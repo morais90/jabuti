@@ -1,8 +1,7 @@
 mod common;
 
-use jabuti_core::metrics::{LineIndex, Loc};
-
 use common::{find_unit, line_index_of, parse_fixture, read_fixture, units_of};
+use jabuti_core::metrics::{LineIndex, Loc};
 
 #[test]
 fn every_line_of_a_file_is_counted_as_code_comment_or_blank() {
@@ -54,6 +53,23 @@ fn a_line_holding_both_code_and_a_comment_counts_as_code() {
             code: 3,
             comment: 0,
             blank: 0
+        }
+    );
+}
+
+#[test]
+fn blank_lines_before_the_first_token_are_counted() {
+    let source = "\n\nfn measured() {}\n";
+    let parsed = parse_fixture(source);
+    let index = LineIndex::new(source, &parsed.comment_ranges());
+
+    assert_eq!(
+        index.loc(parsed.units().span),
+        Loc {
+            total: 3,
+            code: 1,
+            comment: 0,
+            blank: 2
         }
     );
 }

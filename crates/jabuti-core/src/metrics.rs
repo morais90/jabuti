@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::ops::Range;
 
 use crate::model::Span;
@@ -17,17 +18,21 @@ enum LineKind {
     Code,
 }
 
+#[derive(Debug)]
 pub struct LineIndex {
     kinds: Vec<LineKind>,
 }
 
 impl LineIndex {
     pub fn new(source: &str, comments: &[Range<usize>]) -> Self {
+        let mut ordered = comments.to_vec();
+        ordered.sort_by_key(|comment| comment.start);
+
         let mut kinds = Vec::new();
         let mut line_start = 0;
 
         for line in source.split_inclusive('\n') {
-            kinds.push(classify(line, line_start, comments));
+            kinds.push(classify(line, line_start, &ordered));
             line_start += line.len();
         }
 
@@ -40,7 +45,7 @@ impl LineIndex {
         let counted = self.kinds.get(first..last).unwrap_or_default();
 
         let mut loc = Loc {
-            total: counted.len() as u32,
+            total: u32::try_from(counted.len()).unwrap_or(u32::MAX),
             code: 0,
             comment: 0,
             blank: 0,
@@ -67,8 +72,7 @@ fn classify(line: &str, line_start: usize, comments: &[Range<usize>]) -> LineKin
         }
 
         occupied = true;
-        let position = line_start + offset;
-        if !comments.iter().any(|comment| comment.contains(&position)) {
+        if !is_commented(line_start + offset, comments) {
             return LineKind::Code;
         }
     }
@@ -78,4 +82,18 @@ fn classify(line: &str, line_start: usize, comments: &[Range<usize>]) -> LineKin
     } else {
         LineKind::Blank
     }
+}
+
+fn is_commented(position: usize, comments: &[Range<usize>]) -> bool {
+    comments
+        .binary_search_by(|comment| {
+            if comment.end <= position {
+                Ordering::Less
+            } else if comment.start > position {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        })
+        .is_ok()
 }

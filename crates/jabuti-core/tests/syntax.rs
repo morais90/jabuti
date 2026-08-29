@@ -1,9 +1,9 @@
 mod common;
 
-use jabuti_core::model::UnitKind;
-use jabuti_core::syntax::SyntaxError;
-
-use common::{find_unit, kinds, outline, parse_outcome, units_of};
+use common::{find_unit, kinds, outline, parse_fixture, parse_outcome, units_of};
+use jabuti_core::lang;
+use jabuti_core::model::{Span, UnitKind};
+use jabuti_core::syntax::{self, SyntaxError};
 
 #[test]
 fn the_unit_tree_mirrors_the_structure_of_the_source() {
@@ -29,6 +29,39 @@ fn a_function_declared_inside_another_function_nests_under_it() {
 
     assert_eq!(kinds(&outer.children), [UnitKind::Function]);
     assert_eq!(outer.children[0].name.as_deref(), Some("inner"));
+}
+
+#[test]
+fn a_file_that_opens_with_blank_lines_still_starts_at_line_one() {
+    let file = parse_fixture("\n\nfn measured() {}\n").units();
+
+    assert_eq!(
+        file.span,
+        Span {
+            start_line: 1,
+            end_line: 3
+        }
+    );
+}
+
+#[test]
+fn a_file_holding_only_whitespace_spans_the_lines_it_has() {
+    let file = parse_fixture("   \n   \n").units();
+
+    assert_eq!(
+        file.span,
+        Span {
+            start_line: 1,
+            end_line: 2
+        }
+    );
+}
+
+#[test]
+fn every_registered_language_compiles_its_queries() {
+    for spec in lang::ALL {
+        assert!(syntax::parse("", spec).is_ok(), "{:?}", spec.id);
+    }
 }
 
 #[test]

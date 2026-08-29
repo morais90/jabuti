@@ -2,47 +2,41 @@ use std::ops::Range;
 
 use tree_sitter::{Node, Parser, Query, QueryCursor, QueryMatch, StreamingIterator, Tree};
 
-use crate::lang::LangSpec;
+use crate::lang::{LangSpec, Queries};
 use crate::model::{Span, Unit, UnitKind};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SyntaxError {
     #[error("parser rejected the grammar: {0}")]
     Grammar(#[from] tree_sitter::LanguageError),
-    #[error("query failed to compile: {0}")]
-    Query(#[from] tree_sitter::QueryError),
     #[error("source could not be parsed")]
     Malformed,
 }
 
+#[derive(Debug)]
 pub struct Parsed<'source> {
     tree: Tree,
     source: &'source str,
-    units_query: Query,
-    comments_query: Query,
+    queries: &'static Queries,
 }
 
 pub fn parse<'source>(
     source: &'source str,
     spec: &'static LangSpec,
 ) -> Result<Parsed<'source>, SyntaxError> {
-    let language = spec.language();
+    let queries = spec.queries();
     let mut parser = Parser::new();
-    parser.set_language(&language)?;
+    parser.set_language(&queries.language)?;
 
     let tree = parser.parse(source, None).ok_or(SyntaxError::Malformed)?;
     if tree.root_node().has_error() {
         return Err(SyntaxError::Malformed);
     }
 
-    let units_query = Query::new(&language, spec.units_query)?;
-    let comments_query = Query::new(&language, spec.comments_query)?;
-
     Ok(Parsed {
         tree,
         source,
-        units_query,
-        comments_query,
+        queries,
     })
 }
 
@@ -50,25 +44,26 @@ impl Parsed<'_> {
     pub fn units(&self) -> Unit {
         let mut cursor = QueryCursor::new();
         let mut matches = cursor.matches(
-            &self.units_query,
+            &self.queries.units,
             self.tree.root_node(),
             self.source.as_bytes(),
         );
 
         let mut captured = Vec::new();
         while let Some(matched) = matches.next() {
-            if let Some(unit) = CapturedUnit::from_match(matched, &self.units_query, self.source) {
+            if let Some(unit) = CapturedUnit::from_match(matched, &self.queries.units, self.source)
+            {
                 captured.push(unit);
             }
         }
 
-        nest(captured, span_of(self.tree.root_node()))
+        nest(captured, file_span(self.source))
     }
 
     pub fn comment_ranges(&self) -> Vec<Range<usize>> {
         let mut cursor = QueryCursor::new();
         let mut matches = cursor.matches(
-            &self.comments_query,
+            &self.queries.comments,
             self.tree.root_node(),
             self.source.as_bytes(),
         );
@@ -85,6 +80,16 @@ impl Parsed<'_> {
     }
 }
 
+fn file_span(source: &str) -> Span {
+    let lines = source.split_inclusive('\n').count().max(1);
+
+    Span {
+        start_line: 1,
+        end_line: u32::try_from(lines).unwrap_or(u32::MAX),
+    }
+}
+
+#[derive(Debug)]
 struct CapturedUnit {
     kind: UnitKind,
     name: Option<String>,
@@ -93,7 +98,7 @@ struct CapturedUnit {
 }
 
 impl CapturedUnit {
-    fn from_match(matched: &QueryMatch, query: &Query, source: &str) -> Option<Self> {
+    fn from_match(matched: &QueryMatch<'_, '_>, query: &Query, source: &str) -> Option<Self> {
         let mut kind = None;
         let mut node = None;
         let mut name = None;
@@ -123,30 +128,29 @@ impl CapturedUnit {
 }
 
 fn kind_of_label(label: &str) -> Option<UnitKind> {
-    match label.strip_prefix("unit.")? {
+    let suffix = label.strip_prefix("unit.")?;
+
+    match suffix {
         "module" => Some(UnitKind::Module),
         "type" => Some(UnitKind::Type),
         "function" => Some(UnitKind::Function),
         "closure" => Some(UnitKind::Closure),
-        _ => None,
+        unknown => panic!("query captures @unit.{unknown}, which maps to no unit kind"),
     }
 }
 
-fn span_of(node: Node) -> Span {
-    let start = node.start_position();
-    let end = node.end_position();
-    let last_row = if end.column == 0 {
-        end.row.saturating_sub(1)
-    } else {
-        end.row
-    };
-
+fn span_of(node: Node<'_>) -> Span {
     Span {
-        start_line: start.row as u32 + 1,
-        end_line: last_row as u32 + 1,
+        start_line: line_number(node.start_position().row),
+        end_line: line_number(node.end_position().row),
     }
 }
 
+fn line_number(row: usize) -> u32 {
+    u32::try_from(row.saturating_add(1)).unwrap_or(u32::MAX)
+}
+
+#[derive(Debug)]
 struct OpenUnit {
     unit: Unit,
     bytes: Range<usize>,
