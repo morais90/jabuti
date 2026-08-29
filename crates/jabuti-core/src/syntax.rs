@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use tree_sitter::{Node, Parser, Query, QueryCursor, QueryMatch, StreamingIterator};
+use tree_sitter::{Node, Parser, Query, QueryCursor, QueryMatch, StreamingIterator, Tree};
 
 use crate::lang::LangSpec;
 use crate::model::{Span, Unit, UnitKind};
@@ -9,13 +9,23 @@ use crate::model::{Span, Unit, UnitKind};
 pub enum SyntaxError {
     #[error("parser rejected the grammar: {0}")]
     Grammar(#[from] tree_sitter::LanguageError),
-    #[error("unit query failed to compile: {0}")]
+    #[error("query failed to compile: {0}")]
     Query(#[from] tree_sitter::QueryError),
     #[error("source could not be parsed")]
     Malformed,
 }
 
-pub fn parse(source: &str, spec: &LangSpec) -> Result<Unit, SyntaxError> {
+pub struct Parsed<'source> {
+    tree: Tree,
+    source: &'source str,
+    spec: &'static LangSpec,
+    units_query: Query,
+}
+
+pub fn parse<'source>(
+    source: &'source str,
+    spec: &'static LangSpec,
+) -> Result<Parsed<'source>, SyntaxError> {
     let language = spec.language();
     let mut parser = Parser::new();
     parser.set_language(&language)?;
@@ -25,19 +35,42 @@ pub fn parse(source: &str, spec: &LangSpec) -> Result<Unit, SyntaxError> {
         return Err(SyntaxError::Malformed);
     }
 
-    let query = Query::new(&language, spec.units_query)?;
+    let units_query = Query::new(&language, spec.units_query)?;
 
-    let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(&query, tree.root_node(), source.as_bytes());
+    Ok(Parsed {
+        tree,
+        source,
+        spec,
+        units_query,
+    })
+}
 
-    let mut captured = Vec::new();
-    while let Some(matched) = matches.next() {
-        if let Some(unit) = CapturedUnit::from_match(matched, &query, source) {
-            captured.push(unit);
-        }
+impl<'source> Parsed<'source> {
+    pub fn source(&self) -> &'source str {
+        self.source
     }
 
-    Ok(nest(captured, span_of(tree.root_node())))
+    pub fn spec(&self) -> &'static LangSpec {
+        self.spec
+    }
+
+    pub fn units(&self) -> Unit {
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(
+            &self.units_query,
+            self.tree.root_node(),
+            self.source.as_bytes(),
+        );
+
+        let mut captured = Vec::new();
+        while let Some(matched) = matches.next() {
+            if let Some(unit) = CapturedUnit::from_match(matched, &self.units_query, self.source) {
+                captured.push(unit);
+            }
+        }
+
+        nest(captured, span_of(self.tree.root_node()))
+    }
 }
 
 struct CapturedUnit {

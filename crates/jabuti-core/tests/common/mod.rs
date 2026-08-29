@@ -4,15 +4,7 @@ use std::path::PathBuf;
 
 use jabuti_core::lang;
 use jabuti_core::model::{Unit, UnitKind};
-use jabuti_core::syntax::{self, SyntaxError};
-
-pub fn parse_fixture(relative: &str) -> Unit {
-    syntax::parse(&read_fixture(relative), &lang::RUST).expect("fixture parses cleanly")
-}
-
-pub fn parse_fixture_result(relative: &str) -> Result<Unit, SyntaxError> {
-    syntax::parse(&read_fixture(relative), &lang::RUST)
-}
+use jabuti_core::syntax::{self, Parsed, SyntaxError};
 
 pub fn read_fixture(relative: &str) -> String {
     let path = fixture_root().join(relative);
@@ -21,6 +13,18 @@ pub fn read_fixture(relative: &str) -> String {
 
 fn fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
+}
+
+pub fn parse_fixture(source: &str) -> Parsed<'_> {
+    syntax::parse(source, &lang::RUST).expect("fixture parses cleanly")
+}
+
+pub fn units_of(relative: &str) -> Unit {
+    parse_fixture(&read_fixture(relative)).units()
+}
+
+pub fn parse_outcome(relative: &str) -> Result<(), SyntaxError> {
+    syntax::parse(&read_fixture(relative), &lang::RUST).map(|_| ())
 }
 
 pub fn find_unit<'a>(unit: &'a Unit, name: &str) -> &'a Unit {
