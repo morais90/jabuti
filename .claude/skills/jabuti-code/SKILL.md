@@ -11,6 +11,8 @@ description: Development principles for the jabuti project. Load before writing 
 - Do not write comments, in any file type. Code, configuration and workflows explain themselves through naming and structure; a comment means a name is wrong or a unit does too much.
 - Test fixtures are the exception: a fixture states its expected value and the derivation producing it. That annotation is the specification.
 - Prefer named intermediates over combinator chains in analysis code.
+- Justify a rule on its own merits. Do not cite external tools as the source of a threshold, a
+  counting rule or a definition; cite primary literature when a source is needed.
 
 ## Determinism
 
