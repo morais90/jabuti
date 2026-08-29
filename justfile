@@ -1,30 +1,21 @@
+mutant_jobs := "4"
+
 default:
     @just --list
 
-build:
-    cargo build --workspace
-
 fmt:
-    cargo fmt --all
+    cargo +nightly fmt --all
 
-fmt-check:
-    cargo fmt --all --check
+test:
+    cargo nextest run --workspace --all-targets
+    cargo mutants --no-shuffle --jobs {{ mutant_jobs }}
 
-lint:
-    cargo clippy --workspace --all-targets -- -D warnings
-
-unit:
-    cargo test --workspace --all-targets
-
-mutants:
-    cargo mutants --no-shuffle
-
-deny:
+check:
+    cargo +nightly fmt --all --check
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    cargo nextest run --workspace --all-targets
+    cargo mutants --no-shuffle --jobs {{ mutant_jobs }}
     cargo deny check
-
-test: unit mutants
-
-check: fmt-check lint test deny
 
 hooks:
     pre-commit install --install-hooks
