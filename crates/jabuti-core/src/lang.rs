@@ -11,6 +11,7 @@ pub struct LangSpec {
     pub id: LanguageId,
     pub extensions: &'static [&'static str],
     pub units_query: &'static str,
+    pub comments_query: &'static str,
     grammar: fn() -> Language,
 }
 
@@ -28,6 +29,7 @@ pub static RUST: LangSpec = LangSpec {
     id: LanguageId::Rust,
     extensions: &["rs"],
     units_query: include_str!("../queries/rust/units.scm"),
+    comments_query: include_str!("../queries/rust/comments.scm"),
     grammar: rust_grammar,
 };
 

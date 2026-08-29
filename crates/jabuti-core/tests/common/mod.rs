@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use jabuti_core::lang;
+use jabuti_core::metrics::LineIndex;
 use jabuti_core::model::{Unit, UnitKind};
 use jabuti_core::syntax::{self, Parsed, SyntaxError};
 
@@ -21,6 +22,13 @@ pub fn parse_fixture(source: &str) -> Parsed<'_> {
 
 pub fn units_of(relative: &str) -> Unit {
     parse_fixture(&read_fixture(relative)).units()
+}
+
+pub fn line_index_of(relative: &str) -> LineIndex {
+    let source = read_fixture(relative);
+    let parsed = parse_fixture(&source);
+
+    LineIndex::new(&source, &parsed.comment_ranges())
 }
 
 pub fn parse_outcome(relative: &str) -> Result<(), SyntaxError> {

@@ -18,8 +18,8 @@ pub enum SyntaxError {
 pub struct Parsed<'source> {
     tree: Tree,
     source: &'source str,
-    spec: &'static LangSpec,
     units_query: Query,
+    comments_query: Query,
 }
 
 pub fn parse<'source>(
@@ -36,24 +36,17 @@ pub fn parse<'source>(
     }
 
     let units_query = Query::new(&language, spec.units_query)?;
+    let comments_query = Query::new(&language, spec.comments_query)?;
 
     Ok(Parsed {
         tree,
         source,
-        spec,
         units_query,
+        comments_query,
     })
 }
 
-impl<'source> Parsed<'source> {
-    pub fn source(&self) -> &'source str {
-        self.source
-    }
-
-    pub fn spec(&self) -> &'static LangSpec {
-        self.spec
-    }
-
+impl Parsed<'_> {
     pub fn units(&self) -> Unit {
         let mut cursor = QueryCursor::new();
         let mut matches = cursor.matches(
@@ -70,6 +63,25 @@ impl<'source> Parsed<'source> {
         }
 
         nest(captured, span_of(self.tree.root_node()))
+    }
+
+    pub fn comment_ranges(&self) -> Vec<Range<usize>> {
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(
+            &self.comments_query,
+            self.tree.root_node(),
+            self.source.as_bytes(),
+        );
+
+        let mut ranges = Vec::new();
+        while let Some(matched) = matches.next() {
+            for capture in matched.captures {
+                ranges.push(capture.node.byte_range());
+            }
+        }
+
+        ranges.sort_by_key(|range| range.start);
+        ranges
     }
 }
 
@@ -123,8 +135,8 @@ fn kind_of_label(label: &str) -> Option<UnitKind> {
 fn span_of(node: Node) -> Span {
     let start = node.start_position();
     let end = node.end_position();
-    let last_row = if end.column == 0 && end.row > start.row {
-        end.row - 1
+    let last_row = if end.column == 0 {
+        end.row.saturating_sub(1)
     } else {
         end.row
     };
