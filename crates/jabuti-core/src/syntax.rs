@@ -3,7 +3,7 @@ use std::ops::Range;
 use tree_sitter::{Node, Parser, Query, QueryCursor, QueryMatch, StreamingIterator, Tree};
 
 use crate::lang::{LangSpec, Queries};
-use crate::model::{Span, Unit, UnitKind};
+use crate::model::{Decision, DecisionEffect, Span, Unit, UnitKind};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SyntaxError {
@@ -42,89 +42,98 @@ pub fn parse<'source>(
 
 impl Parsed<'_> {
     pub fn units(&self) -> Unit {
-        let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(
-            &self.queries.units,
-            self.tree.root_node(),
-            self.source.as_bytes(),
-        );
-
         let mut captured = Vec::new();
-        while let Some(matched) = matches.next() {
-            if let Some(unit) = CapturedUnit::from_match(matched, &self.queries.units, self.source)
-            {
+
+        self.for_each_match(&self.queries.units, |matched, query| {
+            if let Some(unit) = captured_unit(matched, query, self.source) {
                 captured.push(unit);
             }
-        }
+        });
 
-        nest(captured, file_span(self.source))
+        nest(captured, self.file_unit())
     }
 
     pub fn comment_ranges(&self) -> Vec<Range<usize>> {
-        let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(
-            &self.queries.comments,
-            self.tree.root_node(),
-            self.source.as_bytes(),
-        );
-
         let mut ranges = Vec::new();
-        while let Some(matched) = matches.next() {
+
+        self.for_each_match(&self.queries.comments, |matched, _| {
             for capture in matched.captures {
                 ranges.push(capture.node.byte_range());
             }
-        }
+        });
 
         ranges.sort_by_key(|range| range.start);
         ranges
     }
-}
 
-fn file_span(source: &str) -> Span {
-    let lines = source.split_inclusive('\n').count().max(1);
+    pub fn decisions(&self) -> Vec<Decision> {
+        let mut decisions = Vec::new();
 
-    Span {
-        start_line: 1,
-        end_line: u32::try_from(lines).unwrap_or(u32::MAX),
-    }
-}
-
-#[derive(Debug)]
-struct CapturedUnit {
-    kind: UnitKind,
-    name: Option<String>,
-    span: Span,
-    bytes: Range<usize>,
-}
-
-impl CapturedUnit {
-    fn from_match(matched: &QueryMatch<'_, '_>, query: &Query, source: &str) -> Option<Self> {
-        let mut kind = None;
-        let mut node = None;
-        let mut name = None;
-
-        for capture in matched.captures {
-            let label = query.capture_names()[capture.index as usize];
-            if let Some(labelled_kind) = kind_of_label(label) {
-                kind = Some(labelled_kind);
-                node = Some(capture.node);
-            } else if label == "name" {
-                name = capture
-                    .node
-                    .utf8_text(source.as_bytes())
-                    .ok()
-                    .map(str::to_owned);
+        self.for_each_match(&self.queries.decisions, |matched, query| {
+            for capture in matched.captures {
+                decisions.push(Decision {
+                    position: capture.node.start_byte(),
+                    effect: effect_of_label(query.capture_names()[capture.index as usize]),
+                });
             }
-        }
+        });
 
-        let node = node?;
-        Some(Self {
-            kind: kind?,
-            name,
-            span: span_of(node),
-            bytes: node.byte_range(),
-        })
+        decisions.sort_by_key(|decision| decision.position);
+        decisions
     }
+
+    fn for_each_match(&self, query: &Query, mut visit: impl FnMut(&QueryMatch<'_, '_>, &Query)) {
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(query, self.tree.root_node(), self.source.as_bytes());
+
+        while let Some(matched) = matches.next() {
+            visit(matched, query);
+        }
+    }
+
+    fn file_unit(&self) -> Unit {
+        let lines = self.source.split_inclusive('\n').count().max(1);
+
+        Unit {
+            name: None,
+            kind: UnitKind::File,
+            span: Span {
+                start_line: 1,
+                end_line: u32::try_from(lines).unwrap_or(u32::MAX),
+            },
+            bytes: 0..self.source.len(),
+            children: Vec::new(),
+        }
+    }
+}
+
+fn captured_unit(matched: &QueryMatch<'_, '_>, query: &Query, source: &str) -> Option<Unit> {
+    let mut kind = None;
+    let mut node = None;
+    let mut name = None;
+
+    for capture in matched.captures {
+        let label = query.capture_names()[capture.index as usize];
+        if let Some(labelled_kind) = kind_of_label(label) {
+            kind = Some(labelled_kind);
+            node = Some(capture.node);
+        } else if label == "name" {
+            name = capture
+                .node
+                .utf8_text(source.as_bytes())
+                .ok()
+                .map(str::to_owned);
+        }
+    }
+
+    let node = node?;
+    Some(Unit {
+        name,
+        kind: kind?,
+        span: span_of(node),
+        bytes: node.byte_range(),
+        children: Vec::new(),
+    })
 }
 
 fn kind_of_label(label: &str) -> Option<UnitKind> {
@@ -139,6 +148,14 @@ fn kind_of_label(label: &str) -> Option<UnitKind> {
     }
 }
 
+fn effect_of_label(label: &str) -> DecisionEffect {
+    match label {
+        "decision" => DecisionEffect::Branch,
+        "decision.discount" => DecisionEffect::Discount,
+        unknown => panic!("query captures @{unknown}, which carries no decision effect"),
+    }
+}
+
 fn span_of(node: Node<'_>) -> Span {
     Span {
         start_line: line_number(node.start_position().row),
@@ -150,13 +167,7 @@ fn line_number(row: usize) -> u32 {
     u32::try_from(row.saturating_add(1)).unwrap_or(u32::MAX)
 }
 
-#[derive(Debug)]
-struct OpenUnit {
-    unit: Unit,
-    bytes: Range<usize>,
-}
-
-fn nest(mut captured: Vec<CapturedUnit>, file_span: Span) -> Unit {
+fn nest(mut captured: Vec<Unit>, mut file: Unit) -> Unit {
     captured.sort_by(|left, right| {
         left.bytes
             .start
@@ -164,47 +175,33 @@ fn nest(mut captured: Vec<CapturedUnit>, file_span: Span) -> Unit {
             .then(right.bytes.end.cmp(&left.bytes.end))
     });
 
-    let mut file = Unit {
-        name: None,
-        kind: UnitKind::File,
-        span: file_span,
-        children: Vec::new(),
-    };
-    let mut open: Vec<OpenUnit> = Vec::new();
+    let mut open: Vec<Unit> = Vec::new();
 
-    for capture in captured {
-        while let Some(closed) = close_enclosing(&mut open, &capture.bytes) {
+    for unit in captured {
+        while let Some(closed) = close_enclosing(&mut open, &unit.bytes) {
             attach(&mut open, &mut file, closed);
         }
-        open.push(OpenUnit {
-            unit: Unit {
-                name: capture.name,
-                kind: capture.kind,
-                span: capture.span,
-                children: Vec::new(),
-            },
-            bytes: capture.bytes,
-        });
+        open.push(unit);
     }
 
     while let Some(remaining) = open.pop() {
-        attach(&mut open, &mut file, remaining.unit);
+        attach(&mut open, &mut file, remaining);
     }
 
     file
 }
 
-fn close_enclosing(open: &mut Vec<OpenUnit>, bytes: &Range<usize>) -> Option<Unit> {
+fn close_enclosing(open: &mut Vec<Unit>, bytes: &Range<usize>) -> Option<Unit> {
     let innermost = open.last()?;
     if innermost.bytes.start <= bytes.start && bytes.end <= innermost.bytes.end {
         return None;
     }
-    open.pop().map(|closed| closed.unit)
+    open.pop()
 }
 
-fn attach(open: &mut [OpenUnit], file: &mut Unit, unit: Unit) {
+fn attach(open: &mut [Unit], file: &mut Unit, unit: Unit) {
     match open.last_mut() {
-        Some(parent) => parent.unit.children.push(unit),
+        Some(parent) => parent.children.push(unit),
         None => file.children.push(unit),
     }
 }

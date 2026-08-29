@@ -13,6 +13,7 @@ pub(crate) struct Queries {
     pub(crate) language: Language,
     pub(crate) units: Query,
     pub(crate) comments: Query,
+    pub(crate) decisions: Query,
 }
 
 #[derive(Debug)]
@@ -21,6 +22,7 @@ pub struct LangSpec {
     pub extensions: &'static [&'static str],
     units_source: &'static str,
     comments_source: &'static str,
+    decisions_source: &'static str,
     grammar: fn() -> Language,
     compiled: OnceLock<Queries>,
 }
@@ -31,11 +33,13 @@ impl LangSpec {
             let language = (self.grammar)();
             let units = compile(&language, self.units_source, self.id, "units");
             let comments = compile(&language, self.comments_source, self.id, "comments");
+            let decisions = compile(&language, self.decisions_source, self.id, "decisions");
 
             Queries {
                 language,
                 units,
                 comments,
+                decisions,
             }
         })
     }
@@ -55,6 +59,7 @@ pub static RUST: LangSpec = LangSpec {
     extensions: &["rs"],
     units_source: include_str!("../queries/rust/units.scm"),
     comments_source: include_str!("../queries/rust/comments.scm"),
+    decisions_source: include_str!("../queries/rust/decisions.scm"),
     grammar: rust_grammar,
     compiled: OnceLock::new(),
 };

@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
-use crate::model::Span;
+use crate::model::{Decision, DecisionEffect, Span, Unit};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Loc {
@@ -81,6 +81,56 @@ fn classify(line: &str, line_start: usize, comments: &[Range<usize>]) -> LineKin
         LineKind::Comment
     } else {
         LineKind::Blank
+    }
+}
+
+#[derive(Debug)]
+pub struct DecisionIndex {
+    decisions: Vec<Decision>,
+}
+
+impl DecisionIndex {
+    pub fn new(decisions: &[Decision]) -> Self {
+        let mut ordered = decisions.to_vec();
+        ordered.sort_by_key(|decision| decision.position);
+
+        Self { decisions: ordered }
+    }
+
+    pub fn cyclomatic(&self, unit: &Unit) -> u32 {
+        let own = self.effect_within(&unit.bytes) - self.effect_of_nested_units(unit);
+
+        u32::try_from(own.saturating_add(1)).unwrap_or(1)
+    }
+
+    fn effect_within(&self, bytes: &Range<usize>) -> i64 {
+        let first = self
+            .decisions
+            .partition_point(|decision| decision.position < bytes.start);
+        let last = self
+            .decisions
+            .partition_point(|decision| decision.position < bytes.end);
+
+        self.decisions[first..last]
+            .iter()
+            .map(|decision| match decision.effect {
+                DecisionEffect::Branch => 1,
+                DecisionEffect::Discount => -1,
+            })
+            .sum()
+    }
+
+    fn effect_of_nested_units(&self, unit: &Unit) -> i64 {
+        unit.children
+            .iter()
+            .map(|child| {
+                if child.kind.measured_separately() {
+                    self.effect_within(&child.bytes)
+                } else {
+                    self.effect_of_nested_units(child)
+                }
+            })
+            .sum()
     }
 }
 
