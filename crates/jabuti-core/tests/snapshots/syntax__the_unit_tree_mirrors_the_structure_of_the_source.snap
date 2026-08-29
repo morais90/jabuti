@@ -2,7 +2,7 @@
 source: crates/jabuti-core/tests/syntax.rs
 expression: outline(&file)
 ---
-File - 1..36
+File - 1..35
   Module parser 1..22
     Type Config 2..4
     Type Config 6..15

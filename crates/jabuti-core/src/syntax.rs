@@ -121,9 +121,17 @@ fn kind_of_label(label: &str) -> Option<UnitKind> {
 }
 
 fn span_of(node: Node) -> Span {
+    let start = node.start_position();
+    let end = node.end_position();
+    let last_row = if end.column == 0 && end.row > start.row {
+        end.row - 1
+    } else {
+        end.row
+    };
+
     Span {
-        start_line: node.start_position().row as u32 + 1,
-        end_line: node.end_position().row as u32 + 1,
+        start_line: start.row as u32 + 1,
+        end_line: last_row as u32 + 1,
     }
 }
 
