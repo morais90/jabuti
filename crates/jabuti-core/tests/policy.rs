@@ -23,6 +23,7 @@ fn findings_for(source: &str, policy: &Policy) -> Vec<(Rule, u32, u32)> {
         lines: &lines,
         decisions: &decisions,
         cognitive: &cognitive,
+        churn: 0,
     };
 
     policy

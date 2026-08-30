@@ -19,6 +19,13 @@ impl Default for Policy {
         Self {
             rules: BTreeMap::from([
                 (
+                    Rule::Churn,
+                    RuleConfig {
+                        limit: 0,
+                        severity: Severity::Off,
+                    },
+                ),
+                (
                     Rule::CognitiveComplexity,
                     RuleConfig {
                         limit: 7,
@@ -71,6 +78,7 @@ impl Policy {
         let mut findings = Vec::new();
 
         self.check(Rule::FileLines, file, &file.units, &mut findings);
+        self.check(Rule::Churn, file, &file.units, &mut findings);
         self.walk(file, &file.units, &mut findings);
 
         findings.sort_by(|left, right| {
@@ -133,11 +141,13 @@ pub struct FileUnderReview<'a> {
     pub lines: &'a LineIndex,
     pub decisions: &'a DecisionIndex,
     pub cognitive: &'a CognitiveIndex,
+    pub churn: u32,
 }
 
 impl FileUnderReview<'_> {
     fn measure(&self, rule: Rule, unit: &Unit) -> u32 {
         match rule {
+            Rule::Churn => self.churn,
             Rule::CognitiveComplexity => self.cognitive.cognitive(unit),
             Rule::Parameters => unit.parameters,
             Rule::CyclomaticComplexity => self.decisions.cyclomatic(unit),

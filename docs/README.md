@@ -5,7 +5,7 @@ pages use and how to read what `jabuti check` prints.
 
 ## Measures
 
-A measure is a number about your code. On its own it says nothing about whether that number is good
+A measure is a number about your code, or about how that code has changed over time. On its own it says nothing about whether that number is good
 or bad. You never configure a measure directly. You configure the rules that read it.
 
 | Measure | What it counts |
@@ -14,6 +14,7 @@ or bad. You never configure a measure directly. You configure the rules that rea
 | [Cyclomatic complexity](measures/cyclomatic-complexity.md) | How many different ways execution can flow through a piece of code |
 | [Cognitive complexity](measures/cognitive-complexity.md) | How hard a piece of code is to follow when you read it |
 | [Parameters](measures/parameters.md) | How many arguments a function declares |
+| [Churn](measures/churn.md) | How many commits have touched a file |
 
 ## Rules
 
@@ -27,8 +28,9 @@ the rule is looking for, what it means when it fires, and when changing the defa
 | [`parameters`](rules/parameters.md) | 4 | warning |
 | [`file-lines`](rules/file-lines.md) | 1000 | off |
 | [`cyclomatic-complexity`](rules/cyclomatic-complexity.md) | 10 | off |
+| [`churn`](rules/churn.md) | none | off |
 
-The last two are switched off by default. Their pages explain why, and what you gain by turning
+The last three are switched off by default. Their pages explain why, and what you gain by turning
 them on if your project wants them.
 
 ## Configuration

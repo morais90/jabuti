@@ -28,6 +28,11 @@ pub(crate) fn repository(files: &[(&str, &str)]) -> TempDir {
     directory
 }
 
+pub(crate) fn commit(directory: &TempDir, message: &str) {
+    git(directory, &["add", "-A"]);
+    git(directory, &["commit", "-qm", message]);
+}
+
 pub(crate) fn write(directory: &TempDir, name: &str, contents: &str) {
     let path = directory.path().join(name);
     if let Some(parent) = path.parent() {

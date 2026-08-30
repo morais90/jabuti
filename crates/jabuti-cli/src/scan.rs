@@ -10,6 +10,7 @@ use jabuti_core::report::Scanned;
 use jabuti_core::{lang, syntax};
 use rayon::prelude::*;
 
+use crate::churn::Churn;
 use crate::config::Settings;
 use crate::since::Changes;
 
@@ -31,6 +32,7 @@ pub(crate) fn scan(
     roots: &[PathBuf],
     settings: &Settings,
     changes: Option<&Changes>,
+    churn: Option<&Churn>,
 ) -> Result<Outcome> {
     let mut paths = sources(roots, &settings.exclude)?;
     if let Some(changes) = changes {
@@ -39,7 +41,7 @@ pub(crate) fn scan(
 
     let reviewed: Vec<Reviewed> = paths
         .par_iter()
-        .map(|path| review(path, &settings.policy, changes))
+        .map(|path| review(path, &settings.policy, changes, churn))
         .collect();
 
     Ok(gather(reviewed))
@@ -89,7 +91,12 @@ fn sources(roots: &[PathBuf], exclude: &[String]) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-fn review(path: &Path, policy: &Policy, changes: Option<&Changes>) -> Reviewed {
+fn review(
+    path: &Path,
+    policy: &Policy,
+    changes: Option<&Changes>,
+    churn: Option<&Churn>,
+) -> Reviewed {
     let Ok(source) = std::fs::read_to_string(path) else {
         return unreadable(path);
     };
@@ -110,6 +117,7 @@ fn review(path: &Path, policy: &Policy, changes: Option<&Changes>) -> Reviewed {
         lines: &lines,
         decisions: &decisions,
         cognitive: &cognitive,
+        churn: churn.map_or(0, |churn| churn.commits(path)),
     };
 
     let mut findings = policy.evaluate(&file);
