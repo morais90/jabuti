@@ -11,6 +11,7 @@ use jabuti_core::{lang, syntax};
 use rayon::prelude::*;
 
 use crate::config::Settings;
+use crate::since::Changes;
 
 #[derive(Debug, Default)]
 pub(crate) struct Outcome {
@@ -26,12 +27,19 @@ struct Reviewed {
     unreadable: Option<String>,
 }
 
-pub(crate) fn scan(roots: &[PathBuf], settings: &Settings) -> Result<Outcome> {
-    let paths = sources(roots, &settings.exclude)?;
+pub(crate) fn scan(
+    roots: &[PathBuf],
+    settings: &Settings,
+    changes: Option<&Changes>,
+) -> Result<Outcome> {
+    let mut paths = sources(roots, &settings.exclude)?;
+    if let Some(changes) = changes {
+        paths.retain(|path| changes.covers(path));
+    }
 
     let reviewed: Vec<Reviewed> = paths
         .par_iter()
-        .map(|path| review(path, &settings.policy))
+        .map(|path| review(path, &settings.policy, changes))
         .collect();
 
     Ok(gather(reviewed))
@@ -81,7 +89,7 @@ fn sources(roots: &[PathBuf], exclude: &[String]) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-fn review(path: &Path, policy: &Policy) -> Reviewed {
+fn review(path: &Path, policy: &Policy, changes: Option<&Changes>) -> Reviewed {
     let Ok(source) = std::fs::read_to_string(path) else {
         return unreadable(path);
     };
@@ -102,8 +110,13 @@ fn review(path: &Path, policy: &Policy) -> Reviewed {
         decisions: &decisions,
     };
 
+    let mut findings = policy.evaluate(&file);
+    if let Some(changes) = changes {
+        findings.retain(|finding| changes.touches(path, finding.span));
+    }
+
     Reviewed {
-        findings: policy.evaluate(&file),
+        findings,
         units: counted,
         unreadable: None,
     }

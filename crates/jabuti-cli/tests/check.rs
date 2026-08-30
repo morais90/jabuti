@@ -1,38 +1,7 @@
-use std::fs;
+mod common;
 
-use assert_cmd::Command;
+use common::{error_on_long_functions, function_of, jabuti, project};
 use predicates::str::contains;
-use tempfile::TempDir;
-
-fn project(files: &[(&str, &str)]) -> TempDir {
-    let directory = TempDir::new().expect("temporary directory");
-
-    for (name, contents) in files {
-        let path = directory.path().join(name);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("parent directory");
-        }
-        fs::write(path, contents).expect("fixture written");
-    }
-
-    directory
-}
-
-fn jabuti(directory: &TempDir) -> Command {
-    let mut command = Command::cargo_bin("jabuti").expect("the binary is built");
-    command.current_dir(directory.path()).arg("check").arg(".");
-    command
-}
-
-fn function_of(name: &str, body_lines: usize) -> String {
-    let body = "    let value = 1;\n".repeat(body_lines);
-
-    format!("fn {name}() {{\n{body}}}\n")
-}
-
-fn error_on_long_functions(limit: usize) -> String {
-    format!("[rules]\nfunction-lines = {{ limit = {limit}, severity = \"error\" }}\n")
-}
 
 #[test]
 fn a_tree_within_the_limits_reports_nothing_and_passes() {

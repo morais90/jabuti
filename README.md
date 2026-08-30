@@ -14,7 +14,7 @@ which is exactly what this tool goes looking for.
 </div>
 
 > **Status: early but usable.** `jabuti check` runs on Rust today, with one rule enabled and two
-> more computed but held back. Diff scoping, cognitive complexity and history mining are next.
+> more computed but held back. Cognitive complexity and history mining are next.
 
 ## Why this exists
 
@@ -54,6 +54,24 @@ the rule name carries the meaning, and deciding what to do about it is the calle
 Exit codes separate the two failures an agent must never confuse: `0` passed, `1` a gate was
 violated, `2` the tool itself broke. Output is byte-identical across runs — same input, same
 version, same bytes — so it can be diffed, cached and trusted as a verification signal.
+
+## Scoping to a change
+
+A run over a whole repository reports code nobody just wrote, and on a mature codebase that is most
+of it. Handing an agent 800 findings for twelve changed lines is worse than handing it nothing: it
+cannot tell which ones it caused, so it learns to ignore the output.
+
+```console
+$ jabuti check --since main
+```
+
+Only changed files are analysed, and within them only findings overlapping a changed line are
+reported. Uncommitted edits and untracked files count as changed, because that is the state an agent
+is usually in.
+
+This is also what makes an absolute threshold adoptable. A legacy function that was already over the
+limit stays quiet until someone touches it, so a project can turn the gate on today rather than
+after a cleanup it will never schedule.
 
 ## Thresholds are measured, not asserted
 

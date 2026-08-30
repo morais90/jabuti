@@ -1,5 +1,6 @@
 mod config;
 mod scan;
+mod since;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -24,6 +25,9 @@ enum Command {
     Check {
         #[arg(default_value = ".")]
         paths: Vec<PathBuf>,
+
+        #[arg(long, value_name = "REF")]
+        since: Option<String>,
 
         #[arg(long, value_enum, default_value_t = Format::Agent)]
         format: Format,
@@ -51,12 +55,14 @@ fn main() -> ExitCode {
 fn run() -> Result<ExitCode> {
     let Command::Check {
         paths,
+        since,
         format,
         limit,
     } = Cli::parse().command;
 
     let settings = config::load(&std::env::current_dir()?)?;
-    let outcome = scan::scan(&paths, &settings)?;
+    let changes = since.as_deref().map(since::Changes::since).transpose()?;
+    let outcome = scan::scan(&paths, &settings, changes.as_ref())?;
 
     for path in &outcome.unreadable {
         eprintln!("jabuti: could not analyse {path}");
