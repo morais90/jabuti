@@ -33,6 +33,61 @@ pub struct Unit {
     pub children: Vec<Unit>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Severity {
+    Off,
+    Warning,
+    Error,
+}
+
+impl Severity {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Warning => "warning",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Rule {
+    CyclomaticComplexity,
+    FileLines,
+    FunctionLines,
+}
+
+impl Rule {
+    pub const ALL: [Self; 3] = [
+        Self::CyclomaticComplexity,
+        Self::FileLines,
+        Self::FunctionLines,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::CyclomaticComplexity => "cyclomatic-complexity",
+            Self::FileLines => "file-lines",
+            Self::FunctionLines => "function-lines",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|rule| rule.id() == id)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Finding {
+    pub rule: Rule,
+    pub severity: Severity,
+    pub path: String,
+    pub span: Span,
+    pub subject: Option<String>,
+    pub measured: u32,
+    pub limit: u32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecisionEffect {
     Branch,
