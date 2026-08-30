@@ -1,12 +1,12 @@
 # jabuti-core
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/williandmorais/jabuti/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/morais90/jabuti/blob/main/LICENSE)
 
-The analysis engine behind [jabuti](https://github.com/williandmorais/jabuti), a code verification
+The analysis engine behind [jabuti](https://github.com/morais90/jabuti), a code verification
 tool built for AI coding agents.
 
 This crate parses source with [tree-sitter](https://tree-sitter.github.io/) and exposes it as a
-nested tree of units — file, module, type, function, closure — then measures that tree.
+nested tree of units (file, module, type, function, closure) and then measures that tree.
 
 ```rust
 use jabuti_core::{lang, metrics::LineIndex, syntax};

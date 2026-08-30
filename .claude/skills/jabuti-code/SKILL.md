@@ -13,6 +13,9 @@ description: Development principles for the jabuti project. Load before writing 
 - Prefer named intermediates over combinator chains in analysis code.
 - Justify a rule on its own merits. Do not cite external tools as the source of a threshold, a
   counting rule or a definition; cite primary literature when a source is needed.
+- Write documentation for the person using jabuti, not about how the project is built. Explain a
+  measure so a reader of any level follows it, and back it with literature rather than assertion.
+- Do not use em dashes. A comma, a full stop or a pair of parentheses reads more naturally.
 
 ## Determinism
 
@@ -34,7 +37,11 @@ jabuti produces facts; the agent consuming it produces judgement.
 ## Extensibility
 
 - Keep the three extension axes distinct: a new rule on an existing sensor, a new sensor, a new language.
-- Give every registered `RuleId` a documentation page and at least one fixture.
+- Give every measure a page under `docs/measures/` and every registered `RuleId` a page under
+  `docs/rules/` plus at least one fixture. A measure page explains the number; a rule page explains
+  the limit, the severity and what a reader should make of a finding.
+- Calibrate a limit per language. The same number means different things in different languages, so
+  a threshold measured on one corpus does not transfer.
 - Treat rule IDs as public API. Deprecate with an alias; never rename silently.
 - Extend in-tree and declaratively. No dynamic plugin loading.
 

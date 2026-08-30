@@ -4,10 +4,10 @@
 
 **A deterministic verdict on the code your agent just wrote.**
 
-[![CI](https://github.com/williandmorais/jabuti/actions/workflows/ci.yml/badge.svg)](https://github.com/williandmorais/jabuti/actions/workflows/ci.yml)
+[![CI](https://github.com/morais90/jabuti/actions/workflows/ci.yml/badge.svg)](https://github.com/morais90/jabuti/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-*Jabuti não sobe em árvore.* A tortoise does not climb trees — if one is up there, somebody put it
+*Jabuti não sobe em árvore.* A tortoise does not climb trees. If one is up there, somebody put it
 there. In Brazil the word became shorthand for whatever got slipped in where it does not belong,
 which is exactly what this tool goes looking for.
 
@@ -47,13 +47,13 @@ $ jabuti check
 No findings across 42 files and 378 units.
 ```
 
-Every finding names its severity, the rule, where it is, what was measured and what the limit was —
-enough for a reader to act without asking a follow-up question. There is no advice in the output:
+Every finding names its severity, the rule, where it is, what was measured and what the limit was,
+which is enough to act on without asking a follow-up question. There is no advice in the output:
 the rule name carries the meaning, and deciding what to do about it is the caller's job.
 
 Exit codes separate the two failures an agent must never confuse: `0` passed, `1` a gate was
-violated, `2` the tool itself broke. Output is byte-identical across runs — same input, same
-version, same bytes — so it can be diffed, cached and trusted as a verification signal.
+violated, `2` the tool itself broke. Output is byte-identical across runs, so the same input on the same
+version produces the same bytes and the result can be diffed, cached and trusted.
 
 ## Scoping to a change
 
@@ -78,17 +78,17 @@ after a cleanup it will never schedule.
 A threshold nobody can defend gets disabled the first time it is wrong. Ours are drawn from the
 distribution of real code: 1,645 crates published on crates.io, 45,361 files, 737,689 functions.
 
-`function-lines` is capped at 60, which sits at the 98th percentile — the claim it makes is *this
-function is longer than 98% of the Rust written in public*, which is a claim we can show.
+`function-lines` is capped at 60, which sits at the 98th percentile. The claim it makes is that
+this function is longer than 98% of the Rust written in public, and that is a claim we can show.
 
 The same measurement is why two rules ship switched off. Cyclomatic complexity scores 1 for three
 quarters of all Rust functions, and what lands above any threshold that fires is dominated by flat
-exhaustive matches — lookup tables that read at a glance. File length is too dispersed for a single
+exhaustive matches, which are lookup tables that read at a glance. File length is too dispersed for a single
 number to separate healthy from unhealthy. Both are still computed, because their signal survives
 inside composites even though it does not survive alone. Publishing a rule that is mostly noise
 teaches the reader to ignore the output, which costs more than the rule is worth.
 
-Each rule and its calibration is written up under [`docs/metrics/`](docs/metrics).
+Each rule and its calibration is written up under [`docs/`](docs).
 
 ## Installing
 
@@ -107,15 +107,15 @@ function-lines = { limit = 60, severity = "error" }
 ```
 
 Severity is `error` (fails the gate), `warning` (reported, exit 0) or `off`. Nothing defaults to
-`error`, because without diff scoping an absolute gate fails on the first legacy file it meets —
-opting in is the project's decision, not ours.
+`error`, because without diff scoping an absolute gate fails on the first legacy file it meets.
+Opting in is the project's decision, not ours.
 
 ## How it works
 
 Two families of analysis sit behind one output contract.
 
 **Native sensors** are built here: structural metrics over [tree-sitter](https://tree-sitter.github.io/),
-and process metrics mined from git history. This is where the market is weakest — every language
+and process metrics mined from git history. This is where the market is weakest. Every language
 has its own complexity tool with its own definition, and almost nothing exposes churn, hotspots or
 refactoring ratio outside a paid dashboard.
 
@@ -132,7 +132,7 @@ language is a set of query files instead of a new analyzer:
 ```
 
 Sensors only ever measure. Turning a measurement into a verdict happens in one place, which is what
-lets a threshold change without touching analysis code — and what lets a composite like
+lets a threshold change without touching analysis code, and what lets a composite like
 *churn × complexity* read from two unrelated sensors with no special case.
 
 ## Principles
@@ -150,7 +150,7 @@ fixtures carry the reasoning where it can be verified.
 
 **Extensibility.** The catalog will keep growing, so adding to it has to stay a bounded operation
 for years. Rule identifiers are public API, every rule ships with documentation and a fixture, and
-extension means adding data in-tree — never loading arbitrary plugins, which would buy flexibility
+extension means adding data in-tree, never loading arbitrary plugins, which would buy flexibility
 by giving up the other two principles.
 
 The long form lives in [`.claude/skills/jabuti-code`](.claude/skills/jabuti-code/SKILL.md) and
@@ -169,7 +169,7 @@ $ just hooks    # install pre-commit hooks
 
 ## Contributing
 
-Contributions are welcome, including disagreement with the principles above — they are written down
+Contributions are welcome, including disagreement with the principles above. They are written down
 so they can be argued with.
 
 Before opening a pull request, `just check` must pass in full. That includes mutation testing with
