@@ -26,6 +26,13 @@ impl Default for Policy {
                     },
                 ),
                 (
+                    Rule::Parameters,
+                    RuleConfig {
+                        limit: 4,
+                        severity: Severity::Warning,
+                    },
+                ),
+                (
                     Rule::CyclomaticComplexity,
                     RuleConfig {
                         limit: 10,
@@ -80,6 +87,7 @@ impl Policy {
             self.check(Rule::FunctionLines, file, unit, findings);
             self.check(Rule::CyclomaticComplexity, file, unit, findings);
             self.check(Rule::CognitiveComplexity, file, unit, findings);
+            self.check(Rule::Parameters, file, unit, findings);
         }
 
         for child in &unit.children {
@@ -131,6 +139,7 @@ impl FileUnderReview<'_> {
     fn measure(&self, rule: Rule, unit: &Unit) -> u32 {
         match rule {
             Rule::CognitiveComplexity => self.cognitive.cognitive(unit),
+            Rule::Parameters => unit.parameters,
             Rule::CyclomaticComplexity => self.decisions.cyclomatic(unit),
             Rule::FileLines | Rule::FunctionLines => self.lines.loc(unit.span).total,
         }

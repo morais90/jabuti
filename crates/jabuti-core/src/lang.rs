@@ -33,6 +33,7 @@ pub struct CognitiveSpec {
 pub struct LangSpec {
     pub id: LanguageId,
     pub extensions: &'static [&'static str],
+    pub(crate) implicit_parameters: &'static [&'static str],
     pub(crate) cognitive: CognitiveSpec,
     units_source: &'static str,
     comments_source: &'static str,
@@ -71,6 +72,7 @@ fn rust_grammar() -> Language {
 pub static RUST: LangSpec = LangSpec {
     id: LanguageId::Rust,
     extensions: &["rs"],
+    implicit_parameters: &["self_parameter"],
     cognitive: CognitiveSpec {
         conditional: "if_expression",
         alternative_field: "alternative",

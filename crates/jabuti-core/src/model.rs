@@ -30,6 +30,7 @@ pub struct Unit {
     pub kind: UnitKind,
     pub span: Span,
     pub bytes: Range<usize>,
+    pub parameters: u32,
     pub children: Vec<Unit>,
 }
 
@@ -56,14 +57,16 @@ pub enum Rule {
     CyclomaticComplexity,
     FileLines,
     FunctionLines,
+    Parameters,
 }
 
 impl Rule {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::CognitiveComplexity,
         Self::CyclomaticComplexity,
         Self::FileLines,
         Self::FunctionLines,
+        Self::Parameters,
     ];
 
     pub fn id(self) -> &'static str {
@@ -72,6 +75,7 @@ impl Rule {
             Self::CyclomaticComplexity => "cyclomatic-complexity",
             Self::FileLines => "file-lines",
             Self::FunctionLines => "function-lines",
+            Self::Parameters => "parameters",
         }
     }
 

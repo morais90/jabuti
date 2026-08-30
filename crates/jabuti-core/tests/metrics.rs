@@ -2,7 +2,7 @@ mod common;
 
 use std::ops::Range;
 
-use common::{find_unit, line_index_of, parse_fixture, read_fixture, units_of};
+use common::{find_unit, kinds, line_index_of, parse_fixture, read_fixture, units_of};
 use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex, Loc};
 use jabuti_core::model::{Decision, DecisionEffect, Increment, Span, Unit, UnitKind};
 use rstest::rstest;
@@ -130,6 +130,27 @@ fn cognitive_complexity_matches_the_derivation_in_the_fixture(
     assert_eq!(index.cognitive(find_unit(&file, unit_name)), expected);
 }
 
+#[rstest]
+#[case("takes_nothing", 0)]
+#[case("takes_two", 2)]
+#[case("method_ignores_self", 2)]
+#[case("method_takes_only_self", 0)]
+#[case("takes_a_closure", 0)]
+fn a_unit_reports_the_parameters_it_declares(#[case] unit_name: &str, #[case] expected: u32) {
+    let file = units_of("rust/parameters.rs");
+
+    assert_eq!(find_unit(&file, unit_name).parameters, expected);
+}
+
+#[test]
+fn a_closure_reports_its_own_parameters() {
+    let file = units_of("rust/parameters.rs");
+    let holder = find_unit(&file, "takes_a_closure");
+
+    assert_eq!(kinds(&holder.children), [UnitKind::Closure]);
+    assert_eq!(holder.children[0].parameters, 2);
+}
+
 #[test]
 fn nesting_is_what_separates_cognitive_complexity_from_cyclomatic() {
     let source = read_fixture("rust/cognitive.rs");
@@ -207,6 +228,7 @@ fn unit_over(bytes: Range<usize>) -> Unit {
             end_line: 1,
         },
         bytes,
+        parameters: 0,
         children: Vec::new(),
     }
 }

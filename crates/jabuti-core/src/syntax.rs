@@ -40,7 +40,7 @@ impl Parsed<'_> {
         let mut captured = Vec::new();
 
         self.for_each_match(&self.spec.queries().units, |matched, query| {
-            if let Some(unit) = captured_unit(matched, query, self.source) {
+            if let Some(unit) = captured_unit(matched, query, self.source, self.spec) {
                 captured.push(unit);
             }
         });
@@ -101,15 +101,22 @@ impl Parsed<'_> {
                 end_line: u32::try_from(lines).unwrap_or(u32::MAX),
             },
             bytes: 0..self.source.len(),
+            parameters: 0,
             children: Vec::new(),
         }
     }
 }
 
-fn captured_unit(matched: &QueryMatch<'_, '_>, query: &Query, source: &str) -> Option<Unit> {
+fn captured_unit(
+    matched: &QueryMatch<'_, '_>,
+    query: &Query,
+    source: &str,
+    spec: &LangSpec,
+) -> Option<Unit> {
     let mut kind = None;
     let mut node = None;
     let mut name = None;
+    let mut parameters = 0;
 
     for capture in matched.captures {
         let label = query.capture_names()[capture.index as usize];
@@ -122,6 +129,8 @@ fn captured_unit(matched: &QueryMatch<'_, '_>, query: &Query, source: &str) -> O
                 .utf8_text(source.as_bytes())
                 .ok()
                 .map(str::to_owned);
+        } else if label == "parameters" {
+            parameters = declared_parameters(capture.node, spec);
         }
     }
 
@@ -131,8 +140,19 @@ fn captured_unit(matched: &QueryMatch<'_, '_>, query: &Query, source: &str) -> O
         kind: kind?,
         span: span_of(node),
         bytes: node.byte_range(),
+        parameters,
         children: Vec::new(),
     })
+}
+
+fn declared_parameters(node: Node<'_>, spec: &LangSpec) -> u32 {
+    let mut cursor = node.walk();
+    let declared = node
+        .named_children(&mut cursor)
+        .filter(|child| !spec.implicit_parameters.contains(&child.kind()))
+        .count();
+
+    u32::try_from(declared).unwrap_or(u32::MAX)
 }
 
 fn kind_of_label(label: &str) -> Option<UnitKind> {

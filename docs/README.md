@@ -13,6 +13,7 @@ or bad. You never configure a measure directly. You configure the rules that rea
 | [Lines](measures/lines.md) | How many lines are code, comment or blank |
 | [Cyclomatic complexity](measures/cyclomatic-complexity.md) | How many different ways execution can flow through a piece of code |
 | [Cognitive complexity](measures/cognitive-complexity.md) | How hard a piece of code is to follow when you read it |
+| [Parameters](measures/parameters.md) | How many arguments a function declares |
 
 ## Rules
 
@@ -23,6 +24,7 @@ the rule is looking for, what it means when it fires, and when changing the defa
 |---|---|---|
 | [`cognitive-complexity`](rules/cognitive-complexity.md) | 7 | warning |
 | [`function-lines`](rules/function-lines.md) | 60 | warning |
+| [`parameters`](rules/parameters.md) | 4 | warning |
 | [`file-lines`](rules/file-lines.md) | 1000 | off |
 | [`cyclomatic-complexity`](rules/cyclomatic-complexity.md) | 10 | off |
 

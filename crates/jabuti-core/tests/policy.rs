@@ -104,7 +104,7 @@ fn length_is_measured_on_functions_and_not_on_the_types_that_hold_them() {
 }
 
 #[test]
-fn the_default_policy_reports_length_and_cognitive_complexity_only() {
+fn the_default_policy_reports_three_of_the_five_rules() {
     let reported: Vec<Rule> = Rule::ALL
         .into_iter()
         .filter(|rule| {
@@ -114,7 +114,14 @@ fn the_default_policy_reports_length_and_cognitive_complexity_only() {
         })
         .collect();
 
-    assert_eq!(reported, [Rule::CognitiveComplexity, Rule::FunctionLines]);
+    assert_eq!(
+        reported,
+        [
+            Rule::CognitiveComplexity,
+            Rule::FunctionLines,
+            Rule::Parameters
+        ]
+    );
 }
 
 #[test]
