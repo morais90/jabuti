@@ -13,9 +13,8 @@ which is exactly what this tool goes looking for.
 
 </div>
 
-> **Status: early.** The syntax layer and line counting work for Rust. The metric, sensor, policy
-> and CLI layers are being built in that order, and there is no usable binary yet. The output shown
-> below is the contract being built toward, not something you can run today.
+> **Status: early but usable.** `jabuti check` runs on Rust today, with one rule enabled and two
+> more computed but held back. Diff scoping, cognitive complexity and history mining are next.
 
 ## Why this exists
 
@@ -35,22 +34,63 @@ second, in a form small enough to read.
 ## What it looks like
 
 ```console
-$ jabuti check --since main
-src/handler.rs:120-186  handle_request  cognitive=31 (max 15)  nesting=6 (max 4)
-src/handler.rs:204-231  parse_body      duplicate-introduced (matches src/handler.rs:120-147)
-2 findings on changed code
+$ jabuti check
+1 error and 0 warnings across 42 files and 378 units.
+
+src/handler.rs:120  error  function-lines  handle_request  measured 71, limit 60
 ```
 
 A clean run costs one line:
 
 ```console
-$ jabuti check --since main
-ok  3 files, 14 units, 0 findings
+$ jabuti check
+No findings across 42 files and 378 units.
 ```
+
+Every finding names its severity, the rule, where it is, what was measured and what the limit was —
+enough for a reader to act without asking a follow-up question. There is no advice in the output:
+the rule name carries the meaning, and deciding what to do about it is the caller's job.
 
 Exit codes separate the two failures an agent must never confuse: `0` passed, `1` a gate was
 violated, `2` the tool itself broke. Output is byte-identical across runs — same input, same
 version, same bytes — so it can be diffed, cached and trusted as a verification signal.
+
+## Thresholds are measured, not asserted
+
+A threshold nobody can defend gets disabled the first time it is wrong. Ours are drawn from the
+distribution of real code: 1,645 crates published on crates.io, 45,361 files, 737,689 functions.
+
+`function-lines` is capped at 60, which sits at the 98th percentile — the claim it makes is *this
+function is longer than 98% of the Rust written in public*, which is a claim we can show.
+
+The same measurement is why two rules ship switched off. Cyclomatic complexity scores 1 for three
+quarters of all Rust functions, and what lands above any threshold that fires is dominated by flat
+exhaustive matches — lookup tables that read at a glance. File length is too dispersed for a single
+number to separate healthy from unhealthy. Both are still computed, because their signal survives
+inside composites even though it does not survive alone. Publishing a rule that is mostly noise
+teaches the reader to ignore the output, which costs more than the rule is worth.
+
+Each rule and its calibration is written up under [`docs/metrics/`](docs/metrics).
+
+## Installing
+
+```console
+$ just install
+```
+
+Configuration is optional. When a `jabuti.toml` sits in the working directory it adjusts limits and
+severities:
+
+```toml
+exclude = ["generated/**"]
+
+[rules]
+function-lines = { limit = 60, severity = "error" }
+```
+
+Severity is `error` (fails the gate), `warning` (reported, exit 0) or `off`. Nothing defaults to
+`error`, because without diff scoping an absolute gate fails on the first legacy file it meets —
+opting in is the project's decision, not ours.
 
 ## How it works
 

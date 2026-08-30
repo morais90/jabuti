@@ -54,9 +54,39 @@ A unit's complexity covers its own body and any closures inside it, but not nest
 measured separately — a function declared inside another function has its own score and does not
 inflate its container. A file therefore always scores 1: everything in it belongs to something else.
 
-## Threshold
+## Status: off by default
 
-The default maximum is **5**.
+The rule is computed but does not report, and the reason is the section below rather than any doubt
+about the implementation.
+
+Measuring 737,499 functions across 1,645 crates published on crates.io gives this distribution:
+
+| p50 | p75 | p90 | p95 | p99 | max |
+|---|---|---|---|---|---|
+| 1 | 1 | 2 | 4 | 10 | 1586 |
+
+Three quarters of all Rust functions score 1: they do not branch at all. A limit of 5 sits near the
+95th percentile and a limit of 10 at the 99th — and inspecting what lands in that top percentile
+shows it is dominated by flat exhaustive matches:
+
+```rust
+fn normalized(method: &Method) -> &'static str {   // scores 10
+    match method.as_str() {
+        "GET" => "GET",
+        "POST" => "POST",
+        ...
+    }
+}
+```
+
+That is a lookup table written as a `match`, and it reads at a glance. Rust reaches for exhaustive
+matching where other languages reach for a map, so on idiomatic Rust this rule is mostly noise at
+any threshold that fires at all. Publishing it would teach whoever reads our output to stop reading
+it, which costs more than the rule is worth.
+
+The measure stays. It is an input to composites — complexity crossed with change frequency, or with
+size and state access — where the signal survives. It reports as part of something that
+discriminates, not on its own.
 
 ## What it does not measure
 
