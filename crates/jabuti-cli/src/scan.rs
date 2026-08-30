@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use ignore::overrides::OverrideBuilder;
-use jabuti_core::metrics::{DecisionIndex, LineIndex};
+use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::model::{Finding, Unit, UnitKind};
 use jabuti_core::policy::{FileUnderReview, Policy};
 use jabuti_core::report::Scanned;
@@ -100,6 +100,7 @@ fn review(path: &Path, policy: &Policy, changes: Option<&Changes>) -> Reviewed {
 
     let lines = LineIndex::new(&source, &parsed.comment_ranges());
     let decisions = DecisionIndex::new(&parsed.decisions());
+    let cognitive = CognitiveIndex::new(&parsed.increments());
     let units = parsed.units();
     let counted = count_units(&units);
 
@@ -108,6 +109,7 @@ fn review(path: &Path, policy: &Policy, changes: Option<&Changes>) -> Reviewed {
         units,
         lines: &lines,
         decisions: &decisions,
+        cognitive: &cognitive,
     };
 
     let mut findings = policy.evaluate(&file);

@@ -1,7 +1,7 @@
 mod common;
 
 use common::parse_fixture;
-use jabuti_core::metrics::{DecisionIndex, LineIndex};
+use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::model::{Rule, Severity};
 use jabuti_core::policy::{FileUnderReview, Policy, RuleConfig};
 
@@ -15,12 +15,14 @@ fn findings_for(source: &str, policy: &Policy) -> Vec<(Rule, u32, u32)> {
     let parsed = parse_fixture(source);
     let lines = LineIndex::new(source, &parsed.comment_ranges());
     let decisions = DecisionIndex::new(&parsed.decisions());
+    let cognitive = CognitiveIndex::new(&parsed.increments());
 
     let file = FileUnderReview {
         path: "measured.rs".to_owned(),
         units: parsed.units(),
         lines: &lines,
         decisions: &decisions,
+        cognitive: &cognitive,
     };
 
     policy
@@ -102,7 +104,7 @@ fn length_is_measured_on_functions_and_not_on_the_types_that_hold_them() {
 }
 
 #[test]
-fn the_default_policy_reports_only_function_length() {
+fn the_default_policy_reports_length_and_cognitive_complexity_only() {
     let reported: Vec<Rule> = Rule::ALL
         .into_iter()
         .filter(|rule| {
@@ -112,5 +114,16 @@ fn the_default_policy_reports_only_function_length() {
         })
         .collect();
 
-    assert_eq!(reported, [Rule::FunctionLines]);
+    assert_eq!(reported, [Rule::CognitiveComplexity, Rule::FunctionLines]);
+}
+
+#[test]
+fn no_rule_defaults_to_failing_the_run() {
+    let severities: Vec<Severity> = Rule::ALL
+        .into_iter()
+        .filter_map(|rule| Policy::default().config(rule))
+        .map(|config| config.severity)
+        .collect();
+
+    assert!(!severities.contains(&Severity::Error), "{severities:?}");
 }

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::metrics::{DecisionIndex, LineIndex};
+use crate::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use crate::model::{Finding, Rule, Severity, Unit, UnitKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +18,13 @@ impl Default for Policy {
     fn default() -> Self {
         Self {
             rules: BTreeMap::from([
+                (
+                    Rule::CognitiveComplexity,
+                    RuleConfig {
+                        limit: 7,
+                        severity: Severity::Warning,
+                    },
+                ),
                 (
                     Rule::CyclomaticComplexity,
                     RuleConfig {
@@ -72,6 +79,7 @@ impl Policy {
         if unit.kind == UnitKind::Function {
             self.check(Rule::FunctionLines, file, unit, findings);
             self.check(Rule::CyclomaticComplexity, file, unit, findings);
+            self.check(Rule::CognitiveComplexity, file, unit, findings);
         }
 
         for child in &unit.children {
@@ -116,11 +124,13 @@ pub struct FileUnderReview<'a> {
     pub units: Unit,
     pub lines: &'a LineIndex,
     pub decisions: &'a DecisionIndex,
+    pub cognitive: &'a CognitiveIndex,
 }
 
 impl FileUnderReview<'_> {
     fn measure(&self, rule: Rule, unit: &Unit) -> u32 {
         match rule {
+            Rule::CognitiveComplexity => self.cognitive.cognitive(unit),
             Rule::CyclomaticComplexity => self.decisions.cyclomatic(unit),
             Rule::FileLines | Rule::FunctionLines => self.lines.loc(unit.span).total,
         }

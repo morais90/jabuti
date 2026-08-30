@@ -12,6 +12,7 @@ or bad. You never configure a measure directly. You configure the rules that rea
 |---|---|
 | [Lines](measures/lines.md) | How many lines are code, comment or blank |
 | [Cyclomatic complexity](measures/cyclomatic-complexity.md) | How many different ways execution can flow through a piece of code |
+| [Cognitive complexity](measures/cognitive-complexity.md) | How hard a piece of code is to follow when you read it |
 
 ## Rules
 
@@ -20,12 +21,13 @@ the rule is looking for, what it means when it fires, and when changing the defa
 
 | Rule | Limit | Severity |
 |---|---|---|
+| [`cognitive-complexity`](rules/cognitive-complexity.md) | 7 | warning |
 | [`function-lines`](rules/function-lines.md) | 60 | warning |
 | [`file-lines`](rules/file-lines.md) | 1000 | off |
 | [`cyclomatic-complexity`](rules/cyclomatic-complexity.md) | 10 | off |
 
-Two of these are switched off by default. Their pages explain why, and what you gain by turning them
-on if your project wants them.
+The last two are switched off by default. Their pages explain why, and what you gain by turning
+them on if your project wants them.
 
 ## Configuration
 

@@ -52,13 +52,15 @@ impl Severity {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Rule {
+    CognitiveComplexity,
     CyclomaticComplexity,
     FileLines,
     FunctionLines,
 }
 
 impl Rule {
-    pub const ALL: [Self; 3] = [
+    pub const ALL: [Self; 4] = [
+        Self::CognitiveComplexity,
         Self::CyclomaticComplexity,
         Self::FileLines,
         Self::FunctionLines,
@@ -66,6 +68,7 @@ impl Rule {
 
     pub fn id(self) -> &'static str {
         match self {
+            Self::CognitiveComplexity => "cognitive-complexity",
             Self::CyclomaticComplexity => "cyclomatic-complexity",
             Self::FileLines => "file-lines",
             Self::FunctionLines => "function-lines",
@@ -98,4 +101,10 @@ pub enum DecisionEffect {
 pub struct Decision {
     pub position: usize,
     pub effect: DecisionEffect,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Increment {
+    pub position: usize,
+    pub amount: u32,
 }

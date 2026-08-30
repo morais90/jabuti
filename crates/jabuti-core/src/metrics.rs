@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
-use crate::model::{Decision, DecisionEffect, Span, Unit};
+use crate::model::{Decision, DecisionEffect, Increment, Span, Unit};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Loc {
@@ -128,6 +128,54 @@ impl DecisionIndex {
                     self.effect_within(&child.bytes)
                 } else {
                     self.effect_of_nested_units(child)
+                }
+            })
+            .sum()
+    }
+}
+
+#[derive(Debug)]
+pub struct CognitiveIndex {
+    increments: Vec<Increment>,
+}
+
+impl CognitiveIndex {
+    pub fn new(increments: &[Increment]) -> Self {
+        let mut ordered = increments.to_vec();
+        ordered.sort_by_key(|increment| increment.position);
+
+        Self {
+            increments: ordered,
+        }
+    }
+
+    pub fn cognitive(&self, unit: &Unit) -> u32 {
+        self.within(&unit.bytes)
+            .saturating_sub(self.of_nested_units(unit))
+    }
+
+    fn within(&self, bytes: &Range<usize>) -> u32 {
+        let first = self
+            .increments
+            .partition_point(|increment| increment.position < bytes.start);
+        let last = self
+            .increments
+            .partition_point(|increment| increment.position < bytes.end);
+
+        self.increments[first..last]
+            .iter()
+            .map(|increment| increment.amount)
+            .sum()
+    }
+
+    fn of_nested_units(&self, unit: &Unit) -> u32 {
+        unit.children
+            .iter()
+            .map(|child| {
+                if child.kind.measured_separately() {
+                    self.within(&child.bytes)
+                } else {
+                    self.of_nested_units(child)
                 }
             })
             .sum()

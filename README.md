@@ -13,8 +13,8 @@ which is exactly what this tool goes looking for.
 
 </div>
 
-> **Status: early but usable.** `jabuti check` runs on Rust today, with one rule enabled and two
-> more computed but held back. Cognitive complexity and history mining are next.
+> **Status: early but usable.** `jabuti check` runs on Rust today, with two rules enabled and two
+> more computed but held back. History mining is next.
 
 ## Why this exists
 
@@ -78,15 +78,19 @@ after a cleanup it will never schedule.
 A threshold nobody can defend gets disabled the first time it is wrong. Ours are drawn from the
 distribution of real code: 1,645 crates published on crates.io, 45,361 files, 737,689 functions.
 
-`function-lines` is capped at 60, which sits at the 98th percentile. The claim it makes is that
-this function is longer than 98% of the Rust written in public, and that is a claim we can show.
+`function-lines` is capped at 60 and `cognitive-complexity` at 7, both at the 98th percentile. The
+claim each makes is that the code it points at is unusual by the standard of published Rust, and
+that is a claim we can show.
 
 The same measurement is why two rules ship switched off. Cyclomatic complexity scores 1 for three
 quarters of all Rust functions, and what lands above any threshold that fires is dominated by flat
-exhaustive matches, which are lookup tables that read at a glance. File length is too dispersed for a single
-number to separate healthy from unhealthy. Both are still computed, because their signal survives
-inside composites even though it does not survive alone. Publishing a rule that is mostly noise
-teaches the reader to ignore the output, which costs more than the rule is worth.
+exhaustive matches, which are lookup tables that read at a glance. File length is too dispersed for
+a single number to separate healthy from unhealthy. Both are still computed, because their signal
+survives inside composites even though it does not survive alone.
+
+We checked rather than assumed. On one real project cyclomatic complexity flagged six functions and
+four were lookup tables. At the same percentile, cognitive complexity flagged one function, and that
+function genuinely was the hardest to follow in the repository.
 
 Each rule and its calibration is written up under [`docs/`](docs).
 

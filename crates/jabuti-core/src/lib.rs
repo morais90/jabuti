@@ -1,3 +1,4 @@
+mod cognitive;
 pub mod lang;
 pub mod metrics;
 pub mod model;

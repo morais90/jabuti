@@ -17,9 +17,23 @@ pub(crate) struct Queries {
 }
 
 #[derive(Debug)]
+pub struct CognitiveSpec {
+    pub(crate) conditional: &'static str,
+    pub(crate) alternative_field: &'static str,
+    pub(crate) alternative_wrapper: &'static str,
+    pub(crate) nesting_increments: &'static [&'static str],
+    pub(crate) nesting_only: &'static [&'static str],
+    pub(crate) logical_expression: &'static str,
+    pub(crate) operator_field: &'static str,
+    pub(crate) logical_operators: &'static [&'static str],
+    pub(crate) boundaries: &'static [&'static str],
+}
+
+#[derive(Debug)]
 pub struct LangSpec {
     pub id: LanguageId,
     pub extensions: &'static [&'static str],
+    pub(crate) cognitive: CognitiveSpec,
     units_source: &'static str,
     comments_source: &'static str,
     decisions_source: &'static str,
@@ -57,6 +71,22 @@ fn rust_grammar() -> Language {
 pub static RUST: LangSpec = LangSpec {
     id: LanguageId::Rust,
     extensions: &["rs"],
+    cognitive: CognitiveSpec {
+        conditional: "if_expression",
+        alternative_field: "alternative",
+        alternative_wrapper: "else_clause",
+        nesting_increments: &[
+            "match_expression",
+            "while_expression",
+            "for_expression",
+            "loop_expression",
+        ],
+        nesting_only: &["closure_expression"],
+        logical_expression: "binary_expression",
+        operator_field: "operator",
+        logical_operators: &["&&", "||"],
+        boundaries: &["function_item"],
+    },
     units_source: include_str!("../queries/rust/units.scm"),
     comments_source: include_str!("../queries/rust/comments.scm"),
     decisions_source: include_str!("../queries/rust/decisions.scm"),

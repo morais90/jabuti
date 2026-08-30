@@ -2,8 +2,8 @@ use std::ops::Range;
 
 use tree_sitter::{Node, Parser, Query, QueryCursor, QueryMatch, StreamingIterator, Tree};
 
-use crate::lang::{LangSpec, Queries};
-use crate::model::{Decision, DecisionEffect, Span, Unit, UnitKind};
+use crate::lang::LangSpec;
+use crate::model::{Decision, DecisionEffect, Increment, Span, Unit, UnitKind};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SyntaxError {
@@ -17,34 +17,29 @@ pub enum SyntaxError {
 pub struct Parsed<'source> {
     tree: Tree,
     source: &'source str,
-    queries: &'static Queries,
+    spec: &'static LangSpec,
 }
 
 pub fn parse<'source>(
     source: &'source str,
     spec: &'static LangSpec,
 ) -> Result<Parsed<'source>, SyntaxError> {
-    let queries = spec.queries();
     let mut parser = Parser::new();
-    parser.set_language(&queries.language)?;
+    parser.set_language(&spec.queries().language)?;
 
     let tree = parser.parse(source, None).ok_or(SyntaxError::Malformed)?;
     if tree.root_node().has_error() {
         return Err(SyntaxError::Malformed);
     }
 
-    Ok(Parsed {
-        tree,
-        source,
-        queries,
-    })
+    Ok(Parsed { tree, source, spec })
 }
 
 impl Parsed<'_> {
     pub fn units(&self) -> Unit {
         let mut captured = Vec::new();
 
-        self.for_each_match(&self.queries.units, |matched, query| {
+        self.for_each_match(&self.spec.queries().units, |matched, query| {
             if let Some(unit) = captured_unit(matched, query, self.source) {
                 captured.push(unit);
             }
@@ -56,7 +51,7 @@ impl Parsed<'_> {
     pub fn comment_ranges(&self) -> Vec<Range<usize>> {
         let mut ranges = Vec::new();
 
-        self.for_each_match(&self.queries.comments, |matched, _| {
+        self.for_each_match(&self.spec.queries().comments, |matched, _| {
             for capture in matched.captures {
                 ranges.push(capture.node.byte_range());
             }
@@ -69,7 +64,7 @@ impl Parsed<'_> {
     pub fn decisions(&self) -> Vec<Decision> {
         let mut decisions = Vec::new();
 
-        self.for_each_match(&self.queries.decisions, |matched, query| {
+        self.for_each_match(&self.spec.queries().decisions, |matched, query| {
             for capture in matched.captures {
                 decisions.push(Decision {
                     position: capture.node.start_byte(),
@@ -80,6 +75,10 @@ impl Parsed<'_> {
 
         decisions.sort_by_key(|decision| decision.position);
         decisions
+    }
+
+    pub fn increments(&self) -> Vec<Increment> {
+        crate::cognitive::increments(self.tree.root_node(), &self.spec.cognitive)
     }
 
     fn for_each_match(&self, query: &Query, mut visit: impl FnMut(&QueryMatch<'_, '_>, &Query)) {

@@ -3,8 +3,8 @@ mod common;
 use std::ops::Range;
 
 use common::{find_unit, line_index_of, parse_fixture, read_fixture, units_of};
-use jabuti_core::metrics::{DecisionIndex, LineIndex, Loc};
-use jabuti_core::model::{Decision, DecisionEffect, Span, Unit, UnitKind};
+use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex, Loc};
+use jabuti_core::model::{Decision, DecisionEffect, Increment, Span, Unit, UnitKind};
 use rstest::rstest;
 
 #[test]
@@ -101,6 +101,80 @@ fn cyclomatic_complexity_matches_the_derivation_in_the_fixture(
     let file = parsed.units();
 
     assert_eq!(index.cyclomatic(find_unit(&file, unit_name)), expected);
+}
+
+#[rstest]
+#[case("straight_line", 0)]
+#[case("single_if", 2)]
+#[case("else_if_chain", 3)]
+#[case("sequential_ifs", 3)]
+#[case("nested_ifs", 6)]
+#[case("nested_flow", 6)]
+#[case("wide_match", 1)]
+#[case("one_operator_run", 3)]
+#[case("mixed_operator_runs", 4)]
+#[case("holds_a_closure", 3)]
+#[case("holds_a_nested_function", 0)]
+#[case("inner", 2)]
+#[case("conditional_inside_an_else_body", 5)]
+fn cognitive_complexity_matches_the_derivation_in_the_fixture(
+    #[case] unit_name: &str,
+    #[case] expected: u32,
+) {
+    let source = read_fixture("rust/cognitive.rs");
+    let parsed = parse_fixture(&source);
+    let index = CognitiveIndex::new(&parsed.increments());
+
+    let file = parsed.units();
+
+    assert_eq!(index.cognitive(find_unit(&file, unit_name)), expected);
+}
+
+#[test]
+fn nesting_is_what_separates_cognitive_complexity_from_cyclomatic() {
+    let source = read_fixture("rust/cognitive.rs");
+    let parsed = parse_fixture(&source);
+    let cognitive = CognitiveIndex::new(&parsed.increments());
+    let decisions = DecisionIndex::new(&parsed.decisions());
+
+    let file = parsed.units();
+    let flat = find_unit(&file, "sequential_ifs");
+    let deep = find_unit(&file, "nested_ifs");
+
+    assert_eq!(decisions.cyclomatic(flat), decisions.cyclomatic(deep));
+    assert!(cognitive.cognitive(deep) > cognitive.cognitive(flat));
+}
+
+#[test]
+fn a_wide_match_costs_one_however_many_arms_it_has() {
+    let source = read_fixture("rust/cognitive.rs");
+    let parsed = parse_fixture(&source);
+    let file = parsed.units();
+    let wide = find_unit(&file, "wide_match");
+
+    assert_eq!(CognitiveIndex::new(&parsed.increments()).cognitive(wide), 1);
+    assert_eq!(DecisionIndex::new(&parsed.decisions()).cyclomatic(wide), 5);
+}
+
+#[test]
+fn an_increment_on_the_first_byte_of_a_unit_belongs_to_it() {
+    let index = CognitiveIndex::new(&[increment_at(10)]);
+
+    assert_eq!(index.cognitive(&unit_over(10..20)), 1);
+}
+
+#[test]
+fn an_increment_on_the_byte_after_a_unit_falls_outside_it() {
+    let index = CognitiveIndex::new(&[increment_at(20)]);
+
+    assert_eq!(index.cognitive(&unit_over(10..20)), 0);
+}
+
+fn increment_at(position: usize) -> Increment {
+    Increment {
+        position,
+        amount: 1,
+    }
 }
 
 #[test]
