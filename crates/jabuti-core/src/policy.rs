@@ -19,6 +19,13 @@ impl Default for Policy {
         Self {
             rules: BTreeMap::from([
                 (
+                    Rule::Hotspot,
+                    RuleConfig {
+                        limit: 90,
+                        severity: Severity::Warning,
+                    },
+                ),
+                (
                     Rule::Churn,
                     RuleConfig {
                         limit: 0,
@@ -148,6 +155,7 @@ impl FileUnderReview<'_> {
     fn measure(&self, rule: Rule, unit: &Unit) -> u32 {
         match rule {
             Rule::Churn => self.churn,
+            Rule::Hotspot => 0,
             Rule::CognitiveComplexity => self.cognitive.cognitive(unit),
             Rule::Parameters => unit.parameters,
             Rule::CyclomaticComplexity => self.decisions.cyclomatic(unit),

@@ -54,17 +54,27 @@ fn main() -> ExitCode {
     }
 }
 
-fn history_when_needed(settings: &config::Settings) -> Result<Option<churn::Churn>> {
-    let wanted = settings
+fn enabled(settings: &config::Settings, rule: Rule) -> bool {
+    settings
         .policy
-        .config(Rule::Churn)
-        .is_some_and(|config| config.severity != Severity::Off);
+        .config(rule)
+        .is_some_and(|config| config.severity != Severity::Off)
+}
 
-    if !wanted {
-        return Ok(None);
+fn history_when_needed(settings: &config::Settings) -> Option<churn::Churn> {
+    if !enabled(settings, Rule::Churn) && !enabled(settings, Rule::Hotspot) {
+        return None;
     }
 
-    churn::Churn::of_repository().map(Some)
+    match churn::Churn::of_repository() {
+        Ok(history) => Some(history),
+        Err(reason) => {
+            eprintln!(
+                "jabuti: churn and hotspot need a git repository, so they were not evaluated ({reason})"
+            );
+            None
+        }
+    }
 }
 
 fn run() -> Result<ExitCode> {
@@ -77,7 +87,11 @@ fn run() -> Result<ExitCode> {
 
     let settings = config::load(&std::env::current_dir()?)?;
     let changes = since.as_deref().map(since::Changes::since).transpose()?;
-    let history = history_when_needed(&settings)?;
+    let history = history_when_needed(&settings);
+    if changes.is_some() && enabled(&settings, Rule::Hotspot) {
+        eprintln!("jabuti: hotspot ranks a whole repository, so it is not evaluated with --since");
+    }
+
     let outcome = scan::scan(&paths, &settings, changes.as_ref(), history.as_ref())?;
 
     for path in &outcome.unreadable {

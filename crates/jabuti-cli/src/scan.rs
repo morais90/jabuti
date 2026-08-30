@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use ignore::overrides::OverrideBuilder;
+use jabuti_core::hotspot::{self, FileSummary};
 use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::model::{Finding, Unit, UnitKind};
 use jabuti_core::policy::{FileUnderReview, Policy};
@@ -26,6 +27,7 @@ struct Reviewed {
     findings: Vec<Finding>,
     units: usize,
     unreadable: Option<String>,
+    summary: Option<FileSummary>,
 }
 
 pub(crate) fn scan(
@@ -44,7 +46,24 @@ pub(crate) fn scan(
         .map(|path| review(path, &settings.policy, changes, churn))
         .collect();
 
-    Ok(gather(reviewed))
+    let summaries: Vec<FileSummary> = reviewed
+        .iter()
+        .filter_map(|file| file.summary.clone())
+        .collect();
+
+    let mut outcome = gather(reviewed);
+    if changes.is_none() {
+        outcome
+            .findings
+            .extend(hotspot::hotspots(&summaries, &settings.policy));
+        outcome.findings.sort_by(|left, right| {
+            left.path
+                .cmp(&right.path)
+                .then(left.span.start_line.cmp(&right.span.start_line))
+        });
+    }
+
+    Ok(outcome)
 }
 
 fn gather(reviewed: Vec<Reviewed>) -> Outcome {
@@ -120,6 +139,13 @@ fn review(
         churn: churn.map_or(0, |churn| churn.commits(path)),
     };
 
+    let summary = FileSummary {
+        path: file.path.clone(),
+        span: file.units.span,
+        churn: file.churn,
+        complexity: cognitive.total(&file.units),
+    };
+
     let mut findings = policy.evaluate(&file);
     if let Some(changes) = changes {
         findings.retain(|finding| changes.touches(path, finding.span));
@@ -129,6 +155,7 @@ fn review(
         findings,
         units: counted,
         unreadable: None,
+        summary: Some(summary),
     }
 }
 

@@ -1,4 +1,5 @@
 mod cognitive;
+pub mod hotspot;
 pub mod lang;
 pub mod metrics;
 pub mod model;

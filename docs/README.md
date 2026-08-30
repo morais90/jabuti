@@ -21,9 +21,14 @@ or bad. You never configure a measure directly. You configure the rules that rea
 A rule is what turns a number into something worth your attention. Each page below tells you what
 the rule is looking for, what it means when it fires, and when changing the default makes sense.
 
+Most rules read one measure. [`hotspot`](rules/hotspot.md) reads two, which is where measures start
+paying for themselves: neither change frequency nor complexity says much alone, and together they
+say a lot.
+
 | Rule | Limit | Severity |
 |---|---|---|
 | [`cognitive-complexity`](rules/cognitive-complexity.md) | 7 | warning |
+| [`hotspot`](rules/hotspot.md) | 90 | warning |
 | [`function-lines`](rules/function-lines.md) | 60 | warning |
 | [`parameters`](rules/parameters.md) | 4 | warning |
 | [`file-lines`](rules/file-lines.md) | 1000 | off |

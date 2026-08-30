@@ -149,6 +149,10 @@ impl CognitiveIndex {
         }
     }
 
+    pub fn total(&self, unit: &Unit) -> u32 {
+        self.within(&unit.bytes)
+    }
+
     pub fn cognitive(&self, unit: &Unit) -> u32 {
         self.within(&unit.bytes)
             .saturating_sub(self.of_nested_units(unit))

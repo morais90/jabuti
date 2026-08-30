@@ -167,6 +167,33 @@ fn nesting_is_what_separates_cognitive_complexity_from_cyclomatic() {
 }
 
 #[test]
+fn a_files_total_is_the_sum_of_every_function_it_holds() {
+    let source = read_fixture("rust/cognitive.rs");
+    let parsed = parse_fixture(&source);
+    let index = CognitiveIndex::new(&parsed.increments());
+
+    let file = parsed.units();
+    let summed: u32 = functions(&file)
+        .iter()
+        .map(|unit| index.cognitive(unit))
+        .sum();
+
+    assert_eq!(index.total(&file), summed);
+    assert!(summed > 0, "the fixture has complexity to sum");
+}
+
+fn functions(unit: &Unit) -> Vec<&Unit> {
+    let mut found = Vec::new();
+    if unit.kind == UnitKind::Function {
+        found.push(unit);
+    }
+    for child in &unit.children {
+        found.extend(functions(child));
+    }
+    found
+}
+
+#[test]
 fn a_wide_match_costs_one_however_many_arms_it_has() {
     let source = read_fixture("rust/cognitive.rs");
     let parsed = parse_fixture(&source);

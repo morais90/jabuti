@@ -54,6 +54,7 @@ impl Severity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Rule {
     Churn,
+    Hotspot,
     CognitiveComplexity,
     CyclomaticComplexity,
     FileLines,
@@ -62,8 +63,9 @@ pub enum Rule {
 }
 
 impl Rule {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Churn,
+        Self::Hotspot,
         Self::CognitiveComplexity,
         Self::CyclomaticComplexity,
         Self::FileLines,
@@ -74,6 +76,7 @@ impl Rule {
     pub fn id(self) -> &'static str {
         match self {
             Self::Churn => "churn",
+            Self::Hotspot => "hotspot",
             Self::CognitiveComplexity => "cognitive-complexity",
             Self::CyclomaticComplexity => "cyclomatic-complexity",
             Self::FileLines => "file-lines",
