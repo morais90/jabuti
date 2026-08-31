@@ -1,8 +1,11 @@
 use std::fmt::Write;
 
-use crate::model::{Detail, Finding, Severity};
+use serde::Serialize;
+
+use crate::model::{Detail, Finding, Reading, Severity};
 
 pub const DEFAULT_LIMIT: usize = 40;
+pub const SCHEMA: u32 = 1;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Scanned {
@@ -56,7 +59,7 @@ fn write_finding(rendered: &mut String, finding: &Finding) {
 
     let detail = match &finding.detail {
         Detail::Threshold { measured, limit } => format!("measured {measured}, limit {limit}"),
-        Detail::Message(message) => message.clone(),
+        Detail::Message { message } => message.clone(),
     };
 
     writeln!(
@@ -97,4 +100,53 @@ pub fn has_errors(findings: &[Finding]) -> bool {
     findings
         .iter()
         .any(|finding| finding.severity == Severity::Error)
+}
+
+#[derive(Debug, Serialize)]
+struct Report<'a> {
+    schema: u32,
+    summary: Summary,
+    findings: &'a [Finding],
+}
+
+#[derive(Debug, Serialize)]
+struct Summary {
+    files: usize,
+    units: usize,
+    errors: usize,
+    warnings: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct Measurements<'a> {
+    schema: u32,
+    measures: &'a [Reading],
+}
+
+pub fn json(findings: &[Finding], scanned: Scanned) -> String {
+    let report = Report {
+        schema: SCHEMA,
+        summary: Summary {
+            files: scanned.files,
+            units: scanned.units,
+            errors: count(findings, Severity::Error),
+            warnings: count(findings, Severity::Warning),
+        },
+        findings,
+    };
+
+    rendered(&report)
+}
+
+pub fn measures(readings: &[Reading]) -> String {
+    rendered(&Measurements {
+        schema: SCHEMA,
+        measures: readings,
+    })
+}
+
+fn rendered<T: Serialize>(value: &T) -> String {
+    let mut json = serde_json::to_string_pretty(value).expect("the report is serialisable");
+    json.push('\n');
+    json
 }

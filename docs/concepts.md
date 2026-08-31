@@ -40,13 +40,15 @@ flowchart LR
     lines["lines"] --> fl["file-lines"]
     lines --> fnl["function-lines"]
     cyc["cyclomatic complexity"] --> cc["cyclomatic-complexity"]
-    cyc -.-> hs["hotspot (planned)"]
-    churn["churn (planned)"] -.-> hs
+    cog["cognitive complexity"] --> cogr["cognitive-complexity"]
+    cog --> hs["hotspot"]
+    churn["churn"] --> hs
+    churn --> chr["churn"]
 ```
 
-That last connection is where measures earn their keep. Complexity on its own is a weak signal.
-Complexity in a file that changes every week is a much stronger one, and it costs nothing extra to
-compute once both numbers exist.
+`hotspot` is where measures earn their keep. Complexity on its own is a weak signal and change
+frequency on its own is not a signal at all, but a file that is both is where time goes. Neither
+measure had to change for that rule to exist.
 
 ## Rule
 
@@ -112,6 +114,50 @@ overlap a changed line are reported. Uncommitted edits and brand new files count
 This is also the setting that makes it practical to fail a build on findings. A function that was
 already too long stays quiet until someone edits it, so you can turn the gate on today instead of
 waiting for a cleanup that never gets scheduled.
+
+## Other shapes of output
+
+`--format agent` is the default and the one built for reading. Two others exist for programs.
+
+`--format json` carries the same findings with a schema version, so a build or a bot can consume
+them without parsing text:
+
+```json
+{
+  "schema": 1,
+  "summary": { "files": 42, "units": 378, "errors": 1, "warnings": 0 },
+  "findings": [
+    {
+      "rule": "function-lines",
+      "severity": "error",
+      "path": "src/handler.rs",
+      "span": { "start_line": 120, "end_line": 190 },
+      "subject": "handle_request",
+      "detail": { "measured": 71, "limit": 60 }
+    }
+  ]
+}
+```
+
+A rule is named the same way here as in your configuration, so anything you read out of the report
+can be written straight back into `jabuti.toml`.
+
+`--format measures` is different in kind. It reports every number jabuti computed, for every unit,
+including rules that are switched off:
+
+```json
+{
+  "path": "src/handler.rs",
+  "line": 120,
+  "subject": "handle_request",
+  "kind": "function",
+  "values": { "cognitive-complexity": 9, "cyclomatic-complexity": 4, "function-lines": 71, "parameters": 2 }
+}
+```
+
+Nothing is filtered and no thresholds are applied, because the point is to have the raw numbers for
+questions we have not thought of. Crossing complexity with change frequency is the combination we
+happen to know about; there are others, and finding them needs the numbers rather than the verdicts.
 
 ## Exit codes
 

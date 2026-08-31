@@ -1,0 +1,19 @@
+---
+source: crates/jabuti-core/tests/report.rs
+expression: rendered
+---
+{
+  "schema": 1,
+  "measures": [
+    {
+      "path": "src/lib.rs",
+      "line": 1,
+      "subject": "wide",
+      "kind": "function",
+      "values": {
+        "function-lines": 3,
+        "parameters": 5
+      }
+    }
+  ]
+}

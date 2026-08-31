@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::lang::LanguageId;
 use crate::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
-use crate::model::{Detail, Finding, Rule, RuleId, Severity, Unit, UnitKind};
+use crate::model::{Detail, Finding, Reading, Rule, RuleId, Severity, Unit, UnitKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuleConfig {
@@ -107,6 +107,13 @@ impl Policy {
         findings
     }
 
+    pub fn read(&self, file: &FileUnderReview<'_>) -> Vec<Reading> {
+        let mut readings = vec![reading(file, &file.units, &[Rule::FileLines, Rule::Churn])];
+        gather_readings(file, &file.units, &mut readings);
+
+        readings
+    }
+
     fn walk(&self, file: &FileUnderReview<'_>, unit: &Unit, findings: &mut Vec<Finding>) {
         if unit.kind == UnitKind::Function {
             self.check(Rule::FunctionLines, file, unit, findings);
@@ -153,6 +160,36 @@ impl Policy {
     }
 }
 
+const PER_FUNCTION: [Rule; 4] = [
+    Rule::FunctionLines,
+    Rule::CyclomaticComplexity,
+    Rule::CognitiveComplexity,
+    Rule::Parameters,
+];
+
+fn gather_readings(file: &FileUnderReview<'_>, unit: &Unit, readings: &mut Vec<Reading>) {
+    if unit.kind == UnitKind::Function {
+        readings.push(reading(file, unit, &PER_FUNCTION));
+    }
+
+    for child in &unit.children {
+        gather_readings(file, child, readings);
+    }
+}
+
+fn reading(file: &FileUnderReview<'_>, unit: &Unit, rules: &[Rule]) -> Reading {
+    Reading {
+        path: file.path.clone(),
+        line: unit.span.start_line,
+        subject: unit.name.clone(),
+        kind: unit.kind,
+        values: rules
+            .iter()
+            .map(|rule| (rule.id(), file.measure(*rule, unit)))
+            .collect(),
+    }
+}
+
 #[derive(Debug)]
 pub struct FileUnderReview<'a> {
     pub path: String,
@@ -165,7 +202,7 @@ pub struct FileUnderReview<'a> {
 }
 
 impl FileUnderReview<'_> {
-    fn measure(&self, rule: Rule, unit: &Unit) -> u32 {
+    pub(crate) fn measure(&self, rule: Rule, unit: &Unit) -> u32 {
         match rule {
             Rule::Churn => self.churn,
             Rule::Hotspot => 0,

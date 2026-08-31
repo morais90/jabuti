@@ -1,0 +1,29 @@
+---
+source: crates/jabuti-core/tests/report.rs
+expression: rendered
+---
+{
+  "schema": 1,
+  "summary": {
+    "files": 42,
+    "units": 378,
+    "errors": 1,
+    "warnings": 0
+  },
+  "findings": [
+    {
+      "rule": "function-lines",
+      "severity": "error",
+      "path": "src/handler.rs",
+      "span": {
+        "start_line": 120,
+        "end_line": 130
+      },
+      "subject": "handle_request",
+      "detail": {
+        "measured": 71,
+        "limit": 60
+      }
+    }
+  ]
+}

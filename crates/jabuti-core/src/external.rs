@@ -37,7 +37,9 @@ fn finding(tool: &str, message: &Message) -> Option<Finding> {
             end_line: span.line_end,
         },
         subject: None,
-        detail: Detail::Message(message.text.clone()),
+        detail: Detail::Message {
+            message: message.text.clone(),
+        },
     })
 }
 

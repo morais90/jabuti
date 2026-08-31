@@ -1,12 +1,16 @@
+use std::collections::BTreeMap;
 use std::ops::Range;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use serde::Serialize;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Span {
     pub start_line: u32,
     pub end_line: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum UnitKind {
     File,
     Module,
@@ -34,7 +38,8 @@ pub struct Unit {
     pub children: Vec<Unit>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Severity {
     Off,
     Warning,
@@ -51,7 +56,7 @@ impl Severity {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum Rule {
     Churn,
     Hotspot,
@@ -90,7 +95,8 @@ impl Rule {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(into = "String")]
 pub enum RuleId {
     Native(Rule),
     External { tool: String, lint: String },
@@ -116,19 +122,26 @@ impl RuleId {
     }
 }
 
+impl From<RuleId> for String {
+    fn from(rule: RuleId) -> Self {
+        rule.id()
+    }
+}
+
 impl From<Rule> for RuleId {
     fn from(rule: Rule) -> Self {
         Self::Native(rule)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(untagged)]
 pub enum Detail {
     Threshold { measured: u32, limit: u32 },
-    Message(String),
+    Message { message: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Finding {
     pub rule: RuleId,
     pub severity: Severity,
@@ -148,6 +161,15 @@ pub enum DecisionEffect {
 pub struct Decision {
     pub position: usize,
     pub effect: DecisionEffect,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Reading {
+    pub path: String,
+    pub line: u32,
+    pub subject: Option<String>,
+    pub kind: UnitKind,
+    pub values: BTreeMap<&'static str, u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

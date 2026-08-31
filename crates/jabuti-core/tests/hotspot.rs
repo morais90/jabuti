@@ -5,7 +5,7 @@ use jabuti_core::policy::{Policy, RuleConfig};
 fn measured(finding: &Finding) -> u32 {
     match finding.detail {
         Detail::Threshold { measured, .. } => measured,
-        Detail::Message(_) => unreachable!("hotspot reports a threshold"),
+        Detail::Message { .. } => unreachable!("hotspot reports a threshold"),
     }
 }
 

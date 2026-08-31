@@ -33,9 +33,9 @@ fn a_diagnostic_becomes_a_finding_carrying_the_tools_own_message() {
                 end_line: 3
             },
             subject: None,
-            detail: Detail::Message(
-                "the loop variable `index` is only used to index `values`".to_owned()
-            ),
+            detail: Detail::Message {
+                message: "the loop variable `index` is only used to index `values`".to_owned()
+            },
         })
     );
 }

@@ -3,7 +3,7 @@ mod common;
 use common::parse_fixture;
 use jabuti_core::lang::LanguageId;
 use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
-use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span};
+use jabuti_core::model::{Detail, Finding, Reading, Rule, RuleId, Severity, Span, UnitKind};
 use jabuti_core::policy::{FileUnderReview, Policy, RuleConfig};
 
 fn function_of(body_lines: usize) -> String {
@@ -33,7 +33,7 @@ fn findings_for(source: &str, policy: &Policy) -> Vec<(RuleId, u32, u32)> {
         .into_iter()
         .map(|finding| match finding.detail {
             Detail::Threshold { measured, limit } => (finding.rule, measured, limit),
-            Detail::Message(_) => unreachable!("native rules report a threshold"),
+            Detail::Message { .. } => unreachable!("native rules report a threshold"),
         })
         .collect()
 }
@@ -155,7 +155,9 @@ fn reported_by(tool: &str, lint: &str, severity: Severity) -> Finding {
             end_line: 3,
         },
         subject: None,
-        detail: Detail::Message("the loop variable is only used to index".to_owned()),
+        detail: Detail::Message {
+            message: "the loop variable is only used to index".to_owned(),
+        },
     }
 }
 
@@ -201,7 +203,9 @@ fn the_configuration_can_soften_a_severity_the_tool_chose() {
     assert_eq!(admitted.severity, Severity::Warning);
     assert_eq!(
         admitted.detail,
-        Detail::Message("the loop variable is only used to index".to_owned())
+        Detail::Message {
+            message: "the loop variable is only used to index".to_owned()
+        }
     );
 }
 
@@ -255,4 +259,70 @@ fn setting_a_limit_for_one_language_leaves_the_others_alone() {
         policy.config_for(LanguageId::Rust, Rule::Parameters),
         policy.config(Rule::Parameters)
     );
+}
+
+fn readings_for(source: &str) -> Vec<Reading> {
+    let parsed = parse_fixture(source);
+    let lines = LineIndex::new(source, &parsed.comment_ranges());
+    let decisions = DecisionIndex::new(&parsed.decisions());
+    let cognitive = CognitiveIndex::new(&parsed.increments());
+
+    Policy::default().read(&FileUnderReview {
+        path: "measured.rs".to_owned(),
+        language: LanguageId::Rust,
+        units: parsed.units(),
+        lines: &lines,
+        decisions: &decisions,
+        cognitive: &cognitive,
+        churn: 4,
+    })
+}
+
+#[test]
+fn reading_a_file_reports_the_file_and_every_function_in_it() {
+    let readings = readings_for("fn one() {}\nfn two() {}\n");
+
+    assert_eq!(
+        readings
+            .iter()
+            .map(|reading| (reading.kind, reading.subject.clone()))
+            .collect::<Vec<_>>(),
+        [
+            (UnitKind::File, None),
+            (UnitKind::Function, Some("one".to_owned())),
+            (UnitKind::Function, Some("two".to_owned())),
+        ]
+    );
+}
+
+#[test]
+fn a_file_and_a_function_are_measured_on_different_things() {
+    let readings = readings_for("fn one(value: i32) -> i32 {\n    value\n}\n");
+
+    assert_eq!(
+        readings[0].values.keys().copied().collect::<Vec<_>>(),
+        ["churn", "file-lines"]
+    );
+    assert_eq!(
+        readings[1].values.keys().copied().collect::<Vec<_>>(),
+        [
+            "cognitive-complexity",
+            "cyclomatic-complexity",
+            "function-lines",
+            "parameters"
+        ]
+    );
+}
+
+#[test]
+fn a_measure_is_reported_even_when_its_rule_is_switched_off() {
+    let readings = readings_for("fn one(v: i32) -> i32 {\n    if v > 0 { 1 } else { 0 }\n}\n");
+
+    assert_eq!(
+        Policy::default()
+            .config(Rule::CyclomaticComplexity)
+            .map(|config| config.severity),
+        Some(Severity::Off)
+    );
+    assert_eq!(readings[1].values.get("cyclomatic-complexity"), Some(&2));
 }

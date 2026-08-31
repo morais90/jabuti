@@ -194,3 +194,41 @@ fn a_language_nobody_supports_stops_the_run() {
         .code(2)
         .stderr(contains("unknown language cobol"));
 }
+
+#[test]
+fn the_json_format_names_the_rule_the_way_configuration_does() {
+    let directory = project(&[(
+        "src/lib.rs",
+        "fn wide(a: i32, b: i32, c: i32, d: i32, e: i32) -> i32 {\n    a + b + c + d + e\n}\n",
+    )]);
+
+    jabuti(&directory)
+        .arg("--format")
+        .arg("json")
+        .assert()
+        .success()
+        .stdout(contains("\"schema\": 1"))
+        .stdout(contains("\"rule\": \"parameters\""))
+        .stdout(contains("\"warnings\": 1"));
+}
+
+#[test]
+fn the_measures_format_reports_a_rule_that_is_switched_off() {
+    let directory = project(&[
+        (
+            "jabuti.toml",
+            "[rules]\ncyclomatic-complexity = { severity = \"off\" }\n",
+        ),
+        (
+            "src/lib.rs",
+            "fn a(v: i32) -> i32 {\n    if v > 0 { 1 } else { 0 }\n}\n",
+        ),
+    ]);
+
+    jabuti(&directory)
+        .arg("--format")
+        .arg("measures")
+        .assert()
+        .success()
+        .stdout(contains("\"cyclomatic-complexity\": 2"));
+}

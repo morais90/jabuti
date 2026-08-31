@@ -5,7 +5,7 @@ use ignore::WalkBuilder;
 use ignore::overrides::OverrideBuilder;
 use jabuti_core::hotspot::{self, FileSummary};
 use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
-use jabuti_core::model::{Finding, Unit, UnitKind};
+use jabuti_core::model::{Finding, Reading, Unit, UnitKind};
 use jabuti_core::policy::{FileUnderReview, Policy};
 use jabuti_core::report::Scanned;
 use jabuti_core::{lang, syntax};
@@ -18,6 +18,7 @@ use crate::since::Changes;
 #[derive(Debug, Default)]
 pub(crate) struct Outcome {
     pub(crate) findings: Vec<Finding>,
+    pub(crate) readings: Vec<Reading>,
     pub(crate) scanned: Scanned,
     pub(crate) unreadable: Vec<String>,
 }
@@ -25,6 +26,7 @@ pub(crate) struct Outcome {
 #[derive(Debug, Default)]
 struct Reviewed {
     findings: Vec<Finding>,
+    readings: Vec<Reading>,
     units: usize,
     unreadable: Option<String>,
     summary: Option<FileSummary>,
@@ -76,6 +78,7 @@ fn gather(reviewed: Vec<Reviewed>) -> Outcome {
         }
         outcome.scanned.units += file.units;
         outcome.findings.extend(file.findings);
+        outcome.readings.extend(file.readings);
     }
 
     outcome
@@ -157,6 +160,7 @@ fn review(
     }
 
     Reviewed {
+        readings: policy.read(&file),
         findings,
         units: counted,
         unreadable: None,

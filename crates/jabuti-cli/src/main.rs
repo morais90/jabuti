@@ -47,6 +47,8 @@ enum Command {
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum Format {
     Agent,
+    Json,
+    Measures,
 }
 
 fn main() -> ExitCode {
@@ -206,10 +208,13 @@ fn check(paths: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
         eprintln!("jabuti: could not analyse {path}");
     }
 
-    let Format::Agent = format;
     print!(
         "{}",
-        report::agent(&outcome.findings, outcome.scanned, limit)
+        match format {
+            Format::Agent => report::agent(&outcome.findings, outcome.scanned, limit),
+            Format::Json => report::json(&outcome.findings, outcome.scanned),
+            Format::Measures => report::measures(&outcome.readings),
+        }
     );
 
     if report::has_errors(&outcome.findings) {
