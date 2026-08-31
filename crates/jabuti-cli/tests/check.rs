@@ -151,3 +151,46 @@ fn findings_are_reported_in_path_then_line_order() {
 
     assert!(first < second, "{rendered}");
 }
+
+#[test]
+fn a_kotlin_file_is_measured_against_kotlins_own_limit() {
+    let body = "    val value = 1\n".repeat(50);
+    let directory = project(&[("src/Main.kt", &format!("fun wide() {{\n{body}}}\n"))]);
+
+    jabuti(&directory).assert().success().stdout(contains(
+        "src/Main.kt:1  warning  function-lines  wide  measured 52, limit 47",
+    ));
+}
+
+#[test]
+fn a_language_limit_written_in_the_configuration_wins() {
+    let body = "    val value = 1\n".repeat(50);
+    let directory = project(&[
+        (
+            "jabuti.toml",
+            "[languages.kotlin.rules]\nfunction-lines = { limit = 80 }\n",
+        ),
+        ("src/Main.kt", &format!("fun wide() {{\n{body}}}\n")),
+    ]);
+
+    jabuti(&directory)
+        .assert()
+        .success()
+        .stdout(contains("No findings"));
+}
+
+#[test]
+fn a_language_nobody_supports_stops_the_run() {
+    let directory = project(&[
+        (
+            "jabuti.toml",
+            "[languages.cobol.rules]\nfunction-lines = { limit = 80 }\n",
+        ),
+        ("src/lib.rs", "fn small() {}\n"),
+    ]);
+
+    jabuti(&directory)
+        .assert()
+        .code(2)
+        .stderr(contains("unknown language cobol"));
+}

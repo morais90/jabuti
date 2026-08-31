@@ -50,7 +50,13 @@ The [`parameters`](../rules/parameters.md) rule reports functions that declare m
 Roughly 43% of functions take no arguments at all, and the median is one. Anything past three is
 already unusual.
 
-Other languages will be measured the same way as they are added.
+**Kotlin**, across 54,933 functions in ten established projects:
+
+| p50 | p75 | p90 | p95 | p98 | p99 |
+|---|---|---|---|---|---|
+| 0 | 1 | 2 | 3 | 5 | 6 |
+
+Close enough to Rust that both use the same limit.
 
 ## Further reading
 

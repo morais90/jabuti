@@ -131,7 +131,9 @@ That function scores 10. Nothing about it is hard to follow. This is the main re
 Three quarters of all Rust functions score 1, meaning they do not branch at all. Distributions this
 skewed are hard to threshold usefully, which the rule page goes into.
 
-Other languages will be measured the same way as they are added.
+**Kotlin**, across 54,933 functions in ten established projects, scores a little higher: p50 1,
+p90 3, p95 4, p98 6. Kotlin's `when` and its null-handling operators put more decisions into
+ordinary code than Rust's `match` does.
 
 ## Further reading
 

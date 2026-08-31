@@ -111,7 +111,14 @@ rather than left for you to discover.
 Four functions in five score zero, meaning they contain no branching at all. That shape is worth
 knowing: when a function does score, it is already unusual.
 
-Other languages will be measured the same way as they are added.
+**Kotlin**, across 54,933 functions in ten established projects:
+
+| p50 | p75 | p90 | p95 | p98 | p99 |
+|---|---|---|---|---|---|
+| 0 | 0 | 2 | 4 | 7 | 11 |
+
+Those two distributions are almost identical, in languages that share very little syntax. It is some
+evidence that the measure tracks something about programs rather than about a grammar.
 
 ## Further reading
 

@@ -120,7 +120,10 @@ fn review(
         return unreadable(path);
     };
 
-    let Ok(parsed) = syntax::parse(&source, &lang::RUST) else {
+    let Some(spec) = lang::detect(path) else {
+        return unreadable(path);
+    };
+    let Ok(parsed) = syntax::parse(&source, spec) else {
         return unreadable(path);
     };
 
@@ -132,6 +135,7 @@ fn review(
 
     let file = FileUnderReview {
         path: display(path),
+        language: spec.id,
         units,
         lines: &lines,
         decisions: &decisions,

@@ -2,7 +2,10 @@
 
 Reports a function that spans more lines than the limit.
 
-**Default limit:** 60. **Default severity:** warning. This is the only rule enabled out of the box.
+**Default limit:** 60 in Rust, 47 in Kotlin. **Default severity:** warning.
+
+Both numbers are the same claim measured in each language; [Languages](../languages.md) explains why
+they differ.
 
 ## What it means when it fires
 

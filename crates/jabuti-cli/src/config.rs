@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
+use jabuti_core::lang::LanguageId;
 use jabuti_core::model::{RuleId, Severity};
 use jabuti_core::policy::{Policy, RuleConfig};
 use serde::Deserialize;
@@ -23,6 +24,14 @@ struct Document {
     rules: BTreeMap<String, Entry>,
     #[serde(default)]
     tools: BTreeMap<String, ToolEntry>,
+    #[serde(default)]
+    languages: BTreeMap<String, LanguageEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LanguageEntry {
+    #[serde(default)]
+    rules: BTreeMap<String, Entry>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,16 +70,24 @@ fn settings(document: Document) -> Result<Settings> {
             severity: Severity::Warning,
         });
 
-        policy.set(
-            rule,
-            RuleConfig {
-                limit: entry.limit.unwrap_or(current.limit),
-                severity: match entry.severity {
-                    Some(name) => severity(&name)?,
-                    None => current.severity,
-                },
-            },
-        );
+        policy.set(rule, adjusted(current, entry)?);
+    }
+
+    for (name, entry) in document.languages {
+        let language =
+            LanguageId::from_name(&name).with_context(|| format!("unknown language {name}"))?;
+
+        for (id, rule) in entry.rules {
+            let target = RuleId::parse(&id).with_context(|| format!("unknown rule {id}"))?;
+            let current = policy
+                .config_for(language, target.clone())
+                .unwrap_or(RuleConfig {
+                    limit: 0,
+                    severity: Severity::Warning,
+                });
+
+            policy.set_for(language, target, adjusted(current, rule)?);
+        }
     }
 
     let known: Vec<&str> = crate::tools::ALL.iter().map(|tool| tool.name).collect();
@@ -88,6 +105,16 @@ fn settings(document: Document) -> Result<Settings> {
             .into_iter()
             .map(|(name, entry)| (name, entry.enabled))
             .collect(),
+    })
+}
+
+fn adjusted(current: RuleConfig, entry: Entry) -> Result<RuleConfig> {
+    Ok(RuleConfig {
+        limit: entry.limit.unwrap_or(current.limit),
+        severity: match entry.severity {
+            Some(name) => severity(&name)?,
+            None => current.severity,
+        },
     })
 }
 

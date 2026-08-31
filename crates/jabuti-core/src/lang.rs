@@ -3,9 +3,23 @@ use std::sync::OnceLock;
 
 use tree_sitter::{Language, Query};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LanguageId {
+    Kotlin,
     Rust,
+}
+
+impl LanguageId {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Kotlin => "kotlin",
+            Self::Rust => "rust",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        ALL.iter().map(|spec| spec.id).find(|id| id.name() == name)
+    }
 }
 
 #[derive(Debug)]
@@ -19,7 +33,7 @@ pub(crate) struct Queries {
 #[derive(Debug)]
 pub struct CognitiveSpec {
     pub(crate) conditional: &'static str,
-    pub(crate) alternative_field: &'static str,
+    pub(crate) condition_field: &'static str,
     pub(crate) alternative_wrapper: &'static str,
     pub(crate) nesting_increments: &'static [&'static str],
     pub(crate) nesting_only: &'static [&'static str],
@@ -65,6 +79,38 @@ fn compile(language: &Language, source: &str, id: LanguageId, name: &str) -> Que
         .unwrap_or_else(|error| panic!("{id:?} {name} query does not compile: {error}"))
 }
 
+fn kotlin_grammar() -> Language {
+    tree_sitter_kotlin_ng::LANGUAGE.into()
+}
+
+pub static KOTLIN: LangSpec = LangSpec {
+    id: LanguageId::Kotlin,
+    extensions: &["kt", "kts"],
+    implicit_parameters: &[],
+    cognitive: CognitiveSpec {
+        conditional: "if_expression",
+        condition_field: "condition",
+        alternative_wrapper: "",
+        nesting_increments: &[
+            "when_expression",
+            "while_statement",
+            "do_while_statement",
+            "for_statement",
+            "catch_block",
+        ],
+        nesting_only: &["lambda_literal"],
+        logical_expression: "binary_expression",
+        operator_field: "operator",
+        logical_operators: &["&&", "||"],
+        boundaries: &["function_declaration"],
+    },
+    units_source: include_str!("../queries/kotlin/units.scm"),
+    comments_source: include_str!("../queries/kotlin/comments.scm"),
+    decisions_source: include_str!("../queries/kotlin/decisions.scm"),
+    grammar: kotlin_grammar,
+    compiled: OnceLock::new(),
+};
+
 fn rust_grammar() -> Language {
     tree_sitter_rust::LANGUAGE.into()
 }
@@ -75,7 +121,7 @@ pub static RUST: LangSpec = LangSpec {
     implicit_parameters: &["self_parameter"],
     cognitive: CognitiveSpec {
         conditional: "if_expression",
-        alternative_field: "alternative",
+        condition_field: "condition",
         alternative_wrapper: "else_clause",
         nesting_increments: &[
             "match_expression",
@@ -96,7 +142,7 @@ pub static RUST: LangSpec = LangSpec {
     compiled: OnceLock::new(),
 };
 
-pub static ALL: &[&LangSpec] = &[&RUST];
+pub static ALL: &[&LangSpec] = &[&KOTLIN, &RUST];
 
 pub fn detect(path: &Path) -> Option<&'static LangSpec> {
     let extension = path.extension()?.to_str()?;

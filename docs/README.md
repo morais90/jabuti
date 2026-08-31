@@ -3,6 +3,9 @@
 If this is your first time here, start with [concepts](concepts.md). It explains the few terms these
 pages use and how to read what `jabuti check` prints.
 
+jabuti reads Rust and Kotlin. [Languages](languages.md) covers what each one contributes and why
+their limits differ.
+
 ## Measures
 
 A measure is a number about your code, or about how that code has changed over time. On its own it says nothing about whether that number is good

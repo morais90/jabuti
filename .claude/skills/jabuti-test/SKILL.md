@@ -337,7 +337,18 @@ A snapshot whose diff cannot be explained is a failing test, not a stale one.
 
 ---
 
-## 12. The suite is measured by what it kills, not by what it covers
+## 12. Core behaviour is tested in the core
+
+`cargo mutants` runs only the tests belonging to the package a mutation lives in. A function in
+`jabuti-core` exercised solely through a CLI integration test is, as far as the mutation gate is
+concerned, untested: every mutation of it survives and nobody notices.
+
+So a public function in the core needs a test in the core, even when the CLI already covers it end to
+end. The CLI test proves the wiring; the core test proves the behaviour.
+
+---
+
+## 13. The suite is measured by what it kills, not by what it covers
 
 Coverage proves a line executed. It does not prove anything was asserted about it — a test that calls
 `parse` and drops the result covers the whole module. `cargo mutants` changes the code and asks

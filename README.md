@@ -13,8 +13,8 @@ which is exactly what this tool goes looking for.
 
 </div>
 
-> **Status: early but usable.** `jabuti check` runs on Rust today, with two rules enabled and two
-> more computed but held back. History mining is next.
+> **Status: early but usable.** `jabuti check` reads Rust and Kotlin, reports four rules and
+> computes three more that are held back, and can fold in the linters a project already runs.
 
 ## Why this exists
 

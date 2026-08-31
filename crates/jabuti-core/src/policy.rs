@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::lang::LanguageId;
 use crate::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use crate::model::{Detail, Finding, Rule, RuleId, Severity, Unit, UnitKind};
 
@@ -12,64 +13,49 @@ pub struct RuleConfig {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Policy {
     rules: BTreeMap<RuleId, RuleConfig>,
+    by_language: BTreeMap<(LanguageId, RuleId), RuleConfig>,
 }
 
 impl Default for Policy {
     fn default() -> Self {
         Self {
-            rules: BTreeMap::from([
-                (
-                    RuleId::Native(Rule::Hotspot),
-                    RuleConfig {
-                        limit: 90,
-                        severity: Severity::Warning,
-                    },
-                ),
-                (
-                    RuleId::Native(Rule::Churn),
-                    RuleConfig {
-                        limit: 0,
-                        severity: Severity::Off,
-                    },
-                ),
-                (
-                    RuleId::Native(Rule::CognitiveComplexity),
-                    RuleConfig {
-                        limit: 7,
-                        severity: Severity::Warning,
-                    },
-                ),
-                (
-                    RuleId::Native(Rule::Parameters),
-                    RuleConfig {
-                        limit: 4,
-                        severity: Severity::Warning,
-                    },
-                ),
-                (
-                    RuleId::Native(Rule::CyclomaticComplexity),
-                    RuleConfig {
-                        limit: 10,
-                        severity: Severity::Off,
-                    },
-                ),
-                (
-                    RuleId::Native(Rule::FunctionLines),
-                    RuleConfig {
-                        limit: 60,
-                        severity: Severity::Warning,
-                    },
-                ),
-                (
-                    RuleId::Native(Rule::FileLines),
-                    RuleConfig {
-                        limit: 1000,
-                        severity: Severity::Off,
-                    },
-                ),
-            ]),
+            rules: shared_defaults(),
+            by_language: language_defaults(),
         }
     }
+}
+
+fn reporting(limit: u32) -> RuleConfig {
+    RuleConfig {
+        limit,
+        severity: Severity::Warning,
+    }
+}
+
+fn silent(limit: u32) -> RuleConfig {
+    RuleConfig {
+        limit,
+        severity: Severity::Off,
+    }
+}
+
+fn shared_defaults() -> BTreeMap<RuleId, RuleConfig> {
+    BTreeMap::from([
+        (RuleId::Native(Rule::Churn), silent(0)),
+        (RuleId::Native(Rule::CognitiveComplexity), reporting(7)),
+        (RuleId::Native(Rule::CyclomaticComplexity), silent(10)),
+        (RuleId::Native(Rule::FileLines), silent(1000)),
+        (RuleId::Native(Rule::FunctionLines), reporting(60)),
+        (RuleId::Native(Rule::Hotspot), reporting(90)),
+        (RuleId::Native(Rule::Parameters), reporting(4)),
+    ])
+}
+
+fn language_defaults() -> BTreeMap<(LanguageId, RuleId), RuleConfig> {
+    BTreeMap::from([(
+        (LanguageId::Kotlin, RuleId::Native(Rule::FunctionLines)),
+        reporting(47),
+    )])
 }
 
 impl Policy {
@@ -79,6 +65,19 @@ impl Policy {
 
     pub fn config(&self, rule: impl Into<RuleId>) -> Option<RuleConfig> {
         self.rules.get(&rule.into()).copied()
+    }
+
+    pub fn set_for(&mut self, language: LanguageId, rule: impl Into<RuleId>, config: RuleConfig) {
+        self.by_language.insert((language, rule.into()), config);
+    }
+
+    pub fn config_for(&self, language: LanguageId, rule: impl Into<RuleId>) -> Option<RuleConfig> {
+        let rule = rule.into();
+
+        self.by_language
+            .get(&(language, rule.clone()))
+            .or_else(|| self.rules.get(&rule))
+            .copied()
     }
 
     pub fn admit(&self, finding: Finding) -> Option<Finding> {
@@ -128,7 +127,7 @@ impl Policy {
         unit: &Unit,
         findings: &mut Vec<Finding>,
     ) {
-        let Some(config) = self.rules.get(&RuleId::Native(rule)) else {
+        let Some(config) = self.config_for(file.language, rule) else {
             return;
         };
         if config.severity == Severity::Off {
@@ -157,6 +156,7 @@ impl Policy {
 #[derive(Debug)]
 pub struct FileUnderReview<'a> {
     pub path: String,
+    pub language: LanguageId,
     pub units: Unit,
     pub lines: &'a LineIndex,
     pub decisions: &'a DecisionIndex,

@@ -54,7 +54,7 @@ impl Walk<'_> {
     fn visit_conditional(&mut self, node: Node<'_>, nesting: u32, amount: u32) {
         self.record(node, amount);
 
-        let alternative = node.child_by_field_name(self.spec.alternative_field);
+        let alternative = self.alternative(node);
         let mut cursor = node.walk();
         for child in node.named_children(&mut cursor) {
             if Some(child.id()) != alternative.map(|node| node.id()) {
@@ -70,6 +70,15 @@ impl Walk<'_> {
                 self.visit(branch, nesting + 1);
             }
         }
+    }
+
+    fn alternative<'tree>(&self, node: Node<'tree>) -> Option<Node<'tree>> {
+        let condition = node.child_by_field_name(self.spec.condition_field);
+        let mut cursor = node.walk();
+
+        node.named_children(&mut cursor)
+            .filter(|child| Some(child.id()) != condition.map(|node| node.id()))
+            .nth(1)
     }
 
     fn otherwise<'tree>(&self, alternative: Option<Node<'tree>>) -> Option<Node<'tree>> {

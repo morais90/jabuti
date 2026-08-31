@@ -65,7 +65,13 @@ Half of all Rust functions are six lines or shorter. Borrowing a limit from a la
 functions are typically three times longer would report one function in twelve here, which is enough
 noise that people stop reading the output.
 
-Other languages will be measured the same way as they are added, and each will get its own numbers.
+**Kotlin**, measured across 54,933 functions in ten established projects:
+
+| | p50 | p75 | p90 | p95 | p98 |
+|---|---|---|---|---|---|
+| Lines per function | 7 | 14 | 23 | 32 | 47 |
+
+The medians are close, but Rust has the longer tail, which is why the two limits differ.
 
 ## Further reading
 

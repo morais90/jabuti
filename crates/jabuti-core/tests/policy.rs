@@ -1,6 +1,7 @@
 mod common;
 
 use common::parse_fixture;
+use jabuti_core::lang::LanguageId;
 use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span};
 use jabuti_core::policy::{FileUnderReview, Policy, RuleConfig};
@@ -19,6 +20,7 @@ fn findings_for(source: &str, policy: &Policy) -> Vec<(RuleId, u32, u32)> {
 
     let file = FileUnderReview {
         path: "measured.rs".to_owned(),
+        language: LanguageId::Rust,
         units: parsed.units(),
         lines: &lines,
         decisions: &decisions,
@@ -200,5 +202,57 @@ fn the_configuration_can_soften_a_severity_the_tool_chose() {
     assert_eq!(
         admitted.detail,
         Detail::Message("the loop variable is only used to index".to_owned())
+    );
+}
+
+#[test]
+fn a_language_can_carry_a_limit_of_its_own() {
+    let policy = Policy::default();
+
+    assert_eq!(
+        policy
+            .config_for(LanguageId::Rust, Rule::FunctionLines)
+            .map(|config| config.limit),
+        Some(60)
+    );
+    assert_eq!(
+        policy
+            .config_for(LanguageId::Kotlin, Rule::FunctionLines)
+            .map(|config| config.limit),
+        Some(47)
+    );
+}
+
+#[test]
+fn a_language_without_its_own_limit_falls_back_to_the_shared_one() {
+    let policy = Policy::default();
+
+    assert_eq!(
+        policy.config_for(LanguageId::Kotlin, Rule::CognitiveComplexity),
+        policy.config(Rule::CognitiveComplexity)
+    );
+}
+
+#[test]
+fn setting_a_limit_for_one_language_leaves_the_others_alone() {
+    let mut policy = Policy::default();
+    policy.set_for(
+        LanguageId::Kotlin,
+        Rule::Parameters,
+        RuleConfig {
+            limit: 9,
+            severity: Severity::Warning,
+        },
+    );
+
+    assert_eq!(
+        policy
+            .config_for(LanguageId::Kotlin, Rule::Parameters)
+            .map(|config| config.limit),
+        Some(9)
+    );
+    assert_eq!(
+        policy.config_for(LanguageId::Rust, Rule::Parameters),
+        policy.config(Rule::Parameters)
     );
 }
