@@ -18,6 +18,27 @@ fn a_finding_in_a_file_nobody_touched_is_left_out() {
         .arg("HEAD")
         .assert()
         .success()
+        .stdout(contains("No findings"));
+}
+
+#[test]
+fn unchanged_files_are_skipped_entirely_when_nothing_needs_the_whole_repository() {
+    let directory = repository(&[
+        (
+            "jabuti.toml",
+            "[rules]\nduplicate-block = { severity = \"off\" }\nhotspot = { severity = \"off\" }\n",
+        ),
+        ("src/legacy.rs", &function_of("legacy", 70)),
+        ("src/live.rs", "fn small() {}\n"),
+    ]);
+
+    append(&directory, "src/live.rs", "\nfn added() {}\n");
+
+    jabuti(&directory)
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
         .stdout("No findings across 1 file and 2 units.\n");
 }
 

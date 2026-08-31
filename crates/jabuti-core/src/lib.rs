@@ -1,4 +1,5 @@
 mod cognitive;
+pub mod duplication;
 pub mod external;
 pub mod hotspot;
 pub mod lang;

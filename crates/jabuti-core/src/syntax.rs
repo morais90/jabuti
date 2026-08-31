@@ -3,7 +3,7 @@ use std::ops::Range;
 use tree_sitter::{Node, Parser, Query, QueryCursor, QueryMatch, StreamingIterator, Tree};
 
 use crate::lang::LangSpec;
-use crate::model::{Decision, DecisionEffect, Increment, Span, Unit, UnitKind};
+use crate::model::{Decision, DecisionEffect, Fragment, Increment, Span, Unit, UnitKind};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SyntaxError {
@@ -48,6 +48,18 @@ impl Parsed<'_> {
         });
 
         nest(captured, self.file_unit())
+    }
+
+    pub fn fragments(&self, minimum_nodes: u32) -> Vec<Fragment> {
+        let mut found = Vec::new();
+        let shape = Shape {
+            minimum_nodes,
+            metadata: self.spec.metadata_nodes,
+        };
+        shape.of(self.tree.root_node(), &mut found);
+        found.sort_by_key(|fragment| fragment.bytes.start);
+
+        found
     }
 
     pub fn comment_ranges(&self) -> Vec<Range<usize>> {
@@ -174,6 +186,49 @@ fn effect_of_label(label: &str) -> DecisionEffect {
         "decision" => DecisionEffect::Branch,
         "decision.discount" => DecisionEffect::Discount,
         unknown => panic!("query captures @{unknown}, which carries no decision effect"),
+    }
+}
+
+const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+
+fn mixed(hash: u64, bytes: &[u8]) -> u64 {
+    bytes.iter().fold(hash, |acc, byte| {
+        (acc ^ u64::from(*byte)).wrapping_mul(FNV_PRIME)
+    })
+}
+
+struct Shape {
+    minimum_nodes: u32,
+    metadata: &'static [&'static str],
+}
+
+impl Shape {
+    fn of(&self, node: Node<'_>, found: &mut Vec<Fragment>) -> (u64, u32) {
+        let mut hash = mixed(FNV_OFFSET, node.kind().as_bytes());
+        let mut nodes = 1;
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if self.metadata.contains(&child.kind()) {
+                continue;
+            }
+
+            let (child_hash, child_nodes) = self.of(child, found);
+            hash = mixed(hash, &child_hash.to_le_bytes());
+            nodes += child_nodes;
+        }
+
+        if nodes >= self.minimum_nodes {
+            found.push(Fragment {
+                hash,
+                span: span_of(node),
+                bytes: node.byte_range(),
+                nodes,
+            });
+        }
+
+        (hash, nodes)
     }
 }
 

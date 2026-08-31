@@ -18,6 +18,7 @@ or bad. You never configure a measure directly. You configure the rules that rea
 | [Cognitive complexity](measures/cognitive-complexity.md) | How hard a piece of code is to follow when you read it |
 | [Parameters](measures/parameters.md) | How many arguments a function declares |
 | [Churn](measures/churn.md) | How many commits have touched a file |
+| [Duplication](measures/duplication.md) | Which regions of code have the same structure as a region elsewhere |
 
 ## Rules
 
@@ -31,6 +32,7 @@ say a lot.
 | Rule | Limit | Severity |
 |---|---|---|
 | [`cognitive-complexity`](rules/cognitive-complexity.md) | 7 | warning |
+| [`duplicate-block`](rules/duplicate-block.md) | 120 nodes | warning |
 | [`hotspot`](rules/hotspot.md) | 90 | warning |
 | [`function-lines`](rules/function-lines.md) | 60 | warning |
 | [`parameters`](rules/parameters.md) | 4 | warning |

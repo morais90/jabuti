@@ -62,6 +62,29 @@ pub(crate) fn function_of(name: &str, body_lines: usize) -> String {
     format!("fn {name}() {{\n{body}}}\n")
 }
 
+pub(crate) fn shaped_like(name: &str, first: &str, second: &str) -> String {
+    format!(
+        "fn {name}(input: &str) -> Option<String> {{
+    let mut {first} = input.splitn(2, ':');
+    let {second} = {first}.next()?.trim().to_lowercase();
+    if {second}.is_empty() {{
+        return None;
+    }}
+    Some({second})
+}}
+"
+    )
+}
+
+pub(crate) fn report_duplication_above(limit: usize) -> String {
+    format!(
+        "[rules]
+duplicate-block = {{ limit = {limit}, severity = \"warning\" }}
+hotspot = {{ severity = \"off\" }}
+"
+    )
+}
+
 pub(crate) fn error_on_long_functions(limit: usize) -> String {
     format!("[rules]\nfunction-lines = {{ limit = {limit}, severity = \"error\" }}\n")
 }

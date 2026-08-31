@@ -44,6 +44,7 @@ flowchart LR
     cog --> hs["hotspot"]
     churn["churn"] --> hs
     churn --> chr["churn"]
+    dup["duplication"] --> db["duplicate-block"]
 ```
 
 `hotspot` is where measures earn their keep. Complexity on its own is a weak signal and change

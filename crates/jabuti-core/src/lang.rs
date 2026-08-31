@@ -49,6 +49,7 @@ pub struct LangSpec {
     pub grammar_version: &'static str,
     pub extensions: &'static [&'static str],
     pub(crate) implicit_parameters: &'static [&'static str],
+    pub(crate) metadata_nodes: &'static [&'static str],
     pub(crate) cognitive: CognitiveSpec,
     units_source: &'static str,
     comments_source: &'static str,
@@ -124,6 +125,7 @@ pub static KOTLIN: LangSpec = LangSpec {
     grammar_version: "1.1.0",
     extensions: &["kt", "kts"],
     implicit_parameters: &[],
+    metadata_nodes: &["annotation", "modifiers"],
     cognitive: CognitiveSpec {
         conditional: "if_expression",
         condition_field: "condition",
@@ -157,6 +159,7 @@ pub static RUST: LangSpec = LangSpec {
     grammar_version: "0.24.2",
     extensions: &["rs"],
     implicit_parameters: &["self_parameter", "attribute_item"],
+    metadata_nodes: &["attribute_item", "inner_attribute_item"],
     cognitive: CognitiveSpec {
         conditional: "if_expression",
         condition_field: "condition",

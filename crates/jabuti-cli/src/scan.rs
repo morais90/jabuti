@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use ignore::overrides::OverrideBuilder;
+use jabuti_core::duplication::{self, FileFragments};
 use jabuti_core::hotspot::{self, FileSummary};
 use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::model::{Finding, Reading, Unit, UnitKind};
@@ -27,6 +28,7 @@ pub(crate) struct Outcome {
 struct Reviewed {
     findings: Vec<Finding>,
     readings: Vec<Reading>,
+    fragments: Option<FileFragments>,
     units: usize,
     unreadable: Option<String>,
     summary: Option<FileSummary>,
@@ -38,14 +40,25 @@ pub(crate) fn scan(
     changes: Option<&Changes>,
     churn: Option<&Churn>,
 ) -> Result<Outcome> {
+    let minimum_nodes = duplication_limit(&settings.policy);
     let mut paths = sources(roots, &settings.exclude)?;
-    if let Some(changes) = changes {
+    if let (Some(changes), None) = (changes, minimum_nodes) {
         paths.retain(|path| changes.covers(path));
     }
 
     let reviewed: Vec<Reviewed> = paths
         .par_iter()
-        .map(|path| review(path, &settings.policy, changes, churn))
+        .map(|path| {
+            review(
+                path,
+                &Review {
+                    policy: &settings.policy,
+                    changes,
+                    churn,
+                    minimum_nodes,
+                },
+            )
+        })
         .collect();
 
     let summaries: Vec<FileSummary> = reviewed
@@ -53,7 +66,18 @@ pub(crate) fn scan(
         .filter_map(|file| file.summary.clone())
         .collect();
 
+    let repeated: Vec<FileFragments> = reviewed
+        .iter()
+        .filter_map(|file| file.fragments.clone())
+        .collect();
+
     let mut outcome = gather(reviewed);
+    outcome.findings.extend(
+        duplication::duplicates(&repeated, &settings.policy)
+            .into_iter()
+            .filter(|finding| in_diff(finding, changes)),
+    );
+
     if changes.is_none() {
         outcome
             .findings
@@ -113,12 +137,25 @@ fn sources(roots: &[PathBuf], exclude: &[String]) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-fn review(
-    path: &Path,
-    policy: &Policy,
-    changes: Option<&Changes>,
-    churn: Option<&Churn>,
-) -> Reviewed {
+fn duplication_limit(policy: &Policy) -> Option<u32> {
+    policy
+        .config(jabuti_core::model::Rule::DuplicateBlock)
+        .filter(|config| config.severity != jabuti_core::model::Severity::Off)
+        .map(|config| config.limit)
+}
+
+fn in_diff(finding: &Finding, changes: Option<&Changes>) -> bool {
+    changes.is_none_or(|changes| changes.touches(Path::new(&finding.path), finding.span))
+}
+
+struct Review<'a> {
+    policy: &'a Policy,
+    changes: Option<&'a Changes>,
+    churn: Option<&'a Churn>,
+    minimum_nodes: Option<u32>,
+}
+
+fn review(path: &Path, context: &Review<'_>) -> Reviewed {
     let Ok(source) = std::fs::read_to_string(path) else {
         return rejected(path, "the file could not be read");
     };
@@ -144,7 +181,7 @@ fn review(
         lines: &lines,
         decisions: &decisions,
         cognitive: &cognitive,
-        churn: churn.map_or(0, |churn| churn.commits(path)),
+        churn: context.churn.map_or(0, |churn| churn.commits(path)),
     };
 
     let summary = FileSummary {
@@ -154,13 +191,17 @@ fn review(
         complexity: cognitive.total(&file.units),
     };
 
-    let mut findings = policy.evaluate(&file);
-    if let Some(changes) = changes {
+    let mut findings = context.policy.evaluate(&file);
+    if let Some(changes) = context.changes {
         findings.retain(|finding| changes.touches(path, finding.span));
     }
 
     Reviewed {
-        readings: policy.read(&file),
+        readings: context.policy.read(&file),
+        fragments: context.minimum_nodes.map(|minimum| FileFragments {
+            path: display(path),
+            fragments: parsed.fragments(minimum),
+        }),
         findings,
         units: counted,
         unreadable: None,

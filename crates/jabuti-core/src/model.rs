@@ -59,6 +59,7 @@ impl Severity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum Rule {
     Churn,
+    DuplicateBlock,
     Hotspot,
     CognitiveComplexity,
     CyclomaticComplexity,
@@ -68,8 +69,9 @@ pub enum Rule {
 }
 
 impl Rule {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Churn,
+        Self::DuplicateBlock,
         Self::Hotspot,
         Self::CognitiveComplexity,
         Self::CyclomaticComplexity,
@@ -81,6 +83,7 @@ impl Rule {
     pub fn id(self) -> &'static str {
         match self {
             Self::Churn => "churn",
+            Self::DuplicateBlock => "duplicate-block",
             Self::Hotspot => "hotspot",
             Self::CognitiveComplexity => "cognitive-complexity",
             Self::CyclomaticComplexity => "cyclomatic-complexity",
@@ -161,6 +164,14 @@ pub enum DecisionEffect {
 pub struct Decision {
     pub position: usize,
     pub effect: DecisionEffect,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fragment {
+    pub hash: u64,
+    pub span: Span,
+    pub bytes: Range<usize>,
+    pub nodes: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

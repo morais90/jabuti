@@ -42,6 +42,7 @@ fn silent(limit: u32) -> RuleConfig {
 fn shared_defaults() -> BTreeMap<RuleId, RuleConfig> {
     BTreeMap::from([
         (RuleId::Native(Rule::Churn), silent(0)),
+        (RuleId::Native(Rule::DuplicateBlock), reporting(120)),
         (RuleId::Native(Rule::CognitiveComplexity), reporting(7)),
         (RuleId::Native(Rule::CyclomaticComplexity), silent(10)),
         (RuleId::Native(Rule::FileLines), silent(1000)),
@@ -201,11 +202,13 @@ pub struct FileUnderReview<'a> {
     pub churn: u32,
 }
 
+const NOT_MEASURED_PER_UNIT: u32 = 0;
+
 impl FileUnderReview<'_> {
     pub(crate) fn measure(&self, rule: Rule, unit: &Unit) -> u32 {
         match rule {
             Rule::Churn => self.churn,
-            Rule::Hotspot => 0,
+            Rule::DuplicateBlock | Rule::Hotspot => NOT_MEASURED_PER_UNIT,
             Rule::CognitiveComplexity => self.cognitive.cognitive(unit),
             Rule::Parameters => unit.parameters,
             Rule::CyclomaticComplexity => self.decisions.cyclomatic(unit),
