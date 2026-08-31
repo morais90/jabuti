@@ -71,7 +71,7 @@ pub(crate) fn scan(
         .filter_map(|file| file.fragments.clone())
         .collect();
 
-    let mut outcome = gather(reviewed);
+    let mut outcome = gather(covered(&paths, reviewed, changes));
     outcome.findings.extend(
         duplication::duplicates(&repeated, &settings.policy)
             .into_iter()
@@ -135,6 +135,19 @@ fn sources(roots: &[PathBuf], exclude: &[String]) -> Result<Vec<PathBuf>> {
 
     paths.sort();
     Ok(paths)
+}
+
+fn covered(paths: &[PathBuf], reviewed: Vec<Reviewed>, changes: Option<&Changes>) -> Vec<Reviewed> {
+    let Some(changes) = changes else {
+        return reviewed;
+    };
+
+    paths
+        .iter()
+        .zip(reviewed)
+        .filter(|(path, _)| changes.covers(path))
+        .map(|(_, file)| file)
+        .collect()
 }
 
 fn duplication_limit(policy: &Policy) -> Option<u32> {

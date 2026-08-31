@@ -54,3 +54,13 @@ fn a_slash_makes_an_identifier_belong_to_a_tool() {
 fn an_identifier_naming_nothing_is_rejected(#[case] id: &str) {
     assert_eq!(RuleId::parse(id), None);
 }
+
+#[test]
+fn only_the_rules_compared_across_files_belong_to_the_repository() {
+    let wide: Vec<Rule> = Rule::ALL
+        .into_iter()
+        .filter(|rule| rule.repository_wide())
+        .collect();
+
+    assert_eq!(wide, [Rule::DuplicateBlock, Rule::Hotspot]);
+}

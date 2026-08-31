@@ -80,22 +80,43 @@ fn widest(classes: Vec<Vec<Occurrence>>) -> Vec<(Occurrence, Vec<Occurrence>)> {
 
     for class in ordered {
         for (index, occurrence) in class.iter().enumerate() {
-            if reported.iter().any(|(kept, _)| kept.encloses(occurrence)) {
-                continue;
-            }
-
             let twins = class
                 .iter()
                 .enumerate()
                 .filter(|(other, _)| *other != index)
-                .map(|(_, twin)| twin.clone())
-                .collect();
+                .map(|(_, twin)| twin.clone());
 
-            reported.push((occurrence.clone(), twins));
+            match reported
+                .iter_mut()
+                .find(|(kept, _)| kept.encloses(occurrence))
+            {
+                Some((kept, known)) => absorb(kept, known, twins),
+                None => reported.push((occurrence.clone(), twins.collect())),
+            }
         }
     }
 
+    for (_, twins) in &mut reported {
+        twins.sort_by(|left, right| {
+            left.path.cmp(&right.path).then(
+                left.fragment
+                    .span
+                    .start_line
+                    .cmp(&right.fragment.span.start_line),
+            )
+        });
+    }
+
     reported
+}
+
+fn absorb(kept: &Occurrence, known: &mut Vec<Occurrence>, twins: impl Iterator<Item = Occurrence>) {
+    for twin in twins {
+        let already = kept.encloses(&twin) || known.iter().any(|seen| seen.encloses(&twin));
+        if !already {
+            known.push(twin);
+        }
+    }
 }
 
 fn finding(
@@ -104,11 +125,6 @@ fn finding(
     severity: Severity,
     limit: u32,
 ) -> Finding {
-    let where_else: Vec<String> = twins
-        .iter()
-        .map(|twin| format!("{}:{}", twin.path, twin.fragment.span.start_line))
-        .collect();
-
     Finding {
         rule: RuleId::Native(Rule::DuplicateBlock),
         severity,
@@ -119,8 +135,24 @@ fn finding(
             message: format!(
                 "{} nodes repeated at {} (limit {limit})",
                 occurrence.fragment.nodes,
-                where_else.join(", ")
+                where_else(twins)
             ),
         },
+    }
+}
+
+const TWINS_LISTED: usize = 3;
+
+fn where_else(twins: &[Occurrence]) -> String {
+    let listed = twins
+        .iter()
+        .take(TWINS_LISTED)
+        .map(|twin| format!("{}:{}", twin.path, twin.fragment.span.start_line))
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    match twins.len().checked_sub(TWINS_LISTED) {
+        Some(remaining) if remaining > 0 => format!("{listed} and {remaining} more"),
+        _ => listed,
     }
 }

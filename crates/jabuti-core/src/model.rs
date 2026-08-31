@@ -96,6 +96,10 @@ impl Rule {
     pub fn from_id(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|rule| rule.id() == id)
     }
+
+    pub fn repository_wide(self) -> bool {
+        matches!(self, Self::DuplicateBlock | Self::Hotspot)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]

@@ -60,6 +60,29 @@ pub(crate) fn load(directory: &Path) -> Result<Settings> {
     settings(document)
 }
 
+fn language_rules(policy: &mut Policy, name: &str, entry: LanguageEntry) -> Result<()> {
+    let language =
+        LanguageId::from_name(name).with_context(|| format!("unknown language {name}"))?;
+
+    for (id, rule) in entry.rules {
+        let target = RuleId::parse(&id).with_context(|| format!("unknown rule {id}"))?;
+        if matches!(&target, RuleId::Native(native) if native.repository_wide()) {
+            bail!("{id} is measured across the whole repository, so it cannot be set per language");
+        }
+
+        let current = policy
+            .config_for(language, target.clone())
+            .unwrap_or(RuleConfig {
+                limit: 0,
+                severity: Severity::Warning,
+            });
+
+        policy.set_for(language, target, adjusted(current, rule)?);
+    }
+
+    Ok(())
+}
+
 fn settings(document: Document) -> Result<Settings> {
     let mut policy = Policy::default();
 
@@ -74,20 +97,7 @@ fn settings(document: Document) -> Result<Settings> {
     }
 
     for (name, entry) in document.languages {
-        let language =
-            LanguageId::from_name(&name).with_context(|| format!("unknown language {name}"))?;
-
-        for (id, rule) in entry.rules {
-            let target = RuleId::parse(&id).with_context(|| format!("unknown rule {id}"))?;
-            let current = policy
-                .config_for(language, target.clone())
-                .unwrap_or(RuleConfig {
-                    limit: 0,
-                    severity: Severity::Warning,
-                });
-
-            policy.set_for(language, target, adjusted(current, rule)?);
-        }
+        language_rules(&mut policy, &name, entry)?;
     }
 
     let known: Vec<&str> = crate::tools::ALL.iter().map(|tool| tool.name).collect();

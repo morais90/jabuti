@@ -1,6 +1,8 @@
 mod common;
 
-use common::{append, jabuti, report_duplication_above, repository, shaped_like, write};
+use common::{
+    append, function_of, jabuti, report_duplication_above, repository, shaped_like, write,
+};
 use predicates::str::contains;
 
 #[test]
@@ -82,4 +84,38 @@ fn a_copy_that_predates_the_change_is_left_out() {
         .assert()
         .success()
         .stdout(contains("No findings"));
+}
+
+#[test]
+fn measures_stay_scoped_to_the_change_even_though_duplication_reads_everything() {
+    let directory = repository(&[
+        ("jabuti.toml", &report_duplication_above(40)),
+        ("src/legacy.rs", &function_of("legacy", 70)),
+        ("src/live.rs", "fn small() {}\n"),
+    ]);
+
+    append(&directory, "src/live.rs", "\nfn added() {}\n");
+
+    jabuti(&directory)
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stdout("No findings across 1 file and 2 units.\n");
+}
+
+#[test]
+fn a_repository_wide_rule_cannot_be_set_per_language() {
+    let directory = repository(&[
+        (
+            "jabuti.toml",
+            "[languages.rust.rules]\nduplicate-block = { severity = \"off\" }\n",
+        ),
+        ("src/live.rs", "fn small() {}\n"),
+    ]);
+
+    jabuti(&directory)
+        .assert()
+        .code(2)
+        .stderr(contains("cannot be set per language"));
 }

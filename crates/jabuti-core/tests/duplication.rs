@@ -9,6 +9,10 @@ const HEADER: &str = "fn parse_header(input: &str) -> Option<String> {\n    let 
 
 const RENAMED: &str = "fn read_pair(line: &str) -> Option<String> {\n    let mut pieces = line.splitn(2, ':');\n    let key = pieces.next()?.trim().to_lowercase();\n    if key.is_empty() {\n        return None;\n    }\n    Some(key)\n}\n";
 
+const COMMENTED: &str = "fn read_pair(line: &str) -> Option<String> {\n    // split once\n    let mut pieces = line.splitn(2, ':');\n    let key = pieces.next()?.trim().to_lowercase();\n    if key.is_empty() {\n        return None;\n    }\n    Some(key)\n}\n";
+
+const EXTRA_PARAMETER: &str = "fn other(line: &str, extra: u8) -> Option<String> {\n    let mut pieces = line.splitn(2, ':');\n    let key = pieces.next()?.trim().to_lowercase();\n    if key.is_empty() {\n        return None;\n    }\n    Some(key)\n}\n";
+
 const UNRELATED: &str = "fn total(values: &[i32]) -> i32 {\n    values.iter().sum()\n}\n";
 
 fn fragments(path: &str, source: &str, minimum: u32) -> FileFragments {
@@ -119,7 +123,7 @@ fn an_attribute_is_metadata_and_does_not_make_two_functions_twins() {
 fn two_different_tokens_never_share_a_fingerprint() {
     let source = "fn f() {}\n";
     let parsed = parse_fixture(source);
-    let fragments = parsed.fragments(1);
+    let fragments = parsed.fragments(0);
 
     let fingerprint = |bytes: std::ops::Range<usize>| {
         fragments
@@ -130,4 +134,110 @@ fn two_different_tokens_never_share_a_fingerprint() {
     };
 
     assert_ne!(fingerprint(4..5), fingerprint(5..6));
+}
+
+fn messages(files: &[FileFragments], minimum: u32) -> Vec<String> {
+    duplication::duplicates(files, &reporting_above(minimum))
+        .into_iter()
+        .map(|finding| match finding.detail {
+            jabuti_core::model::Detail::Message { message } => {
+                format!("{} {message}", finding.path)
+            }
+            jabuti_core::model::Detail::Threshold { .. } => {
+                unreachable!("duplication has no threshold")
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn a_comment_added_to_a_copy_does_not_hide_it() {
+    let files = [
+        fragments("src/a.rs", HEADER, 40),
+        fragments("src/b.rs", COMMENTED, 40),
+    ];
+
+    assert_eq!(reported(&files, 40), ["src/a.rs:1", "src/b.rs:1"]);
+}
+
+#[test]
+fn every_occurrence_names_all_the_others_not_only_its_own_class() {
+    let files = [
+        fragments("src/a.rs", HEADER, 40),
+        fragments("src/b.rs", RENAMED, 40),
+        fragments("src/c.rs", EXTRA_PARAMETER, 40),
+    ];
+
+    let messages = messages(&files, 40);
+
+    assert!(messages[0].contains("src/b.rs:1"), "{messages:?}");
+    assert!(messages[0].contains("src/c.rs:1"), "{messages:?}");
+    assert!(messages[2].contains("src/a.rs:1"), "{messages:?}");
+    assert!(messages[2].contains("src/b.rs:1"), "{messages:?}");
+}
+
+#[test]
+fn a_twin_is_never_listed_twice_when_a_wider_copy_already_covers_it() {
+    let files = [
+        fragments("src/a.rs", HEADER, 40),
+        fragments("src/b.rs", RENAMED, 40),
+    ];
+
+    let messages = messages(&files, 40);
+
+    assert_eq!(messages[0].matches("src/b.rs").count(), 1, "{messages:?}");
+}
+
+#[test]
+fn a_long_family_of_copies_names_a_few_and_counts_the_rest() {
+    let files: Vec<FileFragments> = (0..6)
+        .map(|index| fragments(&format!("src/copy{index}.rs"), HEADER, 40))
+        .collect();
+
+    let messages = messages(&files, 40);
+
+    assert!(
+        messages[0].ends_with("and 2 more (limit 40)"),
+        "{messages:?}"
+    );
+}
+
+#[test]
+fn a_block_of_exactly_the_limit_is_left_alone() {
+    let largest = parse_fixture(HEADER)
+        .fragments(0)
+        .iter()
+        .map(|fragment| fragment.nodes)
+        .max()
+        .expect("the file is a fragment of its own");
+
+    let at_limit = [
+        fragments("src/a.rs", HEADER, largest),
+        fragments("src/b.rs", RENAMED, largest),
+    ];
+    assert_eq!(reported(&at_limit, largest), Vec::<String>::new());
+
+    let over_limit = [
+        fragments("src/a.rs", HEADER, largest - 1),
+        fragments("src/b.rs", RENAMED, largest - 1),
+    ];
+    assert_eq!(
+        reported(&over_limit, largest - 1),
+        ["src/a.rs:1", "src/b.rs:1"]
+    );
+}
+
+#[test]
+fn a_family_that_fits_the_message_is_listed_without_a_tally() {
+    let files: Vec<FileFragments> = (0..4)
+        .map(|index| fragments(&format!("src/copy{index}.rs"), HEADER, 40))
+        .collect();
+
+    let messages = messages(&files, 40);
+
+    assert!(!messages[0].contains("more"), "{messages:?}");
+    assert!(
+        messages[0].ends_with("src/copy3.rs:1 (limit 40)"),
+        "{messages:?}"
+    );
 }

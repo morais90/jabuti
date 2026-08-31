@@ -56,8 +56,12 @@ function of five or six lines with a condition in it lands somewhere around 60 t
 
 ## What is left out
 
-Attributes and annotations do not take part. In Rust that means `#[derive(...)]` and friends; in
-Kotlin, annotations and modifier lists.
+Comments do not take part. Adding a note to one copy of a block is one of the most ordinary ways two
+copies come to differ, and it changes nothing about the code, so a copy carrying a comment its twin
+does not have is still reported as a copy.
+
+Attributes and annotations do not take part either. In Rust that means `#[derive(...)]` and friends;
+in Kotlin, annotations and modifier lists.
 
 The reason is a consequence of comparing shape. Because names and literals are ignored,
 `#[case("a", 1)]` and `#[case("b", 2)]` produce the same fingerprint, so any two functions carrying

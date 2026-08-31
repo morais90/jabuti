@@ -30,7 +30,11 @@ src/parser.rs:12  warning  duplicate-block  143 nodes repeated at src/reader.rs:
 
 Every occurrence is reported, and each one points at the others. So a block appearing in two places
 produces two lines, each naming the other. That is deliberate: whichever file you happen to open,
-the finding tells you where the rest of the family lives.
+the finding tells you where the rest of the family lives, which is the part that stops you from
+fixing two copies and leaving a third behind.
+
+When a block was copied many times, the finding names the first few locations and counts the rest,
+so one heavily repeated block cannot flood the report on its own.
 
 The number is a count of syntax nodes rather than lines, for reasons covered in
 [the measure](../measures/duplication.md). Names and literals do not take part in the comparison, so
@@ -86,7 +90,13 @@ introduced rather than to every copy already present.
 
 The rule compares files against each other, so jabuti reads every file in scope even when the run is
 narrowed with `--since`. Only findings that touch changed lines are reported, but the search itself
-has to see the whole picture, since a copy is only findable when its twin is also in view.
+has to see the whole picture, since a copy is only findable when its twin is also in view. Reading a
+file is not the same as counting it: the summary line and `--format measures` still cover only the
+change, so scoping a run means the same thing whether or not this rule is on.
+
+Because a copy can span two files written in different languages, the rule belongs to the repository
+rather than to a language, and setting it under `[languages.<name>.rules]` is rejected with an error
+rather than quietly ignored. The same is true of [`hotspot`](hotspot.md).
 
 Copies are found across files and across languages jabuti supports, but never across a boundary it
 cannot parse. A file with a syntax error contributes nothing to the comparison.

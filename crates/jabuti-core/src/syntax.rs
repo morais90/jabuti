@@ -50,10 +50,10 @@ impl Parsed<'_> {
         nest(captured, self.file_unit())
     }
 
-    pub fn fragments(&self, minimum_nodes: u32) -> Vec<Fragment> {
+    pub fn fragments(&self, limit: u32) -> Vec<Fragment> {
         let mut found = Vec::new();
         let shape = Shape {
-            minimum_nodes,
+            limit,
             metadata: self.spec.metadata_nodes,
         };
         shape.of(self.tree.root_node(), &mut found);
@@ -199,7 +199,7 @@ fn mixed(hash: u64, bytes: &[u8]) -> u64 {
 }
 
 struct Shape {
-    minimum_nodes: u32,
+    limit: u32,
     metadata: &'static [&'static str],
 }
 
@@ -210,7 +210,7 @@ impl Shape {
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if self.metadata.contains(&child.kind()) {
+            if child.is_extra() || self.metadata.contains(&child.kind()) {
                 continue;
             }
 
@@ -219,7 +219,7 @@ impl Shape {
             nodes += child_nodes;
         }
 
-        if nodes >= self.minimum_nodes {
+        if nodes > self.limit {
             found.push(Fragment {
                 hash,
                 span: span_of(node),
