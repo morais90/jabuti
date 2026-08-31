@@ -136,6 +136,7 @@ fn cognitive_complexity_matches_the_derivation_in_the_fixture(
 #[case("method_ignores_self", 2)]
 #[case("method_takes_only_self", 0)]
 #[case("takes_a_closure", 0)]
+#[case("takes_annotated_parameters", 2)]
 fn a_unit_reports_the_parameters_it_declares(#[case] unit_name: &str, #[case] expected: u32) {
     let file = units_of("rust/parameters.rs");
 

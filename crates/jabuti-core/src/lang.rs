@@ -46,6 +46,7 @@ pub struct CognitiveSpec {
 #[derive(Debug)]
 pub struct LangSpec {
     pub id: LanguageId,
+    pub grammar_version: &'static str,
     pub extensions: &'static [&'static str],
     pub(crate) implicit_parameters: &'static [&'static str],
     pub(crate) cognitive: CognitiveSpec,
@@ -57,6 +58,37 @@ pub struct LangSpec {
 }
 
 impl LangSpec {
+    pub fn knows_node_kind(&self, kind: &str, named: bool) -> bool {
+        !kind.is_empty() && self.queries().language.id_for_node_kind(kind, named) != 0
+    }
+
+    pub fn knows_field(&self, field: &str) -> bool {
+        self.queries().language.field_id_for_name(field).is_some()
+    }
+
+    pub fn declared_node_kinds(&self) -> Vec<(&'static str, bool)> {
+        let cognitive = &self.cognitive;
+        let named = [cognitive.conditional, cognitive.logical_expression]
+            .into_iter()
+            .chain(cognitive.nesting_increments.iter().copied())
+            .chain(cognitive.nesting_only.iter().copied())
+            .chain(cognitive.boundaries.iter().copied())
+            .chain(self.implicit_parameters.iter().copied())
+            .chain(some(cognitive.alternative_wrapper))
+            .map(|kind| (kind, true));
+
+        named
+            .chain(cognitive.logical_operators.iter().map(|op| (*op, false)))
+            .collect()
+    }
+
+    pub fn declared_fields(&self) -> Vec<&'static str> {
+        vec![
+            self.cognitive.condition_field,
+            self.cognitive.operator_field,
+        ]
+    }
+
     pub(crate) fn queries(&self) -> &Queries {
         self.compiled.get_or_init(|| {
             let language = (self.grammar)();
@@ -74,6 +106,10 @@ impl LangSpec {
     }
 }
 
+fn some(kind: &'static str) -> Option<&'static str> {
+    (!kind.is_empty()).then_some(kind)
+}
+
 fn compile(language: &Language, source: &str, id: LanguageId, name: &str) -> Query {
     Query::new(language, source)
         .unwrap_or_else(|error| panic!("{id:?} {name} query does not compile: {error}"))
@@ -85,6 +121,7 @@ fn kotlin_grammar() -> Language {
 
 pub static KOTLIN: LangSpec = LangSpec {
     id: LanguageId::Kotlin,
+    grammar_version: "1.1.0",
     extensions: &["kt", "kts"],
     implicit_parameters: &[],
     cognitive: CognitiveSpec {
@@ -117,8 +154,9 @@ fn rust_grammar() -> Language {
 
 pub static RUST: LangSpec = LangSpec {
     id: LanguageId::Rust,
+    grammar_version: "0.24.2",
     extensions: &["rs"],
-    implicit_parameters: &["self_parameter"],
+    implicit_parameters: &["self_parameter", "attribute_item"],
     cognitive: CognitiveSpec {
         conditional: "if_expression",
         condition_field: "condition",

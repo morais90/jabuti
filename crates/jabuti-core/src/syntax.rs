@@ -9,8 +9,8 @@ use crate::model::{Decision, DecisionEffect, Increment, Span, Unit, UnitKind};
 pub enum SyntaxError {
     #[error("parser rejected the grammar: {0}")]
     Grammar(#[from] tree_sitter::LanguageError),
-    #[error("source could not be parsed")]
-    Malformed,
+    #[error("unreadable syntax from line {line}")]
+    Malformed { line: u32 },
 }
 
 #[derive(Debug)]
@@ -27,9 +27,11 @@ pub fn parse<'source>(
     let mut parser = Parser::new();
     parser.set_language(&spec.queries().language)?;
 
-    let tree = parser.parse(source, None).ok_or(SyntaxError::Malformed)?;
-    if tree.root_node().has_error() {
-        return Err(SyntaxError::Malformed);
+    let tree = parser
+        .parse(source, None)
+        .ok_or(SyntaxError::Malformed { line: 1 })?;
+    if let Some(line) = first_error(tree.root_node()) {
+        return Err(SyntaxError::Malformed { line });
     }
 
     Ok(Parsed { tree, source, spec })
@@ -173,6 +175,19 @@ fn effect_of_label(label: &str) -> DecisionEffect {
         "decision.discount" => DecisionEffect::Discount,
         unknown => panic!("query captures @{unknown}, which carries no decision effect"),
     }
+}
+
+fn first_error(node: Node<'_>) -> Option<u32> {
+    if !node.has_error() {
+        return None;
+    }
+
+    let mut cursor = node.walk();
+    let inside = node.children(&mut cursor).find_map(first_error);
+
+    inside.or_else(|| {
+        (node.is_error() || node.is_missing()).then(|| line_number(node.start_position().row))
+    })
 }
 
 fn span_of(node: Node<'_>) -> Span {

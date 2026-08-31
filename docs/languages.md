@@ -16,7 +16,10 @@ and taking the value that reports roughly the worst 2%.
 | `parameters` | 4 | 4 |
 
 The corpora behind those numbers are 737,689 functions from 1,645 crates published on crates.io, and
-54,933 functions from ten established Kotlin projects.
+54,933 functions from ten established Kotlin projects. Both were measured in August 2026.
+
+A calibration has a shelf life. As a language's idiom shifts, so does the distribution it was drawn
+from, which is why the date is recorded alongside the numbers rather than left implicit.
 
 The result is worth noticing. Only function length actually needed a different limit, and the
 difference is real: Rust has a longer tail, so the same 2% report rate sits at 60 lines there and 47
@@ -62,6 +65,34 @@ than no number. It does mean the Kotlin calibration is drawn from the files that
 be slightly simpler than the ones that do not.
 
 Rust files in the equivalent corpus parsed without exception.
+
+## Which version of a language
+
+None in particular, and that is deliberate.
+
+We parse rather than compile, so our only exposure to a language version is whether the grammar can
+read the syntax. Grammars are additive: one that understands Rust 2024 reads Rust 2015 without
+effort. There is no code here that supports an old version, so there is nothing to deprecate and no
+support window worth declaring.
+
+What that leaves us owing you is different, and checkable:
+
+```console
+$ jabuti languages
+kotlin     .kt .kts     grammar 1.1.0
+rust       .rs          grammar 0.24.2
+```
+
+The grammar version is what actually determines whether your syntax parses, so it is the number to
+quote when something does not. And when a file cannot be read, jabuti says where the trouble starts
+rather than only that it failed:
+
+```console
+jabuti: could not analyse src/broken.rs: unreadable syntax from line 6
+```
+
+External tools are the place where versions do need a policy, since their output formats and lint
+names change under us. There the rule is the current stable release and at most one before it.
 
 ## Adding another language
 

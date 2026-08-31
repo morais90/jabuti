@@ -46,3 +46,93 @@ fn no_two_languages_share_a_name_or_an_extension() {
         }
     }
 }
+
+#[test]
+fn every_node_kind_a_language_names_exists_in_its_grammar() {
+    for spec in lang::ALL {
+        let declared = spec.declared_node_kinds();
+        assert!(!declared.is_empty(), "{:?} declares nothing", spec.id);
+
+        for (kind, named) in declared {
+            assert!(
+                spec.knows_node_kind(kind, named),
+                "{:?} names {kind}, which its grammar does not have",
+                spec.id
+            );
+        }
+
+        let fields = spec.declared_fields();
+        assert!(!fields.is_empty(), "{:?} declares no fields", spec.id);
+
+        for field in fields {
+            assert!(spec.knows_field(field), "{:?} names field {field}", spec.id);
+        }
+    }
+}
+
+#[test]
+fn a_language_that_wraps_its_else_branch_declares_the_wrapper() {
+    assert!(
+        lang::RUST
+            .declared_node_kinds()
+            .contains(&("else_clause", true)),
+        "rust wraps the else branch and must say so"
+    );
+    assert!(
+        !lang::KOTLIN
+            .declared_node_kinds()
+            .iter()
+            .any(|(kind, _)| *kind == "else_clause"),
+        "kotlin has no wrapper to declare"
+    );
+}
+
+#[test]
+fn the_grammar_version_a_language_reports_is_the_one_we_depend_on() {
+    let manifest = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
+        .expect("the manifest is readable");
+
+    for spec in lang::ALL {
+        let crate_name = match spec.id {
+            LanguageId::Kotlin => "tree-sitter-kotlin-ng",
+            LanguageId::Rust => "tree-sitter-rust",
+        };
+        let Some(declared) = manifest
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("{crate_name} = ")))
+            .map(|value| value.trim_matches('"'))
+        else {
+            panic!("{crate_name} is not a plain dependency line");
+        };
+
+        assert_eq!(spec.grammar_version, declared, "{:?}", spec.id);
+    }
+}
+
+#[rstest]
+#[case("if_expression", true, true)]
+#[case("spline_expression", true, false)]
+#[case("", true, false)]
+#[case("&&", false, true)]
+#[case("<=>", false, false)]
+fn a_grammar_answers_whether_it_has_a_node_kind(
+    #[case] kind: &str,
+    #[case] named: bool,
+    #[case] known: bool,
+) {
+    assert_eq!(lang::RUST.knows_node_kind(kind, named), known);
+}
+
+#[test]
+fn an_empty_name_is_never_a_node_kind_the_grammar_has() {
+    assert!(!lang::RUST.knows_node_kind("", true));
+    assert!(!lang::KOTLIN.knows_node_kind("", true));
+}
+
+#[rstest]
+#[case("condition", true)]
+#[case("operator", true)]
+#[case("spline", false)]
+fn a_grammar_answers_whether_it_has_a_field(#[case] field: &str, #[case] known: bool) {
+    assert_eq!(lang::RUST.knows_field(field), known);
+}

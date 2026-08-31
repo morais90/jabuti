@@ -21,3 +21,7 @@ fn takes_a_closure() -> i32 {
 
     add(1, 2) // parameters = 0
 }
+
+fn takes_annotated_parameters(#[allow(unused)] first: i32, second: i32) -> i32 {
+    first + second // parameters = 2, the attribute is not an argument
+}

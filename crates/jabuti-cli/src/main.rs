@@ -25,6 +25,8 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    Languages,
+
     Tools,
 
     Check {
@@ -127,6 +129,7 @@ fn history_when_needed(settings: &config::Settings) -> Option<churn::Churn> {
 
 fn run() -> Result<ExitCode> {
     match Cli::parse().command {
+        Command::Languages => Ok(list_languages()),
         Command::Tools => list_tools(),
         Command::Check {
             paths,
@@ -135,6 +138,25 @@ fn run() -> Result<ExitCode> {
             limit,
         } => check(&paths, since.as_deref(), format, limit),
     }
+}
+
+fn list_languages() -> ExitCode {
+    for spec in jabuti_core::lang::ALL {
+        let extensions: Vec<String> = spec
+            .extensions
+            .iter()
+            .map(|extension| format!(".{extension}"))
+            .collect();
+
+        println!(
+            "{:<10} {:<12} grammar {}",
+            spec.id.name(),
+            extensions.join(" "),
+            spec.grammar_version
+        );
+    }
+
+    ExitCode::SUCCESS
 }
 
 fn list_tools() -> Result<ExitCode> {

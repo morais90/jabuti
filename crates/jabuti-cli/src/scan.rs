@@ -117,14 +117,15 @@ fn review(
     churn: Option<&Churn>,
 ) -> Reviewed {
     let Ok(source) = std::fs::read_to_string(path) else {
-        return unreadable(path);
+        return rejected(path, "the file could not be read");
     };
 
     let Some(spec) = lang::detect(path) else {
-        return unreadable(path);
+        return rejected(path, "no language claims this extension");
     };
-    let Ok(parsed) = syntax::parse(&source, spec) else {
-        return unreadable(path);
+    let parsed = match syntax::parse(&source, spec) {
+        Ok(parsed) => parsed,
+        Err(reason) => return rejected(path, &reason.to_string()),
     };
 
     let lines = LineIndex::new(&source, &parsed.comment_ranges());
@@ -163,9 +164,9 @@ fn review(
     }
 }
 
-fn unreadable(path: &Path) -> Reviewed {
+fn rejected(path: &Path, reason: &str) -> Reviewed {
     Reviewed {
-        unreadable: Some(display(path)),
+        unreadable: Some(format!("{}: {reason}", display(path))),
         ..Reviewed::default()
     }
 }

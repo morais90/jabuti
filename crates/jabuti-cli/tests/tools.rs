@@ -174,3 +174,34 @@ fn a_tool_that_finds_nothing_is_not_mistaken_for_a_tool_that_failed() {
         .stdout(contains("No findings"))
         .stderr(contains("exited without reporting anything").not());
 }
+
+#[test]
+fn every_language_reports_its_extensions_and_grammar_version() {
+    let directory = project(&[("src/lib.rs", "fn small() {}\n")]);
+    let mut command = assert_cmd::Command::cargo_bin("jabuti").expect("the binary is built");
+
+    command
+        .current_dir(directory.path())
+        .arg("languages")
+        .assert()
+        .success()
+        .stdout(
+            contains("rust")
+                .and(contains(".rs"))
+                .and(contains("grammar")),
+        )
+        .stdout(contains("kotlin").and(contains(".kt")));
+}
+
+#[test]
+fn a_file_that_cannot_be_parsed_says_where_the_trouble_starts() {
+    let directory = project(&[(
+        "src/broken.rs",
+        "fn first() -> usize {\n    1\n}\n\nfn second() -> usize {\n    let value = = 2;\n    value\n}\n",
+    )]);
+
+    jabuti(&directory)
+        .assert()
+        .success()
+        .stderr(contains("src/broken.rs: unreadable syntax from line 6"));
+}

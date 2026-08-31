@@ -65,8 +65,11 @@ fn every_registered_language_compiles_its_queries() {
 }
 
 #[test]
-fn source_that_does_not_parse_is_rejected_rather_than_measured() {
+fn source_that_does_not_parse_is_rejected_and_says_where() {
     let parsed = parse_outcome("rust/malformed.rs");
 
-    assert!(matches!(parsed, Err(SyntaxError::Malformed)));
+    assert!(
+        matches!(parsed, Err(SyntaxError::Malformed { line: 1 })),
+        "{parsed:?}"
+    );
 }

@@ -15,6 +15,15 @@ impl Holder {
 }
 ```
 
+An attribute on a parameter is not a parameter either, which matters in test code where macros
+annotate arguments:
+
+```rust
+fn measured(#[allow(unused)] first: i32, second: i32) -> i32 {  // parameters = 2
+    first + second
+}
+```
+
 Closures are counted the same way as functions, on themselves:
 
 ```rust
