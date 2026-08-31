@@ -1,5 +1,6 @@
 mod churn;
 mod config;
+mod git;
 mod scan;
 mod since;
 mod tools;

@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 
 #[derive(Debug)]
 pub(crate) struct Churn {
@@ -12,8 +11,8 @@ pub(crate) struct Churn {
 
 impl Churn {
     pub(crate) fn of_repository() -> Result<Self> {
-        let root = PathBuf::from(git(&["rev-parse", "--show-toplevel"])?.trim());
-        let log = git(&["log", "--numstat", "--format="])?;
+        let root = PathBuf::from(crate::git::run(&["rev-parse", "--show-toplevel"])?.trim());
+        let log = crate::git::run(&["log", "--numstat", "--format="])?;
 
         Ok(Self {
             root: root.canonicalize().unwrap_or(root),
@@ -35,23 +34,6 @@ impl Churn {
             .ok()
             .map(Path::to_path_buf)
     }
-}
-
-fn git(arguments: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .args(arguments)
-        .output()
-        .context("running git")?;
-
-    if !output.status.success() {
-        bail!(
-            "git {} failed: {}",
-            arguments.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-
-    String::from_utf8(output.stdout).context("git produced output that is not utf8")
 }
 
 fn tally(log: &str) -> BTreeMap<PathBuf, u32> {

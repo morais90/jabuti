@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use jabuti_core::model::Span;
 
 #[derive(Debug)]
@@ -31,9 +30,9 @@ pub(crate) struct Changes {
 
 impl Changes {
     pub(crate) fn since(reference: &str) -> Result<Self> {
-        let root = PathBuf::from(git(&["rev-parse", "--show-toplevel"])?.trim());
-        let diff = git(&["diff", "--unified=0", "--merge-base", reference])?;
-        let untracked = git(&["ls-files", "--others", "--exclude-standard"])?;
+        let root = PathBuf::from(crate::git::run(&["rev-parse", "--show-toplevel"])?.trim());
+        let diff = crate::git::run(&["diff", "--unified=0", "--merge-base", reference])?;
+        let untracked = crate::git::run(&["ls-files", "--others", "--exclude-standard"])?;
 
         let mut touched = hunks(&diff);
         for path in untracked.lines().filter(|line| !line.is_empty()) {
@@ -60,23 +59,6 @@ impl Changes {
 
         self.touched.get(relative)
     }
-}
-
-fn git(arguments: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .args(arguments)
-        .output()
-        .context("running git")?;
-
-    if !output.status.success() {
-        bail!(
-            "git {} failed: {}",
-            arguments.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-
-    String::from_utf8(output.stdout).context("git produced output that is not utf8")
 }
 
 fn hunks(diff: &str) -> BTreeMap<PathBuf, Touched> {
