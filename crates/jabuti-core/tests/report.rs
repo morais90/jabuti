@@ -1,9 +1,9 @@
-use jabuti_core::model::{Finding, Rule, Severity, Span};
+use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span};
 use jabuti_core::report::{self, Scanned};
 
 fn finding(severity: Severity, line: u32, subject: Option<&str>) -> Finding {
     Finding {
-        rule: Rule::FunctionLines,
+        rule: RuleId::Native(Rule::FunctionLines),
         severity,
         path: "src/handler.rs".to_owned(),
         span: Span {
@@ -11,8 +11,10 @@ fn finding(severity: Severity, line: u32, subject: Option<&str>) -> Finding {
             end_line: line + 10,
         },
         subject: subject.map(str::to_owned),
-        measured: 71,
-        limit: 60,
+        detail: Detail::Threshold {
+            measured: 71,
+            limit: 60,
+        },
     }
 }
 

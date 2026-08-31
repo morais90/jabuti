@@ -1,4 +1,4 @@
-use crate::model::{Finding, Rule, Severity, Span};
+use crate::model::{Detail, Finding, Rule, RuleId, Severity, Span};
 use crate::policy::Policy;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,13 +25,15 @@ pub fn hotspots(files: &[FileSummary], policy: &Policy) -> Vec<Finding> {
         .filter_map(|file| {
             let measured = churn.rank(file.churn).min(complexity.rank(file.complexity));
             (measured > config.limit).then(|| Finding {
-                rule: Rule::Hotspot,
+                rule: RuleId::Native(Rule::Hotspot),
                 severity: config.severity,
                 path: file.path.clone(),
                 span: file.span,
                 subject: None,
-                measured,
-                limit: config.limit,
+                detail: Detail::Threshold {
+                    measured,
+                    limit: config.limit,
+                },
             })
         })
         .collect();

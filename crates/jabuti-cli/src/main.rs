@@ -2,6 +2,7 @@ mod churn;
 mod config;
 mod scan;
 mod since;
+mod tools;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -24,6 +25,8 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    Tools,
+
     Check {
         #[arg(default_value = ".")]
         paths: Vec<PathBuf>,
@@ -54,6 +57,51 @@ fn main() -> ExitCode {
     }
 }
 
+fn run_tools(
+    root: &std::path::Path,
+    settings: &config::Settings,
+    changes: Option<&since::Changes>,
+) -> Vec<jabuti_core::model::Finding> {
+    let mut findings = Vec::new();
+
+    for tool in tools::ALL {
+        if !tool
+            .status(root, enabled_tool(settings, tool.name))
+            .runnable()
+        {
+            continue;
+        }
+
+        match tool.run(root) {
+            Ok(reported) => findings.extend(admitted(reported, root, settings, changes)),
+            Err(reason) => eprintln!("jabuti: {reason}"),
+        }
+    }
+
+    findings
+}
+
+fn admitted(
+    reported: Vec<jabuti_core::model::Finding>,
+    root: &std::path::Path,
+    settings: &config::Settings,
+    changes: Option<&since::Changes>,
+) -> Vec<jabuti_core::model::Finding> {
+    reported
+        .into_iter()
+        .filter_map(|finding| settings.policy.admit(finding))
+        .filter(|finding| in_scope(finding, root, changes))
+        .collect()
+}
+
+fn in_scope(
+    finding: &jabuti_core::model::Finding,
+    root: &std::path::Path,
+    changes: Option<&since::Changes>,
+) -> bool {
+    changes.is_none_or(|changes| changes.touches(&root.join(&finding.path), finding.span))
+}
+
 fn enabled(settings: &config::Settings, rule: Rule) -> bool {
     settings
         .policy
@@ -78,21 +126,59 @@ fn history_when_needed(settings: &config::Settings) -> Option<churn::Churn> {
 }
 
 fn run() -> Result<ExitCode> {
-    let Command::Check {
-        paths,
-        since,
-        format,
-        limit,
-    } = Cli::parse().command;
+    match Cli::parse().command {
+        Command::Tools => list_tools(),
+        Command::Check {
+            paths,
+            since,
+            format,
+            limit,
+        } => check(&paths, since.as_deref(), format, limit),
+    }
+}
 
-    let settings = config::load(&std::env::current_dir()?)?;
-    let changes = since.as_deref().map(since::Changes::since).transpose()?;
+fn list_tools() -> Result<ExitCode> {
+    let root = std::env::current_dir()?;
+    let settings = config::load(&root)?;
+
+    for tool in tools::ALL {
+        let note = match tool.status(&root, enabled_tool(&settings, tool.name)) {
+            tools::Status::NotApplicable => "not applicable here".to_owned(),
+            tools::Status::Unavailable => format!("install with `{}`", tool.install_hint),
+            tools::Status::Disabled => {
+                format!("enable with [tools.{}] enabled = true", tool.name)
+            }
+            tools::Status::Ready => "will run".to_owned(),
+        };
+
+        println!("{:<10} {note}", tool.name);
+    }
+
+    Ok(ExitCode::SUCCESS)
+}
+
+fn enabled_tool(settings: &config::Settings, name: &str) -> bool {
+    settings.tools.get(name).copied().unwrap_or(false)
+}
+
+fn check(paths: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -> Result<ExitCode> {
+    let root = std::env::current_dir()?;
+    let settings = config::load(&root)?;
+    let changes = since.map(since::Changes::since).transpose()?;
     let history = history_when_needed(&settings);
     if changes.is_some() && enabled(&settings, Rule::Hotspot) {
         eprintln!("jabuti: hotspot ranks a whole repository, so it is not evaluated with --since");
     }
 
-    let outcome = scan::scan(&paths, &settings, changes.as_ref(), history.as_ref())?;
+    let mut outcome = scan::scan(paths, &settings, changes.as_ref(), history.as_ref())?;
+    outcome
+        .findings
+        .extend(run_tools(&root, &settings, changes.as_ref()));
+    outcome.findings.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.span.start_line.cmp(&right.span.start_line))
+    });
 
     for path in &outcome.unreadable {
         eprintln!("jabuti: could not analyse {path}");

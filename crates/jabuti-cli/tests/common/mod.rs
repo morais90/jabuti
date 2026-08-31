@@ -18,14 +18,17 @@ pub(crate) fn project(files: &[(&str, &str)]) -> TempDir {
 
 pub(crate) fn repository(files: &[(&str, &str)]) -> TempDir {
     let directory = project(files);
-
-    git(&directory, &["init", "-q", "-b", "main"]);
-    git(&directory, &["config", "user.email", "test@example.com"]);
-    git(&directory, &["config", "user.name", "test"]);
-    git(&directory, &["add", "-A"]);
-    git(&directory, &["commit", "-qm", "base"]);
+    init_repository(&directory);
 
     directory
+}
+
+pub(crate) fn init_repository(directory: &TempDir) {
+    git(directory, &["init", "-q", "-b", "main"]);
+    git(directory, &["config", "user.email", "test@example.com"]);
+    git(directory, &["config", "user.name", "test"]);
+    git(directory, &["add", "-A"]);
+    git(directory, &["commit", "-qm", "base"]);
 }
 
 pub(crate) fn commit(directory: &TempDir, message: &str) {

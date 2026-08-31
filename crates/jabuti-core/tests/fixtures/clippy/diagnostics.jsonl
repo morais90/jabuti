@@ -1,0 +1,8 @@
+{"reason":"compiler-artifact","package_id":"lintme 0.1.0","target":{"name":"lintme"}}
+{"reason":"compiler-message","message":{"level":"warning","message":"the loop variable `index` is only used to index `values`","code":{"code":"clippy::needless_range_loop","explanation":null},"spans":[{"file_name":"src/lib.rs","line_start":3,"line_end":3,"column_start":18,"column_end":37,"is_primary":true,"label":null}]}}
+{"reason":"compiler-message","message":{"level":"warning","message":"the loop variable `index` is only used to index `values`","code":{"code":"clippy::needless_range_loop","explanation":null},"spans":[{"file_name":"src/lib.rs","line_start":3,"line_end":3,"column_start":18,"column_end":37,"is_primary":true,"label":null}]}}
+{"reason":"compiler-message","message":{"level":"error","message":"unused variable: `unused`","code":{"code":"unused_variables","explanation":null},"spans":[{"file_name":"src/lib.rs","line_start":6,"line_end":6,"column_start":9,"column_end":15,"is_primary":true,"label":null}]}}
+{"reason":"compiler-message","message":{"level":"note","message":"`#[warn(unused_variables)]` on by default","code":null,"spans":[]}}
+{"reason":"compiler-message","message":{"level":"warning","message":"1 warning emitted","code":null,"spans":[]}}
+{"reason":"compiler-message","message":{"level":"warning","message":"a warning with no primary span","code":{"code":"clippy::orphaned","explanation":null},"spans":[{"file_name":"src/lib.rs","line_start":1,"line_end":1,"column_start":1,"column_end":2,"is_primary":false,"label":null}]}}
+{"reason":"build-finished","success":true}

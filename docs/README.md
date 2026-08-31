@@ -38,6 +38,11 @@ say a lot.
 The last three are switched off by default. Their pages explain why, and what you gain by turning
 them on if your project wants them.
 
+## External tools
+
+jabuti also runs the linters your project already has, folding their findings into the same output.
+[External tools](tools.md) covers how to see what is available and how to turn one on.
+
 ## Configuration
 
 Create a `jabuti.toml` in the directory you run the command from:

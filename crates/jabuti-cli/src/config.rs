@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use jabuti_core::model::{Rule, Severity};
+use jabuti_core::model::{RuleId, Severity};
 use jabuti_core::policy::{Policy, RuleConfig};
 use serde::Deserialize;
 
@@ -12,6 +12,7 @@ pub(crate) const FILE_NAME: &str = "jabuti.toml";
 pub(crate) struct Settings {
     pub(crate) policy: Policy,
     pub(crate) exclude: Vec<String>,
+    pub(crate) tools: BTreeMap<String, bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -20,6 +21,14 @@ struct Document {
     exclude: Vec<String>,
     #[serde(default)]
     rules: BTreeMap<String, Entry>,
+    #[serde(default)]
+    tools: BTreeMap<String, ToolEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ToolEntry {
+    #[serde(default)]
+    enabled: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,8 +55,8 @@ fn settings(document: Document) -> Result<Settings> {
     let mut policy = Policy::default();
 
     for (id, entry) in document.rules {
-        let rule = Rule::from_id(&id).with_context(|| format!("unknown rule {id}"))?;
-        let current = policy.config(rule).unwrap_or(RuleConfig {
+        let rule = RuleId::parse(&id).with_context(|| format!("unknown rule {id}"))?;
+        let current = policy.config(rule.clone()).unwrap_or(RuleConfig {
             limit: 0,
             severity: Severity::Warning,
         });
@@ -64,9 +73,21 @@ fn settings(document: Document) -> Result<Settings> {
         );
     }
 
+    let known: Vec<&str> = crate::tools::ALL.iter().map(|tool| tool.name).collect();
+    for name in document.tools.keys() {
+        if !known.contains(&name.as_str()) {
+            bail!("unknown tool {name}, jabuti knows {}", known.join(", "));
+        }
+    }
+
     Ok(Settings {
         policy,
         exclude: document.exclude,
+        tools: document
+            .tools
+            .into_iter()
+            .map(|(name, entry)| (name, entry.enabled))
+            .collect(),
     })
 }
 

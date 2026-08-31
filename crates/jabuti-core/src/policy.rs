@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
-use crate::model::{Finding, Rule, Severity, Unit, UnitKind};
+use crate::model::{Detail, Finding, Rule, RuleId, Severity, Unit, UnitKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuleConfig {
@@ -11,7 +11,7 @@ pub struct RuleConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Policy {
-    rules: BTreeMap<Rule, RuleConfig>,
+    rules: BTreeMap<RuleId, RuleConfig>,
 }
 
 impl Default for Policy {
@@ -19,49 +19,49 @@ impl Default for Policy {
         Self {
             rules: BTreeMap::from([
                 (
-                    Rule::Hotspot,
+                    RuleId::Native(Rule::Hotspot),
                     RuleConfig {
                         limit: 90,
                         severity: Severity::Warning,
                     },
                 ),
                 (
-                    Rule::Churn,
+                    RuleId::Native(Rule::Churn),
                     RuleConfig {
                         limit: 0,
                         severity: Severity::Off,
                     },
                 ),
                 (
-                    Rule::CognitiveComplexity,
+                    RuleId::Native(Rule::CognitiveComplexity),
                     RuleConfig {
                         limit: 7,
                         severity: Severity::Warning,
                     },
                 ),
                 (
-                    Rule::Parameters,
+                    RuleId::Native(Rule::Parameters),
                     RuleConfig {
                         limit: 4,
                         severity: Severity::Warning,
                     },
                 ),
                 (
-                    Rule::CyclomaticComplexity,
+                    RuleId::Native(Rule::CyclomaticComplexity),
                     RuleConfig {
                         limit: 10,
                         severity: Severity::Off,
                     },
                 ),
                 (
-                    Rule::FunctionLines,
+                    RuleId::Native(Rule::FunctionLines),
                     RuleConfig {
                         limit: 60,
                         severity: Severity::Warning,
                     },
                 ),
                 (
-                    Rule::FileLines,
+                    RuleId::Native(Rule::FileLines),
                     RuleConfig {
                         limit: 1000,
                         severity: Severity::Off,
@@ -73,12 +73,23 @@ impl Default for Policy {
 }
 
 impl Policy {
-    pub fn set(&mut self, rule: Rule, config: RuleConfig) {
-        self.rules.insert(rule, config);
+    pub fn set(&mut self, rule: impl Into<RuleId>, config: RuleConfig) {
+        self.rules.insert(rule.into(), config);
     }
 
-    pub fn config(&self, rule: Rule) -> Option<RuleConfig> {
-        self.rules.get(&rule).copied()
+    pub fn config(&self, rule: impl Into<RuleId>) -> Option<RuleConfig> {
+        self.rules.get(&rule.into()).copied()
+    }
+
+    pub fn admit(&self, finding: Finding) -> Option<Finding> {
+        match self.rules.get(&finding.rule) {
+            Some(config) if config.severity == Severity::Off => None,
+            Some(config) => Some(Finding {
+                severity: config.severity,
+                ..finding
+            }),
+            None => Some(finding),
+        }
     }
 
     pub fn evaluate(&self, file: &FileUnderReview<'_>) -> Vec<Finding> {
@@ -117,7 +128,7 @@ impl Policy {
         unit: &Unit,
         findings: &mut Vec<Finding>,
     ) {
-        let Some(config) = self.rules.get(&rule) else {
+        let Some(config) = self.rules.get(&RuleId::Native(rule)) else {
             return;
         };
         if config.severity == Severity::Off {
@@ -130,13 +141,15 @@ impl Policy {
         }
 
         findings.push(Finding {
-            rule,
+            rule: RuleId::Native(rule),
             severity: config.severity,
             path: file.path.clone(),
             span: unit.span,
             subject: unit.name.clone(),
-            measured,
-            limit: config.limit,
+            detail: Detail::Threshold {
+                measured,
+                limit: config.limit,
+            },
         });
     }
 }

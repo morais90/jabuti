@@ -90,15 +90,52 @@ impl Rule {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RuleId {
+    Native(Rule),
+    External { tool: String, lint: String },
+}
+
+impl RuleId {
+    pub fn id(&self) -> String {
+        match self {
+            Self::Native(rule) => rule.id().to_owned(),
+            Self::External { tool, lint } => format!("{tool}/{lint}"),
+        }
+    }
+
+    pub fn parse(id: &str) -> Option<Self> {
+        match id.split_once('/') {
+            Some((tool, lint)) if !tool.is_empty() && !lint.is_empty() => Some(Self::External {
+                tool: tool.to_owned(),
+                lint: lint.to_owned(),
+            }),
+            Some(_) => None,
+            None => Rule::from_id(id).map(Self::Native),
+        }
+    }
+}
+
+impl From<Rule> for RuleId {
+    fn from(rule: Rule) -> Self {
+        Self::Native(rule)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Detail {
+    Threshold { measured: u32, limit: u32 },
+    Message(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
-    pub rule: Rule,
+    pub rule: RuleId,
     pub severity: Severity,
     pub path: String,
     pub span: Span,
     pub subject: Option<String>,
-    pub measured: u32,
-    pub limit: u32,
+    pub detail: Detail,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,6 +1,13 @@
 use jabuti_core::hotspot::{self, FileSummary};
-use jabuti_core::model::{Rule, Severity, Span};
+use jabuti_core::model::{Detail, Finding, Rule, Severity, Span};
 use jabuti_core::policy::{Policy, RuleConfig};
+
+fn measured(finding: &Finding) -> u32 {
+    match finding.detail {
+        Detail::Threshold { measured, .. } => measured,
+        Detail::Message(_) => unreachable!("hotspot reports a threshold"),
+    }
+}
 
 fn file(path: &str, churn: u32, complexity: u32) -> FileSummary {
     FileSummary {
@@ -35,7 +42,7 @@ fn spread() -> Vec<FileSummary> {
 fn reported(files: &[FileSummary], limit: u32) -> Vec<(String, u32)> {
     hotspot::hotspots(files, &reporting_above(limit))
         .into_iter()
-        .map(|finding| (finding.path, finding.measured))
+        .map(|finding| (finding.path.clone(), measured(&finding)))
         .collect()
 }
 
@@ -77,7 +84,7 @@ fn the_reported_number_is_the_lower_of_the_two_rankings() {
         .find(|finding| finding.path == "src/lopsided.rs")
         .expect("lopsided is ranked");
 
-    assert_eq!(lopsided.measured, 45);
+    assert_eq!(measured(lopsided), 45);
 }
 
 #[test]

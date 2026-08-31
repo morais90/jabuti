@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use crate::model::{Finding, Severity};
+use crate::model::{Detail, Finding, Severity};
 
 pub const DEFAULT_LIMIT: usize = 40;
 
@@ -54,15 +54,18 @@ fn write_finding(rendered: &mut String, finding: &Finding) {
         .as_ref()
         .map_or(String::new(), |name| format!("{name}  "));
 
+    let detail = match &finding.detail {
+        Detail::Threshold { measured, limit } => format!("measured {measured}, limit {limit}"),
+        Detail::Message(message) => message.clone(),
+    };
+
     writeln!(
         rendered,
-        "{}:{}  {}  {}  {subject}measured {}, limit {}",
+        "{}:{}  {}  {}  {subject}{detail}",
         finding.path,
         finding.span.start_line,
         finding.severity.label(),
         finding.rule.id(),
-        finding.measured,
-        finding.limit
     )
     .expect("writing to a string never fails");
 }
