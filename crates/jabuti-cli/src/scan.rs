@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -134,7 +135,9 @@ fn sources(roots: &[PathBuf], exclude: &[String]) -> Result<Vec<PathBuf>> {
         .collect();
 
     paths.sort();
-    paths.dedup_by_key(|path| path.canonicalize().unwrap_or_else(|_| path.clone()));
+
+    let mut seen = BTreeSet::new();
+    paths.retain(|path| seen.insert(path.canonicalize().unwrap_or_else(|_| path.clone())));
 
     Ok(paths)
 }

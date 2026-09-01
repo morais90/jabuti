@@ -128,11 +128,12 @@ fn the_same_file_reached_through_two_roots_is_not_a_copy_of_itself() {
             "src/parser.rs",
             &shaped_like("parse_header", "parts", "name"),
         ),
+        ("src/small.rs", "fn small() {}\n"),
     ]);
 
     jabuti(&directory)
         .arg("src")
         .assert()
         .success()
-        .stdout("No findings across 1 file and 1 unit.\n");
+        .stdout("No findings across 2 files and 2 units.\n");
 }
