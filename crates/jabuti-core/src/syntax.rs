@@ -252,19 +252,19 @@ fn captured_masking<'tree>(
     for capture in matched.captures {
         let label = query.capture_names()[capture.index as usize];
         if label == "construct" {
-            construct = capture.node.utf8_text(source.as_bytes()).ok();
+            construct = Some(capture.node);
         } else if let Some(labelled) = kind_of_mask(label) {
             kind = Some(labelled);
             node = Some(capture.node);
         }
     }
 
-    let node = node?;
+    let (node, named) = (node?, construct?);
     Some((
         Masking {
             kind: kind?,
-            construct: construct?.to_owned(),
-            span: span_of(node),
+            construct: named.utf8_text(source.as_bytes()).ok()?.to_owned(),
+            span: span_of(named),
         },
         node,
     ))

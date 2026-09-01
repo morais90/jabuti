@@ -63,3 +63,17 @@ fn masking_can_be_switched_off_for_one_language() {
         .success()
         .stdout(contains("No findings"));
 }
+
+#[test]
+fn a_test_directory_given_as_the_path_argument_is_still_a_test_directory() {
+    let directory = project(&[
+        ("jabuti.toml", &only_masking()),
+        ("tests/behaviour.rs", MASKED),
+    ]);
+
+    jabuti(&directory)
+        .arg("tests")
+        .assert()
+        .success()
+        .stdout(contains("No findings"));
+}

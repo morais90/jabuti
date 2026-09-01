@@ -158,3 +158,26 @@ fn a_rule_switched_off_reports_nothing_however_much_is_masked() {
         []
     );
 }
+
+#[test]
+fn the_finding_points_at_the_line_the_construct_is_on() {
+    let source = "fn f() {\n    let value = builder()\n        .name(\"a\")\n        .build()\n        .unwrap();\n}\n";
+    let maskings = parse_fixture(source).maskings();
+
+    assert_eq!(maskings.len(), 1);
+    assert_eq!(maskings[0].span.start_line, 5);
+}
+
+#[test]
+fn an_async_test_wrapper_is_recognised_like_a_plain_test() {
+    let source = "#[tokio::test]\nasync fn checks() {\n    let a = g().unwrap();\n}\n";
+
+    assert_eq!(masked(source), []);
+}
+
+#[test]
+fn a_plain_function_beside_test_attributes_is_still_read() {
+    let source = "#[inline]\nfn live() {\n    let a = g().unwrap();\n}\n";
+
+    assert_eq!(masked(source), [panics("unwrap")]);
+}

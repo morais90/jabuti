@@ -137,12 +137,7 @@ pub static KOTLIN: LangSpec = LangSpec {
     decorators_before: &[],
     decorators_within: &["modifiers", "annotation"],
     test_markers: &["@Test", "@ParameterizedTest", "@RepeatedTest"],
-    test_paths: &[
-        "/src/test/",
-        "/src/androidTest/",
-        "/src/commonTest/",
-        "/src/jvmTest/",
-    ],
+    test_paths: &["test", "tests", "*Test"],
     cognitive: CognitiveSpec {
         conditional: "if_expression",
         condition_field: "condition",
@@ -180,8 +175,8 @@ pub static RUST: LangSpec = LangSpec {
     metadata_nodes: &["attribute_item", "inner_attribute_item"],
     decorators_before: &["attribute_item"],
     decorators_within: &["inner_attribute_item"],
-    test_markers: &["#[test]", "#[bench]", "#[rstest]", "cfg(test)"],
-    test_paths: &["/tests/", "/benches/", "/examples/"],
+    test_markers: &["test]", "bench]", "test_case", "cfg(test)"],
+    test_paths: &["tests", "benches", "examples"],
     cognitive: CognitiveSpec {
         conditional: "if_expression",
         condition_field: "condition",
@@ -210,9 +205,20 @@ pub static ALL: &[&LangSpec] = &[&KOTLIN, &RUST];
 
 impl LangSpec {
     pub fn is_test_path(&self, path: &Path) -> bool {
-        let shown = path.to_string_lossy().replace('\\', "/");
+        path.components()
+            .filter_map(|component| component.as_os_str().to_str())
+            .any(|directory| {
+                self.test_paths
+                    .iter()
+                    .any(|name| names_match(name, directory))
+            })
+    }
+}
 
-        self.test_paths.iter().any(|marker| shown.contains(marker))
+fn names_match(pattern: &str, directory: &str) -> bool {
+    match pattern.strip_prefix('*') {
+        Some(suffix) => directory.ends_with(suffix),
+        None => directory == pattern,
     }
 }
 
