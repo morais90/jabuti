@@ -26,7 +26,7 @@ pub fn agent(
     if findings.is_empty() {
         writeln!(rendered, "No findings across {}.", files_and_units(scanned))
             .expect("writing to a string never fails");
-        write_unreadable(&mut rendered, unreadable, limit);
+        rendered.push_str(&self::unreadable(unreadable, limit));
 
         return rendered;
     }
@@ -54,14 +54,15 @@ pub fn agent(
         .expect("writing to a string never fails");
     }
 
-    write_unreadable(&mut rendered, unreadable, limit);
+    rendered.push_str(&self::unreadable(unreadable, limit));
 
     rendered
 }
 
-fn write_unreadable(rendered: &mut String, unreadable: &[Unreadable], limit: usize) {
+pub fn unreadable(unreadable: &[Unreadable], limit: usize) -> String {
+    let mut rendered = String::new();
     if unreadable.is_empty() {
-        return;
+        return rendered;
     }
 
     writeln!(rendered, "\n{}", not_measured(unreadable.len()))
@@ -77,13 +78,15 @@ fn write_unreadable(rendered: &mut String, unreadable: &[Unreadable], limit: usi
         writeln!(rendered, "{} not shown.", plural(hidden, "further file"))
             .expect("writing to a string never fails");
     }
+
+    rendered
 }
 
 fn not_measured(count: usize) -> String {
     if count == 1 {
-        "1 file was not measured, so the verdict above does not cover it.".to_owned()
+        "1 file was not measured, so nothing above accounts for it.".to_owned()
     } else {
-        format!("{count} files were not measured, so the verdict above does not cover them.")
+        format!("{count} files were not measured, so nothing above accounts for them.")
     }
 }
 

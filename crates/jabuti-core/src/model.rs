@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 
 use serde::Serialize;
@@ -212,6 +212,14 @@ pub struct Reading {
     pub subject: Option<String>,
     pub kind: UnitKind,
     pub values: BTreeMap<&'static str, u32>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FileFacts {
+    pub module: String,
+    pub declares: BTreeSet<String>,
+    pub paths: BTreeSet<String>,
+    pub names: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

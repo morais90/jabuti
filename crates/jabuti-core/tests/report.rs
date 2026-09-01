@@ -162,7 +162,7 @@ fn a_clean_run_still_names_every_file_it_could_not_read() {
         rendered,
         "No findings across 42 files and 378 units.\n\
          \n\
-         1 file was not measured, so the verdict above does not cover it.\n\
+         1 file was not measured, so nothing above accounts for it.\n\
          src/theme.kt  unreadable syntax from line 51\n"
     );
 }
@@ -185,7 +185,7 @@ fn unreadable_files_are_listed_after_the_findings_they_are_not_part_of() {
          \n\
          src/handler.rs:120  error  function-lines  handle_request  measured 71, limit 60\n\
          \n\
-         2 files were not measured, so the verdict above does not cover them.\n\
+         2 files were not measured, so nothing above accounts for them.\n\
          src/theme.kt  unreadable syntax from line 51\n\
          src/nav.kt  unreadable syntax from line 314\n"
     );

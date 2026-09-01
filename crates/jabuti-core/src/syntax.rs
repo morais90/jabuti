@@ -4,7 +4,8 @@ use tree_sitter::{Node, Parser, Query, QueryCursor, QueryMatch, StreamingIterato
 
 use crate::lang::LangSpec;
 use crate::model::{
-    Decision, DecisionEffect, Fragment, Increment, Masking, MaskingKind, Span, Unit, UnitKind,
+    Decision, DecisionEffect, FileFacts, Fragment, Increment, Masking, MaskingKind, Span, Unit,
+    UnitKind,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -62,6 +63,19 @@ impl Parsed<'_> {
         found.sort_by_key(|fragment| fragment.bytes.start);
 
         found
+    }
+
+    pub fn facts(&self) -> FileFacts {
+        let mut facts = FileFacts::default();
+
+        self.for_each_match(&self.spec.queries().references, |matched, query| {
+            for capture in matched.captures {
+                let name = query.capture_names()[capture.index as usize];
+                record(&mut facts, name, capture.node, self.source);
+            }
+        });
+
+        facts
     }
 
     pub fn maskings(&self) -> Vec<Masking> {
@@ -330,6 +344,108 @@ impl Shape {
 
         (hash, nodes)
     }
+}
+
+fn widest_path(node: Node<'_>, source: &str) -> Option<String> {
+    let mut widest = node;
+    while let Some(parent) = widest.parent() {
+        if parent.kind() != widest.kind() {
+            break;
+        }
+        widest = parent;
+    }
+
+    let inside_a_use_list = widest
+        .parent()
+        .is_some_and(|parent| parent.kind() == "use_list");
+
+    (!inside_a_use_list).then(|| text_of(widest, source))
+}
+
+fn record(facts: &mut FileFacts, capture: &str, node: Node<'_>, source: &str) {
+    match capture {
+        "package" => facts.module = text_of(node, source),
+        "declaration" => {
+            facts.declares.insert(text_of(node, source));
+        }
+        "reference.name" => {
+            facts.names.insert(text_of(node, source));
+        }
+        "reference.path" => {
+            if let Some(path) = widest_path(node, source) {
+                facts.paths.insert(path);
+            }
+        }
+        "reference.token" => {
+            if let Some(path) = token_path(node, source) {
+                facts.paths.insert(path);
+            }
+        }
+        "reference.list" => facts.paths.extend(list_paths(node, source)),
+        _ => {}
+    }
+}
+
+fn list_paths(node: Node<'_>, source: &str) -> Vec<String> {
+    let Some(prefix) = node.child_by_field_name("path") else {
+        return Vec::new();
+    };
+    let Some(list) = node.child_by_field_name("list") else {
+        return Vec::new();
+    };
+
+    let prefix = text_of(prefix, source);
+    let mut cursor = list.walk();
+
+    list.named_children(&mut cursor)
+        .filter_map(|entry| leaf(entry, source))
+        .map(|leaf| format!("{prefix}::{leaf}"))
+        .collect()
+}
+
+fn leaf(entry: Node<'_>, source: &str) -> Option<String> {
+    match entry.kind() {
+        "identifier" | "scoped_identifier" => Some(text_of(entry, source)),
+        "use_as_clause" => entry
+            .child_by_field_name("path")
+            .map(|path| text_of(path, source)),
+        _ => None,
+    }
+}
+
+fn token_path(node: Node<'_>, source: &str) -> Option<String> {
+    if node
+        .prev_sibling()
+        .is_some_and(|before| before.kind() == "::")
+    {
+        return None;
+    }
+
+    let mut path = text_of(node, source);
+    let mut sibling = node.next_sibling();
+
+    while let Some(separator) = sibling {
+        if separator.kind() != "::" {
+            break;
+        }
+        let Some(segment) = separator.next_sibling() else {
+            break;
+        };
+        if segment.kind() != "identifier" {
+            break;
+        }
+        path.push_str("::");
+        path.push_str(&text_of(segment, source));
+        sibling = segment.next_sibling();
+    }
+
+    path.contains("::").then_some(path)
+}
+
+fn text_of(node: Node<'_>, source: &str) -> String {
+    node.utf8_text(source.as_bytes())
+        .unwrap_or_default()
+        .to_owned()
 }
 
 fn first_error(node: Node<'_>) -> Option<u32> {

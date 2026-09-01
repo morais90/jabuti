@@ -123,7 +123,7 @@ says where the trouble starts rather than only that it failed:
 $ jabuti check .
 No findings across 41 files and 682 units.
 
-1 file was not measured, so the verdict above does not cover it.
+1 file was not measured, so nothing above accounts for it.
 src/broken.rs  unreadable syntax from line 6
 ```
 

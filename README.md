@@ -73,6 +73,32 @@ This is also what makes an absolute threshold adoptable. A legacy function that 
 limit stays quiet until someone touches it, so a project can turn the gate on today rather than
 after a cleanup it will never schedule.
 
+## Asking what a change reaches
+
+A gate answers whether the code is acceptable. The other useful question is what it is wired to, and
+an agent needs that answer before it edits rather than after:
+
+```console
+$ jabuti graph impact --since main
+1 file changed, 5 files reached.
+
+crates/jabuti-cli/src/git.rs
+  crates/jabuti-cli/src/churn.rs
+  crates/jabuti-cli/src/graph.rs
+  crates/jabuti-cli/src/main.rs
+  crates/jabuti-cli/src/scan.rs
+  crates/jabuti-cli/src/since.rs
+```
+
+Nothing is judged and nothing fails. It is the same dependency graph read in the other direction, as
+context rather than a verdict.
+
+The dependencies are found wherever they are written, not only in the import list. This repository
+is its own example: no file contains `use crate::git`, yet two of them call `crate::git::run` on the
+line that uses it, and in Kotlin a file needs no import at all to use its own package. Reading only
+imports would miss both, and a missing dependency is the expensive kind of mistake here.
+[`docs/concepts.md`](docs/concepts.md) says what the graph can and cannot see.
+
 ## Thresholds are measured, not asserted
 
 A threshold nobody can defend gets disabled the first time it is wrong. Ours are drawn from the

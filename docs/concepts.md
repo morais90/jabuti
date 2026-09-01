@@ -117,6 +117,65 @@ This is also the setting that makes it practical to fail a build on findings. A 
 already too long stays quiet until someone edits it, so you can turn the gate on today instead of
 waiting for a cleanup that never gets scheduled.
 
+## Asking what a change reaches
+
+A gate tells you whether the code you just wrote is acceptable. The other question worth asking is
+what that code is connected to, and it is best asked before the edit rather than after:
+
+```console
+$ jabuti graph impact --since main
+1 file changed, 5 files reached.
+
+crates/jabuti-cli/src/git.rs
+  crates/jabuti-cli/src/churn.rs
+  crates/jabuti-cli/src/graph.rs
+  crates/jabuti-cli/src/main.rs
+  crates/jabuti-cli/src/scan.rs
+  crates/jabuti-cli/src/since.rs
+```
+
+Each changed file is followed by the files that depend on it, directly or through others. Nothing is
+judged and nothing fails; this is context, not a verdict.
+
+### What counts as a dependency
+
+A file depends on another when it names something that other file declares. That happens in more
+ways than an import list suggests, and reading only the imports gets it wrong. In this repository,
+for example, no file contains `use crate::git`, yet two of them call `crate::git::run` directly on the
+line that uses it. An import-only answer would say nothing depends on `git.rs`, and you would change
+its signature believing that.
+
+So the whole path is read, wherever it is written:
+
+| Written as | Example |
+|---|---|
+| An import | `use crate::config::Settings`, `import org.example.catalog.Book` |
+| A path spelled out where it is used | `crate::git::run(...)` |
+| A path relative to a module in scope | `since::latest()` after `mod since;` |
+| A path inside a macro | `format!("{}", crate::git::run(...))` |
+| In Kotlin, a bare name from the same package | `Book`, with no import, because Kotlin does not need one |
+
+That last row is the one that matters most in Kotlin and is invisible to any import-based answer.
+Measured on three Kotlin projects, between one edge in eight and one in five is a same-package
+reference with no import to find it by.
+
+### What it cannot see
+
+We read syntax, not types, so a dependency that only exists once types are known is not found:
+
+- a method called on a value, since knowing what `service.save()` refers to means knowing the type
+  of `service`
+- a call that goes through an interface or a trait, where the implementation is chosen at run time
+- anything a macro or an annotation processor generates rather than writes
+
+Across crates in a Rust workspace a reference is matched by crate name, and the crate is assumed to
+live in a directory called after it. A crate whose directory name differs from the name in its
+`Cargo.toml` is not found.
+
+Name resolution can also point at the wrong file when two declarations share a name, which adds a
+file to the answer rather than removing one. That is the safer of the two mistakes: a file listed
+that did not need checking costs you a moment, and a file missing costs you the change.
+
 ## Other shapes of output
 
 `--format agent` is the default and the one built for reading. Two others exist for programs.
@@ -159,7 +218,7 @@ So every file jabuti could not read is named in the output, in all three formats
 $ jabuti check .
 No findings across 41 files and 682 units.
 
-1 file was not measured, so the verdict above does not cover it.
+1 file was not measured, so nothing above accounts for it.
 src/broken.rs  unreadable syntax from line 6
 ```
 

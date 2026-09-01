@@ -1,6 +1,7 @@
 mod cognitive;
 pub mod duplication;
 pub mod external;
+pub mod graph;
 pub mod hotspot;
 pub mod lang;
 pub mod masking;

@@ -70,7 +70,7 @@ fn a_file_that_does_not_parse_is_named_in_the_output_and_left_out_of_the_count()
         .success()
         .stdout(contains("1 file and 1 unit"))
         .stdout(contains(
-            "1 file was not measured, so the verdict above does not cover it.",
+            "1 file was not measured, so nothing above accounts for it.",
         ))
         .stdout(contains("src/broken.rs  unreadable syntax from line 1"))
         .stderr("");
@@ -257,7 +257,7 @@ fn source_the_grammar_is_too_old_to_know_is_reported_rather_than_skipped() {
         .stdout(
             "No findings across 1 file and 1 unit.\n\
              \n\
-             1 file was not measured, so the verdict above does not cover it.\n\
+             1 file was not measured, so nothing above accounts for it.\n\
              src/guard.kt  unreadable syntax from line 1\n",
         )
         .stderr("");

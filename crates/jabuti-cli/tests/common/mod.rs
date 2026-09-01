@@ -50,9 +50,15 @@ pub(crate) fn append(directory: &TempDir, name: &str, contents: &str) {
     fs::write(path, existing + contents).expect("fixture extended");
 }
 
-pub(crate) fn jabuti(directory: &TempDir) -> Command {
+pub(crate) fn binary(directory: &TempDir) -> Command {
     let mut command = Command::cargo_bin("jabuti").expect("the binary is built");
-    command.current_dir(directory.path()).arg("check").arg(".");
+    command.current_dir(directory.path());
+    command
+}
+
+pub(crate) fn jabuti(directory: &TempDir) -> Command {
+    let mut command = binary(directory);
+    command.arg("check").arg(".");
     command
 }
 

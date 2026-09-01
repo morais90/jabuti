@@ -109,7 +109,7 @@ fn gather(reviewed: Vec<Reviewed>) -> Outcome {
     outcome
 }
 
-fn sources(roots: &[PathBuf], exclude: &[String]) -> Result<Vec<PathBuf>> {
+pub(crate) fn sources(roots: &[PathBuf], exclude: &[String]) -> Result<Vec<PathBuf>> {
     let Some((first, rest)) = roots.split_first() else {
         return Ok(Vec::new());
     };
@@ -261,7 +261,7 @@ fn count_units(unit: &Unit) -> usize {
     counted + unit.children.iter().map(count_units).sum::<usize>()
 }
 
-fn display(path: &Path) -> String {
+pub(crate) fn display(path: &Path) -> String {
     path.strip_prefix("./")
         .unwrap_or(path)
         .display()

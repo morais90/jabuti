@@ -1,6 +1,7 @@
 mod churn;
 mod config;
 mod git;
+mod graph;
 mod scan;
 mod since;
 mod tools;
@@ -30,6 +31,11 @@ enum Command {
 
     Tools,
 
+    Graph {
+        #[command(subcommand)]
+        query: GraphQuery,
+    },
+
     Check {
         #[arg(default_value = ".")]
         paths: Vec<PathBuf>,
@@ -39,6 +45,20 @@ enum Command {
 
         #[arg(long, value_enum, default_value_t = Format::Agent)]
         format: Format,
+
+        #[arg(long, default_value_t = report::DEFAULT_LIMIT)]
+        limit: usize,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GraphQuery {
+    Impact {
+        #[arg(default_value = ".")]
+        paths: Vec<PathBuf>,
+
+        #[arg(long, value_name = "REF")]
+        since: String,
 
         #[arg(long, default_value_t = report::DEFAULT_LIMIT)]
         limit: usize,
@@ -140,7 +160,24 @@ fn run() -> Result<ExitCode> {
             format,
             limit,
         } => check(&paths, since.as_deref(), format, limit),
+        Command::Graph { query } => match query {
+            GraphQuery::Impact {
+                paths,
+                since,
+                limit,
+            } => report_impact(&paths, &since, limit),
+        },
     }
+}
+
+fn report_impact(paths: &[PathBuf], since: &str, limit: usize) -> Result<ExitCode> {
+    let root = std::env::current_dir()?;
+    let settings = config::load(&root)?;
+    let changes = since::Changes::since(since)?;
+
+    print!("{}", graph::impact(paths, &settings, &changes, limit)?);
+
+    Ok(ExitCode::SUCCESS)
 }
 
 fn list_languages() -> ExitCode {

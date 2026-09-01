@@ -1,0 +1,25 @@
+---
+source: crates/jabuti-core/tests/graph.rs
+expression: rendered(&facts)
+---
+module org.example.catalog
+declares BookList
+declares CatalogService
+declares Registry
+declares describe
+path java.time.LocalDateTime
+path org.example.service.BookLifecycle
+path org.example.storage.BookRepository
+name Author
+name Book
+name BookList
+name BookRepository
+name BookSearch
+name Int
+name Lifecycle
+name List
+name LocalDateTime
+name Shelf
+name String
+name author
+name repository

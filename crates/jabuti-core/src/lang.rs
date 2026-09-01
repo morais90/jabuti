@@ -29,6 +29,7 @@ pub(crate) struct Queries {
     pub(crate) comments: Query,
     pub(crate) decisions: Query,
     pub(crate) masking: Query,
+    pub(crate) references: Query,
 }
 
 #[derive(Debug)]
@@ -60,6 +61,7 @@ pub struct LangSpec {
     comments_source: &'static str,
     decisions_source: &'static str,
     masking_source: &'static str,
+    references_source: &'static str,
     grammar: fn() -> Language,
     compiled: OnceLock<Queries>,
 }
@@ -103,6 +105,7 @@ impl LangSpec {
             let comments = compile(&language, self.comments_source, self.id, "comments");
             let decisions = compile(&language, self.decisions_source, self.id, "decisions");
             let masking = compile(&language, self.masking_source, self.id, "masking");
+            let references = compile(&language, self.references_source, self.id, "references");
 
             Queries {
                 language,
@@ -110,6 +113,7 @@ impl LangSpec {
                 comments,
                 decisions,
                 masking,
+                references,
             }
         })
     }
@@ -159,6 +163,7 @@ pub static KOTLIN: LangSpec = LangSpec {
     comments_source: include_str!("../queries/kotlin/comments.scm"),
     decisions_source: include_str!("../queries/kotlin/decisions.scm"),
     masking_source: include_str!("../queries/kotlin/masking.scm"),
+    references_source: include_str!("../queries/kotlin/references.scm"),
     grammar: kotlin_grammar,
     compiled: OnceLock::new(),
 };
@@ -197,6 +202,7 @@ pub static RUST: LangSpec = LangSpec {
     comments_source: include_str!("../queries/rust/comments.scm"),
     decisions_source: include_str!("../queries/rust/decisions.scm"),
     masking_source: include_str!("../queries/rust/masking.scm"),
+    references_source: include_str!("../queries/rust/references.scm"),
     grammar: rust_grammar,
     compiled: OnceLock::new(),
 };
