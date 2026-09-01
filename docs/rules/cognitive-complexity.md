@@ -36,15 +36,39 @@ driving one loop, is usually the fix the score is pointing at.
 
 ## Where 7 comes from
 
-It is the 98th percentile of real code. Measured across 737,689 functions from 1,645 crates published
-on crates.io:
+It is the 98th percentile of published Rust libraries. Measured across 737,689 functions from 1,645
+crates published on crates.io:
 
 | p50 | p75 | p90 | p95 | p98 | p99 |
 |---|---|---|---|---|---|
 | 0 | 0 | 1 | 3 | 7 | 12 |
 
-Four Rust functions in five score zero. A limit of 7 reports about 1.9% of functions, which is the
+Four Rust functions in five score zero. A limit of 7 reports about 1.8% of functions, which is the
 same rate [`function-lines`](function-lines.md) is calibrated to.
+
+## This limit travels further than the others
+
+A percentile drawn from libraries does not automatically describe an application, and for
+[`function-lines`](function-lines.md) the difference is large. For this rule it is small. The share
+of functions reported at a limit of 7:
+
+| Corpus | Kind | Reported |
+|---|---|---|
+| 1,645 crates published on crates.io | library | 1.8% |
+| kotlinx.coroutines | library | 3.2% |
+| okhttp | library | 2.4% |
+| DuckDuckGo Android | application | 1.4% |
+| hyperswitch | application | 2.1% |
+| komga | application | 3.5% |
+| Signal-Android | application | 4.3% |
+| meilisearch | application | 6.5% |
+
+Two languages, libraries and applications, and the rate stays between 1.4% and 6.5%. Over the same
+eight corpora, function length ranges from 1.1% to 11.4%.
+
+That is worth more than it looks. A threshold that holds its meaning across populations is measuring
+something about programs; one that moves with the kind of project is partly measuring the kind of
+project. It is a second reason to trust this rule over the ones it sits beside.
 
 ## Why this is the rule worth trusting
 

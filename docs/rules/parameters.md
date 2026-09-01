@@ -24,15 +24,20 @@ knowing even though it says nothing about what the function does.
 
 ## Where 4 comes from
 
-It is close to the 98th percentile of real code. Measured across 737,689 functions from 1,645 crates
-published on crates.io:
+It is close to the 98th percentile of published Rust libraries. Measured across 737,689 functions
+from 1,645 crates published on crates.io:
 
 | p50 | p75 | p90 | p95 | p98 | p99 |
 |---|---|---|---|---|---|
 | 1 | 1 | 2 | 3 | 5 | 6 |
 
-A limit of 4 reports about 2.3% of functions, in the same band as the other rules that are on by
+A limit of 4 reports about 2.2% of functions, in the same band as the other rules that are on by
 default.
+
+That percentile is of libraries, and an application tends to carry wider signatures: the same limit
+reports 5.0% of functions in hyperswitch and 5.2% in komga, against 0.9% in okhttp and 0.8% in
+kotlinx.coroutines. A handler assembling a request from many parts is the ordinary reason, and it is
+the case where raising the limit is a reasonable answer rather than an evasion.
 
 ## When to change it
 
