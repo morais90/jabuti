@@ -55,14 +55,46 @@ position rather than by a name only one grammar uses.
 
 ## A limitation worth knowing about
 
-Around 2.8% of files in the Kotlin corpus could not be parsed by the grammar we use, and jabuti
-reports each one on stderr rather than measuring it. One cause we traced is soft keywords: an
-expression like `where?.let { ... }` uses `where` as an identifier, which the grammar reads as the
-keyword.
+The Kotlin grammar we use was published in January 2025 and has not moved since. Kotlin has. Seven
+constructs in current use are missing from it, and a file containing any one of them cannot be read
+at all:
 
-Rejecting those files is the right behaviour, since a number computed over a misparsed tree is worse
-than no number. It does mean the Kotlin calibration is drawn from the files that parse, and those may
-be slightly simpler than the ones that do not.
+| Construct | Example | Introduced by |
+|---|---|---|
+| Guard in a `when` branch | `is Empty if active -> clear()` | Kotlin 2.1 |
+| Multi-dollar string | `$$"${application.version}"` | Kotlin 2.2 |
+| Collection literal in an annotation | `@Constraint(validatedBy = [])` | annotation arguments |
+| Destructured lambda parameter with a type | `map { (_, second): Pair<K, V> -> second }` | destructuring |
+| Annotated accessor on a property with no declared type | `val shapes @Composable get() = ...` | Compose |
+| Annotated function type | `content: @Composable (() -> Unit)` | Compose |
+| Soft keyword used as an identifier | `where?.let { ... }` | the language's own keyword rules |
+
+How much that costs, measured over five Kotlin projects:
+
+| Project | Files measured | Files not read |
+|---|---|---|
+| DuckDuckGo Android | 5,874 | 5 |
+| Signal-Android | 4,180 | 18 |
+| komga | 534 | 17 |
+| okhttp | 610 | 7 |
+| kotlinx.coroutines | 1,066 | 16 |
+
+Under one file in a hundred in the larger projects, and one in thirty in komga, which is the newest
+of the five and uses the most recent syntax.
+
+We looked at the other Kotlin grammar available. It reads four of those seven, and fails on files
+this one reads: it parses okhttp with nothing rejected where ours rejects seven files, and rejects
+eighty files in Signal-Android where ours rejects eighteen. Neither is uniformly better, so changing
+would trade one set of blind spots for another.
+
+Rejecting a file is the right behaviour, since a number computed over a misparsed tree is worse than
+no number. What was wrong until recently is that jabuti said so only on stderr, so a caller reading
+the output saw a clean verdict over code that had never been measured. Every unreadable file is now
+named in the output itself, and counted in the JSON summary, precisely so that no run can look
+cleaner than it was.
+
+It does mean the Kotlin calibration is drawn from the files that parse, and those may be slightly
+simpler than the ones that do not.
 
 Rust files in the equivalent corpus parsed without exception.
 
@@ -84,11 +116,15 @@ rust       .rs          grammar 0.24.2
 ```
 
 The grammar version is what actually determines whether your syntax parses, so it is the number to
-quote when something does not. And when a file cannot be read, jabuti says where the trouble starts
-rather than only that it failed:
+quote when something does not. And when a file cannot be read, jabuti says so in its own output, and
+says where the trouble starts rather than only that it failed:
 
 ```console
-jabuti: could not analyse src/broken.rs: unreadable syntax from line 6
+$ jabuti check .
+No findings across 41 files and 682 units.
+
+1 file was not measured, so the verdict above does not cover it.
+src/broken.rs  unreadable syntax from line 6
 ```
 
 External tools are the place where versions do need a policy, since their output formats and lint

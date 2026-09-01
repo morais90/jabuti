@@ -1,0 +1,14 @@
+---
+source: crates/jabuti-core/tests/report.rs
+expression: rendered
+---
+{
+  "schema": 2,
+  "measures": [],
+  "unreadable": [
+    {
+      "path": "src/theme.kt",
+      "reason": "unreadable syntax from line 51"
+    }
+  ]
+}

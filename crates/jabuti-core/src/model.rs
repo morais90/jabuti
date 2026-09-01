@@ -214,6 +214,12 @@ pub struct Reading {
     pub values: BTreeMap<&'static str, u32>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Unreadable {
+    pub path: String,
+    pub reason: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Increment {
     pub position: usize,

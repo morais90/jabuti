@@ -3,12 +3,13 @@ source: crates/jabuti-core/tests/report.rs
 expression: rendered
 ---
 {
-  "schema": 1,
+  "schema": 2,
   "summary": {
     "files": 42,
     "units": 378,
     "errors": 1,
-    "warnings": 0
+    "warnings": 0,
+    "unreadable": 0
   },
   "findings": [
     {
@@ -25,5 +26,6 @@ expression: rendered
         "limit": 60
       }
     }
-  ]
+  ],
+  "unreadable": []
 }

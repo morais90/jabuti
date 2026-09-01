@@ -3,7 +3,7 @@ source: crates/jabuti-core/tests/report.rs
 expression: rendered
 ---
 {
-  "schema": 1,
+  "schema": 2,
   "measures": [
     {
       "path": "src/lib.rs",
@@ -15,5 +15,6 @@ expression: rendered
         "parameters": 5
       }
     }
-  ]
+  ],
+  "unreadable": []
 }

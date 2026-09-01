@@ -126,8 +126,8 @@ them without parsing text:
 
 ```json
 {
-  "schema": 1,
-  "summary": { "files": 42, "units": 378, "errors": 1, "warnings": 0 },
+  "schema": 2,
+  "summary": { "files": 42, "units": 378, "errors": 1, "warnings": 0, "unreadable": 0 },
   "findings": [
     {
       "rule": "function-lines",
@@ -137,12 +137,38 @@ them without parsing text:
       "subject": "handle_request",
       "detail": { "measured": 71, "limit": 60 }
     }
-  ]
+  ],
+  "unreadable": []
 }
 ```
 
 A rule is named the same way here as in your configuration, so anything you read out of the report
 can be written straight back into `jabuti.toml`.
+
+## A file jabuti could not read
+
+A grammar can be older than the language it reads, and a file using syntax it does not know cannot be
+parsed. Measuring such a file anyway would be worse than not measuring it, because every number would
+be computed over a tree with a hole in it, so jabuti refuses it.
+
+What it must not do is refuse quietly. A caller who sees a clean verdict over code that was never
+looked at has been told something false, and that is the most expensive mistake this tool can make.
+So every file jabuti could not read is named in the output, in all three formats:
+
+```console
+$ jabuti check .
+No findings across 41 files and 682 units.
+
+1 file was not measured, so the verdict above does not cover it.
+src/broken.rs  unreadable syntax from line 6
+```
+
+In `json` and `measures` the same files arrive under `unreadable`. The `json` summary repeats the
+count, so a consumer reading only that still sees it.
+
+The exit code does not change. The verdict on the files that were read is valid, and reporting an
+execution error would throw it away; what the caller needs to know is which files it does not cover.
+[`docs/languages.md`](languages.md) lists the constructs currently behind this.
 
 `--format measures` is different in kind. It reports every number jabuti computed, for every unit,
 including rules that are switched off:

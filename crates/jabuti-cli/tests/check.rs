@@ -1,6 +1,6 @@
 mod common;
 
-use common::{error_on_long_functions, function_of, jabuti, project};
+use common::{error_on_long_functions, function_of, jabuti, project, repository};
 use predicates::str::contains;
 
 #[test]
@@ -59,8 +59,8 @@ fn every_unit_in_the_tree_is_counted_not_only_the_top_level_ones() {
 }
 
 #[test]
-fn a_file_that_does_not_parse_is_named_on_stderr_and_left_out_of_the_count() {
-    let directory = project(&[
+fn a_file_that_does_not_parse_is_named_in_the_output_and_left_out_of_the_count() {
+    let directory = repository(&[
         ("src/lib.rs", "fn small() {}\n"),
         ("src/broken.rs", "fn truncated() {\n"),
     ]);
@@ -69,7 +69,11 @@ fn a_file_that_does_not_parse_is_named_on_stderr_and_left_out_of_the_count() {
         .assert()
         .success()
         .stdout(contains("1 file and 1 unit"))
-        .stderr(contains("could not analyse src/broken.rs"));
+        .stdout(contains(
+            "1 file was not measured, so the verdict above does not cover it.",
+        ))
+        .stdout(contains("src/broken.rs  unreadable syntax from line 1"))
+        .stderr("");
 }
 
 #[test]
@@ -207,7 +211,7 @@ fn the_json_format_names_the_rule_the_way_configuration_does() {
         .arg("json")
         .assert()
         .success()
-        .stdout(contains("\"schema\": 1"))
+        .stdout(contains("\"schema\": 2"))
         .stdout(contains("\"rule\": \"parameters\""))
         .stdout(contains("\"warnings\": 1"));
 }
@@ -231,4 +235,30 @@ fn the_measures_format_reports_a_rule_that_is_switched_off() {
         .assert()
         .success()
         .stdout(contains("\"cyclomatic-complexity\": 2"));
+}
+
+#[test]
+fn source_the_grammar_is_too_old_to_know_is_reported_rather_than_skipped() {
+    let directory = repository(&[
+        ("src/small.kt", "fun small() {}\n"),
+        (
+            "src/guard.kt",
+            "fun describe(value: Any, active: Boolean): String =\n\
+             \x20   when (value) {\n\
+             \x20       is String if active -> \"active string\"\n\
+             \x20       else -> \"other\"\n\
+             \x20   }\n",
+        ),
+    ]);
+
+    jabuti(&directory)
+        .assert()
+        .success()
+        .stdout(
+            "No findings across 1 file and 1 unit.\n\
+             \n\
+             1 file was not measured, so the verdict above does not cover it.\n\
+             src/guard.kt  unreadable syntax from line 1\n",
+        )
+        .stderr("");
 }

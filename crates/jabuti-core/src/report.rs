@@ -2,10 +2,10 @@ use std::fmt::Write;
 
 use serde::Serialize;
 
-use crate::model::{Detail, Finding, Reading, Severity};
+use crate::model::{Detail, Finding, Reading, Severity, Unreadable};
 
 pub const DEFAULT_LIMIT: usize = 40;
-pub const SCHEMA: u32 = 1;
+pub const SCHEMA: u32 = 2;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Scanned {
@@ -13,7 +13,12 @@ pub struct Scanned {
     pub units: usize,
 }
 
-pub fn agent(findings: &[Finding], scanned: Scanned, limit: usize) -> String {
+pub fn agent(
+    findings: &[Finding],
+    unreadable: &[Unreadable],
+    scanned: Scanned,
+    limit: usize,
+) -> String {
     let mut rendered = String::new();
     let errors = count(findings, Severity::Error);
     let warnings = count(findings, Severity::Warning);
@@ -21,6 +26,7 @@ pub fn agent(findings: &[Finding], scanned: Scanned, limit: usize) -> String {
     if findings.is_empty() {
         writeln!(rendered, "No findings across {}.", files_and_units(scanned))
             .expect("writing to a string never fails");
+        write_unreadable(&mut rendered, unreadable, limit);
 
         return rendered;
     }
@@ -48,7 +54,37 @@ pub fn agent(findings: &[Finding], scanned: Scanned, limit: usize) -> String {
         .expect("writing to a string never fails");
     }
 
+    write_unreadable(&mut rendered, unreadable, limit);
+
     rendered
+}
+
+fn write_unreadable(rendered: &mut String, unreadable: &[Unreadable], limit: usize) {
+    if unreadable.is_empty() {
+        return;
+    }
+
+    writeln!(rendered, "\n{}", not_measured(unreadable.len()))
+        .expect("writing to a string never fails");
+
+    for file in unreadable.iter().take(limit) {
+        writeln!(rendered, "{}  {}", file.path, file.reason)
+            .expect("writing to a string never fails");
+    }
+
+    let hidden = unreadable.len().saturating_sub(limit);
+    if hidden > 0 {
+        writeln!(rendered, "{} not shown.", plural(hidden, "further file"))
+            .expect("writing to a string never fails");
+    }
+}
+
+fn not_measured(count: usize) -> String {
+    if count == 1 {
+        "1 file was not measured, so the verdict above does not cover it.".to_owned()
+    } else {
+        format!("{count} files were not measured, so the verdict above does not cover them.")
+    }
 }
 
 fn write_finding(rendered: &mut String, finding: &Finding) {
@@ -107,6 +143,7 @@ struct Report<'a> {
     schema: u32,
     summary: Summary,
     findings: &'a [Finding],
+    unreadable: &'a [Unreadable],
 }
 
 #[derive(Debug, Serialize)]
@@ -115,15 +152,17 @@ struct Summary {
     units: usize,
     errors: usize,
     warnings: usize,
+    unreadable: usize,
 }
 
 #[derive(Debug, Serialize)]
 struct Measurements<'a> {
     schema: u32,
     measures: &'a [Reading],
+    unreadable: &'a [Unreadable],
 }
 
-pub fn json(findings: &[Finding], scanned: Scanned) -> String {
+pub fn json(findings: &[Finding], unreadable: &[Unreadable], scanned: Scanned) -> String {
     let report = Report {
         schema: SCHEMA,
         summary: Summary {
@@ -131,17 +170,20 @@ pub fn json(findings: &[Finding], scanned: Scanned) -> String {
             units: scanned.units,
             errors: count(findings, Severity::Error),
             warnings: count(findings, Severity::Warning),
+            unreadable: unreadable.len(),
         },
         findings,
+        unreadable,
     };
 
     rendered(&report)
 }
 
-pub fn measures(readings: &[Reading]) -> String {
+pub fn measures(readings: &[Reading], unreadable: &[Unreadable]) -> String {
     rendered(&Measurements {
         schema: SCHEMA,
         measures: readings,
+        unreadable,
     })
 }
 

@@ -1,4 +1,6 @@
-use jabuti_core::model::{Detail, Finding, Reading, Rule, RuleId, Severity, Span, UnitKind};
+use jabuti_core::model::{
+    Detail, Finding, Reading, Rule, RuleId, Severity, Span, UnitKind, Unreadable,
+};
 use jabuti_core::report::{self, Scanned};
 
 fn finding(severity: Severity, line: u32, subject: Option<&str>) -> Finding {
@@ -27,7 +29,7 @@ fn scanned() -> Scanned {
 
 #[test]
 fn a_clean_run_says_so_in_a_single_line() {
-    let rendered = report::agent(&[], scanned(), 40);
+    let rendered = report::agent(&[], &[], scanned(), 40);
 
     assert_eq!(rendered, "No findings across 42 files and 378 units.\n");
 }
@@ -36,6 +38,7 @@ fn a_clean_run_says_so_in_a_single_line() {
 fn a_finding_names_its_severity_rule_location_and_both_numbers() {
     let rendered = report::agent(
         &[finding(Severity::Error, 120, Some("handle_request"))],
+        &[],
         scanned(),
         40,
     );
@@ -50,7 +53,7 @@ fn a_finding_names_its_severity_rule_location_and_both_numbers() {
 
 #[test]
 fn a_finding_without_a_subject_leaves_no_gap_where_the_name_would_be() {
-    let rendered = report::agent(&[finding(Severity::Warning, 1, None)], scanned(), 40);
+    let rendered = report::agent(&[finding(Severity::Warning, 1, None)], &[], scanned(), 40);
 
     assert!(
         rendered.ends_with("src/handler.rs:1  warning  function-lines  measured 71, limit 60\n"),
@@ -64,7 +67,7 @@ fn output_beyond_the_limit_is_replaced_by_a_count_of_what_was_withheld() {
         .map(|line| finding(Severity::Warning, line, Some("wide")))
         .collect();
 
-    let rendered = report::agent(&findings, scanned(), 3);
+    let rendered = report::agent(&findings, &[], scanned(), 3);
 
     assert_eq!(
         rendered
@@ -89,6 +92,7 @@ fn only_an_error_severity_finding_fails_the_gate() {
 fn the_json_report_carries_a_schema_a_summary_and_the_findings() {
     let rendered = report::json(
         &[finding(Severity::Error, 120, Some("handle_request"))],
+        &[],
         scanned(),
     );
 
@@ -114,7 +118,7 @@ fn a_finding_from_a_tool_serialises_its_message_instead_of_a_threshold() {
         },
     };
 
-    let rendered = report::json(&[reported], scanned());
+    let rendered = report::json(&[reported], &[], scanned());
 
     assert!(
         rendered.contains("\"rule\": \"clippy/needless_range_loop\""),
@@ -129,13 +133,95 @@ fn a_finding_from_a_tool_serialises_its_message_instead_of_a_threshold() {
 
 #[test]
 fn measures_are_reported_for_every_unit_whatever_the_thresholds_say() {
-    let rendered = report::measures(&[Reading {
-        path: "src/lib.rs".to_owned(),
-        line: 1,
-        subject: Some("wide".to_owned()),
-        kind: UnitKind::Function,
-        values: std::collections::BTreeMap::from([("parameters", 5), ("function-lines", 3)]),
-    }]);
+    let rendered = report::measures(
+        &[Reading {
+            path: "src/lib.rs".to_owned(),
+            line: 1,
+            subject: Some("wide".to_owned()),
+            kind: UnitKind::Function,
+            values: std::collections::BTreeMap::from([("parameters", 5), ("function-lines", 3)]),
+        }],
+        &[],
+    );
+
+    insta::assert_snapshot!(rendered);
+}
+
+fn unreadable(path: &str, line: u32) -> Unreadable {
+    Unreadable {
+        path: path.to_owned(),
+        reason: format!("unreadable syntax from line {line}"),
+    }
+}
+
+#[test]
+fn a_clean_run_still_names_every_file_it_could_not_read() {
+    let rendered = report::agent(&[], &[unreadable("src/theme.kt", 51)], scanned(), 40);
+
+    assert_eq!(
+        rendered,
+        "No findings across 42 files and 378 units.\n\
+         \n\
+         1 file was not measured, so the verdict above does not cover it.\n\
+         src/theme.kt  unreadable syntax from line 51\n"
+    );
+}
+
+#[test]
+fn unreadable_files_are_listed_after_the_findings_they_are_not_part_of() {
+    let rendered = report::agent(
+        &[finding(Severity::Error, 120, Some("handle_request"))],
+        &[
+            unreadable("src/theme.kt", 51),
+            unreadable("src/nav.kt", 314),
+        ],
+        scanned(),
+        40,
+    );
+
+    assert_eq!(
+        rendered,
+        "1 error and 0 warnings across 42 files and 378 units.\n\
+         \n\
+         src/handler.rs:120  error  function-lines  handle_request  measured 71, limit 60\n\
+         \n\
+         2 files were not measured, so the verdict above does not cover them.\n\
+         src/theme.kt  unreadable syntax from line 51\n\
+         src/nav.kt  unreadable syntax from line 314\n"
+    );
+}
+
+#[test]
+fn the_list_of_unreadable_files_obeys_the_same_limit_the_findings_do() {
+    let skipped: Vec<Unreadable> = (1..=10)
+        .map(|line| unreadable("src/wide.kt", line))
+        .collect();
+
+    let rendered = report::agent(&[], &skipped, scanned(), 3);
+
+    assert_eq!(
+        rendered
+            .lines()
+            .filter(|line| line.starts_with("src/wide.kt"))
+            .count(),
+        3
+    );
+    assert!(
+        rendered.contains("7 further files not shown."),
+        "{rendered}"
+    );
+}
+
+#[test]
+fn the_json_report_carries_every_unreadable_file_and_counts_them_in_the_summary() {
+    let rendered = report::json(&[], &[unreadable("src/theme.kt", 51)], scanned());
+
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn measures_name_the_files_no_measurement_could_be_taken_from() {
+    let rendered = report::measures(&[], &[unreadable("src/theme.kt", 51)]);
 
     insta::assert_snapshot!(rendered);
 }

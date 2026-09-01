@@ -203,5 +203,5 @@ fn a_file_that_cannot_be_parsed_says_where_the_trouble_starts() {
     jabuti(&directory)
         .assert()
         .success()
-        .stderr(contains("src/broken.rs: unreadable syntax from line 6"));
+        .stdout(contains("src/broken.rs  unreadable syntax from line 6"));
 }

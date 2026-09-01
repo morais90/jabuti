@@ -205,16 +205,17 @@ fn check(paths: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
             .then(left.span.start_line.cmp(&right.span.start_line))
     });
 
-    for path in &outcome.unreadable {
-        eprintln!("jabuti: could not analyse {path}");
-    }
-
     print!(
         "{}",
         match format {
-            Format::Agent => report::agent(&outcome.findings, outcome.scanned, limit),
-            Format::Json => report::json(&outcome.findings, outcome.scanned),
-            Format::Measures => report::measures(&outcome.readings),
+            Format::Agent => report::agent(
+                &outcome.findings,
+                &outcome.unreadable,
+                outcome.scanned,
+                limit
+            ),
+            Format::Json => report::json(&outcome.findings, &outcome.unreadable, outcome.scanned),
+            Format::Measures => report::measures(&outcome.readings, &outcome.unreadable),
         }
     );
 

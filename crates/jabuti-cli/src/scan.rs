@@ -7,7 +7,7 @@ use ignore::overrides::OverrideBuilder;
 use jabuti_core::duplication::{self, FileFragments};
 use jabuti_core::hotspot::{self, FileSummary};
 use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
-use jabuti_core::model::{Finding, Reading, Unit, UnitKind};
+use jabuti_core::model::{Finding, Reading, Unit, UnitKind, Unreadable};
 use jabuti_core::policy::{FileUnderReview, Policy};
 use jabuti_core::report::Scanned;
 use jabuti_core::{lang, masking, syntax};
@@ -22,7 +22,7 @@ pub(crate) struct Outcome {
     pub(crate) findings: Vec<Finding>,
     pub(crate) readings: Vec<Reading>,
     pub(crate) scanned: Scanned,
-    pub(crate) unreadable: Vec<String>,
+    pub(crate) unreadable: Vec<Unreadable>,
 }
 
 #[derive(Debug, Default)]
@@ -31,7 +31,7 @@ struct Reviewed {
     readings: Vec<Reading>,
     fragments: Option<FileFragments>,
     units: usize,
-    unreadable: Option<String>,
+    unreadable: Option<Unreadable>,
     summary: Option<FileSummary>,
 }
 
@@ -247,7 +247,10 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
 
 fn rejected(path: &Path, reason: &str) -> Reviewed {
     Reviewed {
-        unreadable: Some(format!("{}: {reason}", display(path))),
+        unreadable: Some(Unreadable {
+            path: display(path),
+            reason: reason.to_owned(),
+        }),
         ..Reviewed::default()
     }
 }
