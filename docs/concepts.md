@@ -45,6 +45,7 @@ flowchart LR
     churn["churn"] --> hs
     churn --> chr["churn"]
     dup["duplication"] --> db["duplicate-block"]
+    mask["masked errors"] --> em["error-masking"]
 ```
 
 `hotspot` is where measures earn their keep. Complexity on its own is a weak signal and change

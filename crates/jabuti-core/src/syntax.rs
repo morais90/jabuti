@@ -3,7 +3,9 @@ use std::ops::Range;
 use tree_sitter::{Node, Parser, Query, QueryCursor, QueryMatch, StreamingIterator, Tree};
 
 use crate::lang::LangSpec;
-use crate::model::{Decision, DecisionEffect, Fragment, Increment, Span, Unit, UnitKind};
+use crate::model::{
+    Decision, DecisionEffect, Fragment, Increment, Masking, MaskingKind, Span, Unit, UnitKind,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SyntaxError {
@@ -60,6 +62,63 @@ impl Parsed<'_> {
         found.sort_by_key(|fragment| fragment.bytes.start);
 
         found
+    }
+
+    pub fn maskings(&self) -> Vec<Masking> {
+        let mut found = Vec::new();
+
+        self.for_each_match(&self.spec.queries().masking, |matched, query| {
+            let captured = captured_masking(matched, query, self.source);
+            if let Some((masking, node)) = captured
+                && !self.inside_test(node)
+            {
+                found.push(masking);
+            }
+        });
+
+        found.sort_by_key(|masking| masking.span.start_line);
+        found
+    }
+
+    fn inside_test(&self, node: Node<'_>) -> bool {
+        let mut current = Some(node);
+
+        while let Some(inner) = current {
+            if self.markers_around(inner) {
+                return true;
+            }
+            current = inner.parent();
+        }
+
+        false
+    }
+
+    fn markers_around(&self, node: Node<'_>) -> bool {
+        let mut attached = Vec::new();
+
+        let mut sibling = node.prev_sibling();
+        while let Some(current) = sibling {
+            if !self.spec.decorators_before.contains(&current.kind()) {
+                break;
+            }
+            attached.push(current);
+            sibling = current.prev_sibling();
+        }
+
+        let mut cursor = node.walk();
+        attached.extend(
+            node.children(&mut cursor)
+                .filter(|child| self.spec.decorators_within.contains(&child.kind())),
+        );
+
+        attached.iter().any(|node| {
+            node.utf8_text(self.source.as_bytes()).is_ok_and(|text| {
+                self.spec
+                    .test_markers
+                    .iter()
+                    .any(|mark| text.contains(mark))
+            })
+        })
     }
 
     pub fn comment_ranges(&self) -> Vec<Range<usize>> {
@@ -178,6 +237,47 @@ fn kind_of_label(label: &str) -> Option<UnitKind> {
         "function" => Some(UnitKind::Function),
         "closure" => Some(UnitKind::Closure),
         unknown => panic!("query captures @unit.{unknown}, which maps to no unit kind"),
+    }
+}
+
+fn captured_masking<'tree>(
+    matched: &QueryMatch<'_, 'tree>,
+    query: &Query,
+    source: &str,
+) -> Option<(Masking, Node<'tree>)> {
+    let mut kind = None;
+    let mut construct = None;
+    let mut node = None;
+
+    for capture in matched.captures {
+        let label = query.capture_names()[capture.index as usize];
+        if label == "construct" {
+            construct = capture.node.utf8_text(source.as_bytes()).ok();
+        } else if let Some(labelled) = kind_of_mask(label) {
+            kind = Some(labelled);
+            node = Some(capture.node);
+        }
+    }
+
+    let node = node?;
+    Some((
+        Masking {
+            kind: kind?,
+            construct: construct?.to_owned(),
+            span: span_of(node),
+        },
+        node,
+    ))
+}
+
+fn kind_of_mask(label: &str) -> Option<MaskingKind> {
+    let suffix = label.strip_prefix("mask.")?;
+
+    match suffix {
+        "panic" => Some(MaskingKind::Panic),
+        "discard" => Some(MaskingKind::Discard),
+        "swallow" => Some(MaskingKind::Swallow),
+        unknown => panic!("query captures @mask.{unknown}, which maps to no masking kind"),
     }
 }
 

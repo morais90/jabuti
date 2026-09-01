@@ -60,6 +60,7 @@ impl Severity {
 pub enum Rule {
     Churn,
     DuplicateBlock,
+    ErrorMasking,
     Hotspot,
     CognitiveComplexity,
     CyclomaticComplexity,
@@ -69,9 +70,10 @@ pub enum Rule {
 }
 
 impl Rule {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Churn,
         Self::DuplicateBlock,
+        Self::ErrorMasking,
         Self::Hotspot,
         Self::CognitiveComplexity,
         Self::CyclomaticComplexity,
@@ -84,6 +86,7 @@ impl Rule {
         match self {
             Self::Churn => "churn",
             Self::DuplicateBlock => "duplicate-block",
+            Self::ErrorMasking => "error-masking",
             Self::Hotspot => "hotspot",
             Self::CognitiveComplexity => "cognitive-complexity",
             Self::CyclomaticComplexity => "cyclomatic-complexity",
@@ -168,6 +171,30 @@ pub enum DecisionEffect {
 pub struct Decision {
     pub position: usize,
     pub effect: DecisionEffect,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaskingKind {
+    Panic,
+    Discard,
+    Swallow,
+}
+
+impl MaskingKind {
+    pub fn consequence(self) -> &'static str {
+        match self {
+            Self::Panic => "the failure becomes a panic",
+            Self::Discard => "the failure is dropped without being read",
+            Self::Swallow => "the failure is caught and nothing happens",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Masking {
+    pub kind: MaskingKind,
+    pub construct: String,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

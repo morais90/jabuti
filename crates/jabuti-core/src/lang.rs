@@ -28,6 +28,7 @@ pub(crate) struct Queries {
     pub(crate) units: Query,
     pub(crate) comments: Query,
     pub(crate) decisions: Query,
+    pub(crate) masking: Query,
 }
 
 #[derive(Debug)]
@@ -50,10 +51,15 @@ pub struct LangSpec {
     pub extensions: &'static [&'static str],
     pub(crate) implicit_parameters: &'static [&'static str],
     pub(crate) metadata_nodes: &'static [&'static str],
+    pub(crate) decorators_before: &'static [&'static str],
+    pub(crate) decorators_within: &'static [&'static str],
+    pub(crate) test_markers: &'static [&'static str],
+    pub(crate) test_paths: &'static [&'static str],
     pub(crate) cognitive: CognitiveSpec,
     units_source: &'static str,
     comments_source: &'static str,
     decisions_source: &'static str,
+    masking_source: &'static str,
     grammar: fn() -> Language,
     compiled: OnceLock<Queries>,
 }
@@ -96,12 +102,14 @@ impl LangSpec {
             let units = compile(&language, self.units_source, self.id, "units");
             let comments = compile(&language, self.comments_source, self.id, "comments");
             let decisions = compile(&language, self.decisions_source, self.id, "decisions");
+            let masking = compile(&language, self.masking_source, self.id, "masking");
 
             Queries {
                 language,
                 units,
                 comments,
                 decisions,
+                masking,
             }
         })
     }
@@ -126,6 +134,15 @@ pub static KOTLIN: LangSpec = LangSpec {
     extensions: &["kt", "kts"],
     implicit_parameters: &[],
     metadata_nodes: &["annotation", "modifiers"],
+    decorators_before: &[],
+    decorators_within: &["modifiers", "annotation"],
+    test_markers: &["@Test", "@ParameterizedTest", "@RepeatedTest"],
+    test_paths: &[
+        "/src/test/",
+        "/src/androidTest/",
+        "/src/commonTest/",
+        "/src/jvmTest/",
+    ],
     cognitive: CognitiveSpec {
         conditional: "if_expression",
         condition_field: "condition",
@@ -146,6 +163,7 @@ pub static KOTLIN: LangSpec = LangSpec {
     units_source: include_str!("../queries/kotlin/units.scm"),
     comments_source: include_str!("../queries/kotlin/comments.scm"),
     decisions_source: include_str!("../queries/kotlin/decisions.scm"),
+    masking_source: include_str!("../queries/kotlin/masking.scm"),
     grammar: kotlin_grammar,
     compiled: OnceLock::new(),
 };
@@ -160,6 +178,10 @@ pub static RUST: LangSpec = LangSpec {
     extensions: &["rs"],
     implicit_parameters: &["self_parameter", "attribute_item"],
     metadata_nodes: &["attribute_item", "inner_attribute_item"],
+    decorators_before: &["attribute_item"],
+    decorators_within: &["inner_attribute_item"],
+    test_markers: &["#[test]", "#[bench]", "#[rstest]", "cfg(test)"],
+    test_paths: &["/tests/", "/benches/", "/examples/"],
     cognitive: CognitiveSpec {
         conditional: "if_expression",
         condition_field: "condition",
@@ -179,11 +201,20 @@ pub static RUST: LangSpec = LangSpec {
     units_source: include_str!("../queries/rust/units.scm"),
     comments_source: include_str!("../queries/rust/comments.scm"),
     decisions_source: include_str!("../queries/rust/decisions.scm"),
+    masking_source: include_str!("../queries/rust/masking.scm"),
     grammar: rust_grammar,
     compiled: OnceLock::new(),
 };
 
 pub static ALL: &[&LangSpec] = &[&KOTLIN, &RUST];
+
+impl LangSpec {
+    pub fn is_test_path(&self, path: &Path) -> bool {
+        let shown = path.to_string_lossy().replace('\\', "/");
+
+        self.test_paths.iter().any(|marker| shown.contains(marker))
+    }
+}
 
 pub fn detect(path: &Path) -> Option<&'static LangSpec> {
     let extension = path.extension()?.to_str()?;

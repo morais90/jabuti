@@ -9,7 +9,7 @@ use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::model::{Finding, Reading, Unit, UnitKind};
 use jabuti_core::policy::{FileUnderReview, Policy};
 use jabuti_core::report::Scanned;
-use jabuti_core::{lang, syntax};
+use jabuti_core::{lang, masking, syntax};
 use rayon::prelude::*;
 
 use crate::churn::Churn;
@@ -137,6 +137,22 @@ fn sources(roots: &[PathBuf], exclude: &[String]) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
+fn masked_errors(
+    shown: &str,
+    path: &Path,
+    parsed: &syntax::Parsed<'_>,
+    policy: &Policy,
+) -> Vec<Finding> {
+    let Some(spec) = lang::detect(path) else {
+        return Vec::new();
+    };
+    if spec.is_test_path(path) {
+        return Vec::new();
+    }
+
+    masking::findings(shown, spec.id, &parsed.maskings(), policy)
+}
+
 fn covered(paths: &[PathBuf], reviewed: Vec<Reviewed>, changes: Option<&Changes>) -> Vec<Reviewed> {
     let Some(changes) = changes else {
         return reviewed;
@@ -205,6 +221,8 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
     };
 
     let mut findings = context.policy.evaluate(&file);
+    findings.extend(masked_errors(&file.path, path, &parsed, context.policy));
+    findings.sort_by_key(|finding| finding.span.start_line);
     if let Some(changes) = context.changes {
         findings.retain(|finding| changes.touches(path, finding.span));
     }

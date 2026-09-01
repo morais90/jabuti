@@ -136,3 +136,14 @@ fn an_empty_name_is_never_a_node_kind_the_grammar_has() {
 fn a_grammar_answers_whether_it_has_a_field(#[case] field: &str, #[case] known: bool) {
     assert_eq!(lang::RUST.knows_field(field), known);
 }
+
+#[test]
+fn a_file_under_a_test_directory_is_recognised_by_its_path() {
+    assert!(lang::RUST.is_test_path(Path::new("crates/x/tests/behaviour.rs")));
+    assert!(lang::RUST.is_test_path(Path::new("crates/x/benches/speed.rs")));
+    assert!(!lang::RUST.is_test_path(Path::new("crates/x/src/live.rs")));
+
+    assert!(lang::KOTLIN.is_test_path(Path::new("app/src/test/kotlin/T.kt")));
+    assert!(lang::KOTLIN.is_test_path(Path::new("app/src/androidTest/kotlin/T.kt")));
+    assert!(!lang::KOTLIN.is_test_path(Path::new("app/src/main/kotlin/T.kt")));
+}

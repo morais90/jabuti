@@ -33,6 +33,7 @@ say a lot.
 |---|---|---|
 | [`cognitive-complexity`](rules/cognitive-complexity.md) | 7 | warning |
 | [`duplicate-block`](rules/duplicate-block.md) | 120 nodes | warning |
+| [`error-masking`](rules/error-masking.md) | none | warning |
 | [`hotspot`](rules/hotspot.md) | 90 | warning |
 | [`function-lines`](rules/function-lines.md) | 60 | warning |
 | [`parameters`](rules/parameters.md) | 4 | warning |

@@ -3,6 +3,7 @@ pub mod duplication;
 pub mod external;
 pub mod hotspot;
 pub mod lang;
+pub mod masking;
 pub mod metrics;
 pub mod model;
 pub mod policy;
