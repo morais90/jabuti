@@ -30,8 +30,12 @@ src/parser.rs:12  warning  duplicate-block  143 nodes repeated at src/reader.rs:
 
 Every occurrence is reported, and each one points at the others. So a block appearing in two places
 produces two lines, each naming the other. That is deliberate: whichever file you happen to open,
-the finding tells you where the rest of the family lives, which is the part that stops you from
-fixing two copies and leaving a third behind.
+the finding tells you where the other copies of *that* block live.
+
+Two regions of different sizes are two different findings. If three files share a block but only two
+of them share the whole surrounding function, you get a finding for the function naming those two
+files, and a separate finding for the smaller block naming all three. Each node count then describes
+exactly the region shared with the places named beside it.
 
 When a block was copied many times, the finding names the first few locations and counts the rest,
 so one heavily repeated block cannot flood the report on its own.
@@ -94,12 +98,15 @@ has to see the whole picture, since a copy is only findable when its twin is als
 file is not the same as counting it: the summary line and `--format measures` still cover only the
 change, so scoping a run means the same thing whether or not this rule is on.
 
-Because a copy can span two files written in different languages, the rule belongs to the repository
-rather than to a language, and setting it under `[languages.<name>.rules]` is rejected with an error
-rather than quietly ignored. The same is true of [`hotspot`](hotspot.md).
+Because the rule compares files against each other, a finding is about a pair of files rather than
+about one file in one language. It therefore belongs to the run rather than to a language, and
+setting it under `[languages.<name>.rules]` is rejected with an error rather than quietly ignored.
+The same is true of [`hotspot`](hotspot.md).
 
-Copies are found across files and across languages jabuti supports, but never across a boundary it
-cannot parse. A file with a syntax error contributes nothing to the comparison.
+Copies are found across files but not across languages. The fingerprint is built from the names the
+grammar gives its nodes, and those names differ between languages, so a Rust function and the Kotlin
+function it was translated from will never match. A file jabuti cannot parse contributes nothing to
+the comparison at all.
 
 Type-3 clones, where a line was added or removed alongside the renaming, are not detected. Neither
 are two implementations of the same behaviour written differently. Both are on the roadmap and both

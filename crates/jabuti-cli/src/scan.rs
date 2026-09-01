@@ -134,6 +134,8 @@ fn sources(roots: &[PathBuf], exclude: &[String]) -> Result<Vec<PathBuf>> {
         .collect();
 
     paths.sort();
+    paths.dedup_by_key(|path| path.canonicalize().unwrap_or_else(|_| path.clone()));
+
     Ok(paths)
 }
 

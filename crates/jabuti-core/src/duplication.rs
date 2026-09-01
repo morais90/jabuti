@@ -66,8 +66,14 @@ impl Occurrence {
     }
 }
 
-fn widest(classes: Vec<Vec<Occurrence>>) -> Vec<(Occurrence, Vec<Occurrence>)> {
-    let mut reported: Vec<(Occurrence, Vec<Occurrence>)> = Vec::new();
+#[derive(Debug)]
+struct Twins {
+    listed: Vec<Occurrence>,
+    total: usize,
+}
+
+fn widest(classes: Vec<Vec<Occurrence>>) -> Vec<(Occurrence, Twins)> {
+    let mut reported: Vec<(Occurrence, Twins)> = Vec::new();
 
     let mut ordered = classes;
     ordered.sort_by(|left, right| {
@@ -80,51 +86,35 @@ fn widest(classes: Vec<Vec<Occurrence>>) -> Vec<(Occurrence, Vec<Occurrence>)> {
 
     for class in ordered {
         for (index, occurrence) in class.iter().enumerate() {
-            let twins = class
-                .iter()
-                .enumerate()
-                .filter(|(other, _)| *other != index)
-                .map(|(_, twin)| twin.clone());
-
-            match reported
-                .iter_mut()
-                .find(|(kept, _)| kept.encloses(occurrence))
-            {
-                Some((kept, known)) => absorb(kept, known, twins),
-                None => reported.push((occurrence.clone(), twins.collect())),
+            if reported.iter().any(|(kept, _)| kept.encloses(occurrence)) {
+                continue;
             }
-        }
-    }
 
-    for (_, twins) in &mut reported {
-        twins.sort_by(|left, right| {
-            left.path.cmp(&right.path).then(
-                left.fragment
-                    .span
-                    .start_line
-                    .cmp(&right.fragment.span.start_line),
-            )
-        });
+            reported.push((occurrence.clone(), twins_of(&class, index)));
+        }
     }
 
     reported
 }
 
-fn absorb(kept: &Occurrence, known: &mut Vec<Occurrence>, twins: impl Iterator<Item = Occurrence>) {
-    for twin in twins {
-        let already = kept.encloses(&twin) || known.iter().any(|seen| seen.encloses(&twin));
-        if !already {
-            known.push(twin);
-        }
+const TWINS_LISTED: usize = 3;
+
+fn twins_of(class: &[Occurrence], index: usize) -> Twins {
+    let listed = class
+        .iter()
+        .enumerate()
+        .filter(|(other, _)| *other != index)
+        .take(TWINS_LISTED)
+        .map(|(_, twin)| twin.clone())
+        .collect();
+
+    Twins {
+        listed,
+        total: class.len() - 1,
     }
 }
 
-fn finding(
-    occurrence: &Occurrence,
-    twins: &[Occurrence],
-    severity: Severity,
-    limit: u32,
-) -> Finding {
+fn finding(occurrence: &Occurrence, twins: &Twins, severity: Severity, limit: u32) -> Finding {
     Finding {
         rule: RuleId::Native(Rule::DuplicateBlock),
         severity,
@@ -141,17 +131,15 @@ fn finding(
     }
 }
 
-const TWINS_LISTED: usize = 3;
-
-fn where_else(twins: &[Occurrence]) -> String {
+fn where_else(twins: &Twins) -> String {
     let listed = twins
+        .listed
         .iter()
-        .take(TWINS_LISTED)
         .map(|twin| format!("{}:{}", twin.path, twin.fragment.span.start_line))
         .collect::<Vec<String>>()
         .join(", ");
 
-    match twins.len().checked_sub(TWINS_LISTED) {
+    match twins.total.checked_sub(twins.listed.len()) {
         Some(remaining) if remaining > 0 => format!("{listed} and {remaining} more"),
         _ => listed,
     }

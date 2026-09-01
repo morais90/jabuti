@@ -161,7 +161,7 @@ fn a_comment_added_to_a_copy_does_not_hide_it() {
 }
 
 #[test]
-fn every_occurrence_names_all_the_others_not_only_its_own_class() {
+fn a_narrower_copy_is_reported_on_its_own_rather_than_folded_into_a_wider_one() {
     let files = [
         fragments("src/a.rs", HEADER, 40),
         fragments("src/b.rs", RENAMED, 40),
@@ -171,9 +171,28 @@ fn every_occurrence_names_all_the_others_not_only_its_own_class() {
     let messages = messages(&files, 40);
 
     assert!(messages[0].contains("src/b.rs:1"), "{messages:?}");
-    assert!(messages[0].contains("src/c.rs:1"), "{messages:?}");
+    assert!(!messages[0].contains("src/c.rs"), "{messages:?}");
     assert!(messages[2].contains("src/a.rs:1"), "{messages:?}");
     assert!(messages[2].contains("src/b.rs:1"), "{messages:?}");
+}
+
+#[test]
+fn the_node_count_describes_the_region_shared_with_the_places_it_names() {
+    let files = [
+        fragments("src/a.rs", HEADER, 40),
+        fragments("src/b.rs", RENAMED, 40),
+        fragments("src/c.rs", EXTRA_PARAMETER, 40),
+    ];
+
+    let messages = messages(&files, 40);
+    let nodes = |message: &str| {
+        message
+            .split_whitespace()
+            .find_map(|word| word.parse::<u32>().ok())
+            .expect("the message opens with a node count")
+    };
+
+    assert!(nodes(&messages[0]) > nodes(&messages[2]), "{messages:?}");
 }
 
 #[test]

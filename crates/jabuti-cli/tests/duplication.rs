@@ -119,3 +119,20 @@ fn a_repository_wide_rule_cannot_be_set_per_language() {
         .code(2)
         .stderr(contains("cannot be set per language"));
 }
+
+#[test]
+fn the_same_file_reached_through_two_roots_is_not_a_copy_of_itself() {
+    let directory = repository(&[
+        ("jabuti.toml", &report_duplication_above(40)),
+        (
+            "src/parser.rs",
+            &shaped_like("parse_header", "parts", "name"),
+        ),
+    ]);
+
+    jabuti(&directory)
+        .arg("src")
+        .assert()
+        .success()
+        .stdout("No findings across 1 file and 1 unit.\n");
+}
