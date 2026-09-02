@@ -3,6 +3,7 @@ use crate::report::render::agent::Line;
 use crate::policy::{Policy, Rule as Named};
 use super::git;
 use super::{scan, tools::probe};
+use crate::render::{agent::{Line as Row, Width}, theme};
 use self::inner::Helper;
 use std::collections::BTreeMap;
 use serde::Serialize;

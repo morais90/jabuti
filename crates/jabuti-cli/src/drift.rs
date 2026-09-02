@@ -1,11 +1,9 @@
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use jabuti_core::graph::{Index, Source};
 use jabuti_core::lang::{self, LangSpec};
-use jabuti_core::model::{Detail, FileFacts, Finding, Rule, RuleId, Severity, Span};
-use jabuti_core::syntax;
+use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span, Unreadable};
 
 use crate::config::Settings;
 use crate::since::Changes;
@@ -15,13 +13,14 @@ pub(crate) fn findings(
     settings: &Settings,
     changes: &Changes,
     reference: &str,
-) -> Result<Vec<Finding>> {
+) -> Result<(Vec<Finding>, Vec<Unreadable>)> {
     let rule = RuleId::Native(Rule::NewDependency);
     let base = crate::git::run(&["merge-base", "HEAD", reference])?
         .trim()
         .to_owned();
     let paths = crate::scan::sources(roots, &settings.exclude)?;
-    let index = Index::of(&known(&paths));
+    let (indexed, unreadable) = crate::graph::known(&paths);
+    let index = Index::of(&indexed);
 
     let mut found = Vec::new();
     for path in paths.iter().filter(|path| changes.covers(path)) {
@@ -39,10 +38,12 @@ pub(crate) fn findings(
         let Some(before) = previous(&base, &inside) else {
             continue;
         };
-        let Some(now) = source_of(&shown, spec, read(path).as_deref()) else {
+        let Some(now) =
+            crate::graph::source_of(&shown, spec, crate::graph::contents(path).as_deref())
+        else {
             continue;
         };
-        let Some(then) = source_of(&shown, spec, Some(&before)) else {
+        let Some(then) = crate::graph::source_of(&shown, spec, Some(&before)) else {
             continue;
         };
 
@@ -60,40 +61,7 @@ pub(crate) fn findings(
         }
     }
 
-    Ok(found)
-}
-
-fn known(paths: &[PathBuf]) -> Vec<Source> {
-    paths
-        .iter()
-        .filter_map(|path| {
-            let spec = lang::detect(path)?;
-            let shown = crate::scan::display(path);
-
-            match spec.id {
-                lang::LanguageId::Rust => Some(Source {
-                    path: PathBuf::from(shown),
-                    language: spec.id,
-                    facts: FileFacts::default(),
-                }),
-                lang::LanguageId::Kotlin => source_of(&shown, spec, read(path).as_deref()),
-            }
-        })
-        .collect()
-}
-
-fn read(path: &Path) -> Option<String> {
-    std::fs::read_to_string(path).ok()
-}
-
-fn source_of(shown: &str, spec: &'static LangSpec, contents: Option<&str>) -> Option<Source> {
-    let facts = syntax::parse(contents?, spec).ok()?.facts();
-
-    Some(Source {
-        path: PathBuf::from(shown),
-        language: spec.id,
-        facts,
-    })
+    Ok((found, unreadable))
 }
 
 fn gating(settings: &Settings, spec: &'static LangSpec) -> Option<Severity> {
@@ -109,15 +77,11 @@ fn previous(base: &str, inside: &Path) -> Option<String> {
 }
 
 fn added(index: &Index, now: &Source, then: &Source) -> Vec<(PathBuf, Span)> {
-    let before: BTreeSet<PathBuf> = index
-        .targets(then)
-        .into_iter()
-        .map(|(target, _)| target)
-        .collect();
+    let before = index.targets(then);
 
     index
         .targets(now)
         .into_iter()
-        .filter(|(target, _)| target != &now.path && !before.contains(target))
+        .filter(|(target, _)| target != &now.path && !before.contains_key(target))
         .collect()
 }

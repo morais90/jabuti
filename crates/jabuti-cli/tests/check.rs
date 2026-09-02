@@ -262,3 +262,19 @@ fn source_the_grammar_is_too_old_to_know_is_reported_rather_than_skipped() {
         )
         .stderr("");
 }
+
+#[test]
+fn a_symlink_to_a_source_file_does_not_replace_the_file_it_points_at() {
+    let directory = repository(&[(
+        "src/lib.rs",
+        "pub fn read() -> usize {\n    let value: Option<usize> = None;\n    value.unwrap()\n}\n",
+    )]);
+    std::os::unix::fs::symlink("src/lib.rs", directory.path().join("alias.rs"))
+        .expect("the alias can be created");
+
+    jabuti(&directory)
+        .assert()
+        .success()
+        .stdout(contains("src/lib.rs:3  warning  error-masking"))
+        .stdout(contains("1 file and 1 unit"));
+}

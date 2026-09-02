@@ -1,3 +1,4 @@
+use crate::git::status;
 use std::collections::BTreeMap;
 
 pub struct Settings {
@@ -11,5 +12,9 @@ impl Settings {
             root: crate::git::run(&["rev-parse", "--show-toplevel"]),
             overrides: BTreeMap::new(),
         }
+    }
+
+    pub fn dirty(&self) -> bool {
+        !status().is_empty()
     }
 }

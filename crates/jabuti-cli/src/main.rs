@@ -3,6 +3,7 @@ mod config;
 mod drift;
 mod git;
 mod graph;
+mod layers;
 mod scan;
 mod since;
 mod tools;
@@ -12,7 +13,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use jabuti_core::model::{Finding, Rule, Severity};
+use jabuti_core::model::{Finding, Rule, Severity, Unreadable};
 use jabuti_core::report;
 
 #[derive(Debug, Parser)]
@@ -129,9 +130,9 @@ fn drifted(
     settings: &config::Settings,
     changes: Option<&since::Changes>,
     since: Option<&str>,
-) -> Result<Vec<Finding>> {
+) -> Result<(Vec<Finding>, Vec<Unreadable>)> {
     let (Some(reference), Some(changes)) = (since, changes) else {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     };
 
     drift::findings(paths, settings, changes, reference)
@@ -258,9 +259,18 @@ fn check(paths: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
     outcome
         .findings
         .extend(run_tools(&root, &settings, changes.as_ref()));
+    let (drifted, skipped) = drifted(paths, &settings, changes.as_ref(), since)?;
+    outcome.findings.extend(drifted);
+    outcome.unreadable.extend(skipped);
+    let (crossed, skipped) = layers::findings(paths, &root, &settings, changes.as_ref())?;
+    outcome.findings.extend(crossed);
+    outcome.unreadable.extend(skipped);
     outcome
-        .findings
-        .extend(drifted(paths, &settings, changes.as_ref(), since)?);
+        .unreadable
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    outcome
+        .unreadable
+        .dedup_by(|left, right| left.path == right.path);
     outcome.findings.sort_by(|left, right| {
         left.path
             .cmp(&right.path)

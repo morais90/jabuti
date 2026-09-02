@@ -168,13 +168,30 @@ We read syntax, not types, so a dependency that only exists once types are known
 - a call that goes through an interface or a trait, where the implementation is chosen at run time
 - anything a macro or an annotation processor generates rather than writes
 
-Across crates in a Rust workspace a reference is matched by crate name, and the crate is assumed to
-live in a directory called after it. A crate whose directory name differs from the name in its
-`Cargo.toml` is not found.
+A Rust file's module is read from its place under the nearest `src` directory, which is the layout
+Cargo produces. Code kept elsewhere, under `lib/` say, does not resolve. Across crates in a workspace
+a reference is matched by crate name, and the crate is assumed to live in a directory called after
+it, so a crate whose directory name differs from the name in its `Cargo.toml` is not found.
 
 Name resolution can also point at the wrong file when two declarations share a name, which adds a
 file to the answer rather than removing one. That is the safer of the two mistakes: a file listed
 that did not need checking costs you a moment, and a file missing costs you the change.
+
+### Holding a boundary
+
+The same graph can enforce a rule as well as answer a question. Declare which files form a layer and
+which layers each may depend on, and every crossing is reported at the line that made it:
+
+```toml
+[layers]
+domain = { paths = ["src/domain/**"], depends_on = [] }
+infrastructure = { paths = ["src/infrastructure/**"], depends_on = ["domain"] }
+```
+
+Files matching no layer are left alone in both directions, so the rule can be switched on for the
+one boundary you care about without classifying everything first.
+[`docs/rules/layer-violation.md`](rules/layer-violation.md) has the details, including the path
+pattern mistake that leaves a layer silently empty and how the rule guards against it.
 
 ## Other shapes of output
 

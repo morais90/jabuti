@@ -49,6 +49,7 @@ fn shared_defaults() -> BTreeMap<RuleId, RuleConfig> {
         (RuleId::Native(Rule::FileLines), silent(1000)),
         (RuleId::Native(Rule::FunctionLines), reporting(60)),
         (RuleId::Native(Rule::Hotspot), reporting(90)),
+        (RuleId::Native(Rule::LayerViolation), reporting(0)),
         (RuleId::Native(Rule::NewDependency), reporting(0)),
         (RuleId::Native(Rule::Parameters), reporting(4)),
     ])
@@ -210,9 +211,11 @@ impl FileUnderReview<'_> {
     pub(crate) fn measure(&self, rule: Rule, unit: &Unit) -> u32 {
         match rule {
             Rule::Churn => self.churn,
-            Rule::DuplicateBlock | Rule::ErrorMasking | Rule::Hotspot | Rule::NewDependency => {
-                NOT_MEASURED_PER_UNIT
-            }
+            Rule::DuplicateBlock
+            | Rule::ErrorMasking
+            | Rule::Hotspot
+            | Rule::LayerViolation
+            | Rule::NewDependency => NOT_MEASURED_PER_UNIT,
             Rule::CognitiveComplexity => self.cognitive.cognitive(unit),
             Rule::Parameters => unit.parameters,
             Rule::CyclomaticComplexity => self.decisions.cyclomatic(unit),

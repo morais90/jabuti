@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use crate::lang::LanguageId;
@@ -20,7 +20,7 @@ pub fn edges(sources: &[Source]) -> Edges {
     for source in sources {
         for (target, at) in index.targets(source) {
             if target != source.path {
-                found.entry((source.path.clone(), target)).or_insert(at);
+                found.insert((source.path.clone(), target), at);
             }
         }
     }
@@ -67,11 +67,19 @@ impl Index {
         }
     }
 
-    pub fn targets(&self, source: &Source) -> Vec<(PathBuf, Span)> {
-        match source.language {
+    pub fn targets(&self, source: &Source) -> BTreeMap<PathBuf, Span> {
+        let mut reached = match source.language {
             LanguageId::Rust => rust_targets(source, &self.modules, &self.crates),
             LanguageId::Kotlin => kotlin_targets(source, &self.declarations),
+        };
+        reached.sort_by_key(|(target, at)| (target.clone(), at.start_line));
+
+        let mut earliest: BTreeMap<PathBuf, Span> = BTreeMap::new();
+        for (target, at) in reached {
+            earliest.entry(target).or_insert(at);
         }
+
+        earliest
     }
 }
 
@@ -187,14 +195,12 @@ fn longest(
     root: &Path,
     mut segments: Vec<String>,
 ) -> Option<PathBuf> {
-    while !segments.is_empty() {
+    loop {
         if let Some(target) = modules.get(&(root.to_path_buf(), segments.clone())) {
             return Some(target.clone());
         }
-        segments.pop();
+        segments.pop()?;
     }
-
-    None
 }
 
 fn kotlin_targets(
@@ -215,6 +221,50 @@ fn kotlin_targets(
         let key = (source.facts.module.clone(), name.clone());
         if let Some(target) = declarations.get(&key) {
             found.push((target.clone(), *at));
+        }
+    }
+
+    found
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Layers {
+    pub of: BTreeMap<PathBuf, String>,
+    pub allowed: BTreeMap<String, BTreeSet<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Violation {
+    pub from: PathBuf,
+    pub to: PathBuf,
+    pub at: Span,
+    pub from_layer: String,
+    pub to_layer: String,
+}
+
+pub fn violations(edges: &Edges, layers: &Layers) -> Vec<Violation> {
+    let mut found = Vec::new();
+
+    for ((from, to), at) in edges {
+        let (Some(from_layer), Some(to_layer)) = (layers.of.get(from), layers.of.get(to)) else {
+            continue;
+        };
+        if from_layer == to_layer {
+            continue;
+        }
+
+        let permitted = layers
+            .allowed
+            .get(from_layer)
+            .is_some_and(|allowed| allowed.contains(to_layer));
+        if !permitted {
+            found.push(Violation {
+                from: from.clone(),
+                to: to.clone(),
+                at: *at,
+                from_layer: from_layer.clone(),
+                to_layer: to_layer.clone(),
+            });
         }
     }
 

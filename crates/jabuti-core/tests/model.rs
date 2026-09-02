@@ -62,5 +62,8 @@ fn only_the_rules_compared_across_files_belong_to_the_repository() {
         .filter(|rule| rule.repository_wide())
         .collect();
 
-    assert_eq!(wide, [Rule::DuplicateBlock, Rule::Hotspot]);
+    assert_eq!(
+        wide,
+        [Rule::DuplicateBlock, Rule::Hotspot, Rule::LayerViolation]
+    );
 }

@@ -356,11 +356,11 @@ fn widest_path(node: Node<'_>, source: &str) -> Option<String> {
         widest = parent;
     }
 
-    let inside_a_use_list = widest
+    let covered_by_a_list = widest
         .parent()
-        .is_some_and(|parent| parent.kind() == "use_list");
+        .is_some_and(|parent| matches!(parent.kind(), "use_list" | "scoped_use_list"));
 
-    (!inside_a_use_list).then(|| text_of(widest, source))
+    (!covered_by_a_list).then(|| text_of(widest, source))
 }
 
 fn record(facts: &mut FileFacts, capture: &str, node: Node<'_>, source: &str) {
@@ -396,6 +396,17 @@ fn remember(seen: &mut BTreeMap<String, Span>, name: String, at: Span) {
 }
 
 fn list_paths(node: Node<'_>, source: &str) -> Vec<String> {
+    if node
+        .parent()
+        .is_some_and(|parent| parent.kind() == "use_list")
+    {
+        return Vec::new();
+    }
+
+    expanded(node, source)
+}
+
+fn expanded(node: Node<'_>, source: &str) -> Vec<String> {
     let Some(prefix) = node.child_by_field_name("path") else {
         return Vec::new();
     };
@@ -407,18 +418,21 @@ fn list_paths(node: Node<'_>, source: &str) -> Vec<String> {
     let mut cursor = list.walk();
 
     list.named_children(&mut cursor)
-        .filter_map(|entry| leaf(entry, source))
+        .flat_map(|entry| leaves(entry, source))
         .map(|leaf| format!("{prefix}::{leaf}"))
         .collect()
 }
 
-fn leaf(entry: Node<'_>, source: &str) -> Option<String> {
+fn leaves(entry: Node<'_>, source: &str) -> Vec<String> {
     match entry.kind() {
-        "identifier" | "scoped_identifier" => Some(text_of(entry, source)),
+        "identifier" | "scoped_identifier" => vec![text_of(entry, source)],
         "use_as_clause" => entry
             .child_by_field_name("path")
-            .map(|path| text_of(path, source)),
-        _ => None,
+            .map(|path| text_of(path, source))
+            .into_iter()
+            .collect(),
+        "scoped_use_list" => expanded(entry, source),
+        _ => Vec::new(),
     }
 }
 

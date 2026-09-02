@@ -62,6 +62,7 @@ pub enum Rule {
     DuplicateBlock,
     ErrorMasking,
     Hotspot,
+    LayerViolation,
     NewDependency,
     CognitiveComplexity,
     CyclomaticComplexity,
@@ -71,11 +72,12 @@ pub enum Rule {
 }
 
 impl Rule {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Churn,
         Self::DuplicateBlock,
         Self::ErrorMasking,
         Self::Hotspot,
+        Self::LayerViolation,
         Self::NewDependency,
         Self::CognitiveComplexity,
         Self::CyclomaticComplexity,
@@ -90,6 +92,7 @@ impl Rule {
             Self::DuplicateBlock => "duplicate-block",
             Self::ErrorMasking => "error-masking",
             Self::Hotspot => "hotspot",
+            Self::LayerViolation => "layer-violation",
             Self::NewDependency => "new-dependency",
             Self::CognitiveComplexity => "cognitive-complexity",
             Self::CyclomaticComplexity => "cyclomatic-complexity",
@@ -104,7 +107,10 @@ impl Rule {
     }
 
     pub fn repository_wide(self) -> bool {
-        matches!(self, Self::DuplicateBlock | Self::Hotspot)
+        matches!(
+            self,
+            Self::DuplicateBlock | Self::Hotspot | Self::LayerViolation
+        )
     }
 }
 

@@ -37,19 +37,21 @@ fn a_rust_file_reports_every_path_it_writes_wherever_it_wrote_it() {
         rendered(&facts),
         "module \n\
          path crate::config::Settings at 1\n\
-         path crate::git::run at 19\n\
-         path crate::policy at 3\n\
+         path crate::git::run at 20\n\
          path crate::policy::Policy at 3\n\
          path crate::policy::Rule at 3\n\
-         path crate::policy::defaults::strict at 20\n\
+         path crate::policy::defaults::strict at 21\n\
+         path crate::render::agent::Line at 6\n\
+         path crate::render::agent::Width at 6\n\
+         path crate::render::theme at 6\n\
          path crate::report::render::agent::Line at 2\n\
-         path crate::tools::probe::name at 27\n\
-         path self::inner::Helper at 6\n\
-         path serde::Serialize at 8\n\
-         path std::collections::BTreeMap at 7\n\
+         path crate::tools::probe::name at 28\n\
+         path self::inner::Helper at 7\n\
+         path serde::Serialize at 9\n\
+         path std::collections::BTreeMap at 8\n\
          path super::git at 4\n\
          path super::scan at 5\n\
-         path super::since::Changes::new at 21\n\
+         path super::since::Changes::new at 22\n\
          path super::tools::probe at 5"
     );
 }
@@ -191,7 +193,7 @@ fn a_kotlin_file_depends_on_a_sibling_it_never_imported() {
 }
 
 #[test]
-fn a_reference_into_another_crate_of_the_workspace_resolves() {
+fn a_reference_into_another_crate_or_into_the_crate_root_resolves() {
     let edges = graph::edges(&sources_under("graph/workspace", &lang::RUST));
 
     assert_eq!(
@@ -200,6 +202,118 @@ fn a_reference_into_another_crate_of_the_workspace_resolves() {
          crates/app/src/main.rs -> crates/engine/src/lib.rs\n\
          crates/app/src/main.rs -> crates/engine/src/model.rs\n\
          crates/app/src/runner.rs -> crates/engine/src/lib.rs\n\
-         crates/app/src/runner.rs -> crates/engine/src/model.rs"
+         crates/app/src/runner.rs -> crates/engine/src/model.rs\n\
+         crates/engine/src/model.rs -> crates/engine/src/lib.rs"
     );
+}
+
+fn layered(assignments: &[(&str, &str)], allowed: &[(&str, &[&str])]) -> graph::Layers {
+    graph::Layers {
+        of: assignments
+            .iter()
+            .map(|(path, layer)| (std::path::PathBuf::from(path), (*layer).to_owned()))
+            .collect(),
+        allowed: allowed
+            .iter()
+            .map(|(layer, targets)| {
+                (
+                    (*layer).to_owned(),
+                    targets.iter().map(|target| (*target).to_owned()).collect(),
+                )
+            })
+            .collect(),
+    }
+}
+
+fn described(violations: &[graph::Violation]) -> String {
+    violations
+        .iter()
+        .map(|violation| {
+            format!(
+                "{}:{} {} -> {} ({} may not depend on {})",
+                violation.from.display(),
+                violation.at.start_line,
+                violation.from_layer,
+                violation.to_layer,
+                violation.from_layer,
+                violation.to_layer
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn every_reference_into_a_layer_that_was_not_allowed_is_a_violation_at_its_own_line() {
+    let edges = graph::edges(&sources_under("graph/workspace", &lang::RUST));
+    let layers = layered(
+        &[
+            ("crates/app/src/main.rs", "app"),
+            ("crates/app/src/runner.rs", "app"),
+            ("crates/engine/src/lib.rs", "engine"),
+            ("crates/engine/src/model.rs", "engine"),
+        ],
+        &[("app", &[]), ("engine", &[])],
+    );
+
+    assert_eq!(
+        described(&graph::violations(&edges, &layers)),
+        "crates/app/src/main.rs:7 app -> engine (app may not depend on engine)\n\
+         crates/app/src/main.rs:1 app -> engine (app may not depend on engine)\n\
+         crates/app/src/runner.rs:5 app -> engine (app may not depend on engine)\n\
+         crates/app/src/runner.rs:1 app -> engine (app may not depend on engine)"
+    );
+}
+
+#[test]
+fn a_dependency_a_layer_was_allowed_to_have_is_not_reported() {
+    let edges = graph::edges(&sources_under("graph/workspace", &lang::RUST));
+    let layers = layered(
+        &[
+            ("crates/app/src/main.rs", "app"),
+            ("crates/app/src/runner.rs", "app"),
+            ("crates/engine/src/lib.rs", "engine"),
+            ("crates/engine/src/model.rs", "engine"),
+        ],
+        &[("app", &["engine"]), ("engine", &[])],
+    );
+
+    assert!(graph::violations(&edges, &layers).is_empty());
+}
+
+#[test]
+fn a_file_in_no_layer_neither_violates_nor_is_violated() {
+    let edges = graph::edges(&sources_under("graph/workspace", &lang::RUST));
+    let layers = layered(&[("crates/app/src/main.rs", "app")], &[("app", &[])]);
+
+    assert!(graph::violations(&edges, &layers).is_empty());
+}
+
+#[test]
+fn a_dependency_inside_one_layer_is_never_a_violation() {
+    let edges = graph::edges(&sources_under("graph/workspace", &lang::RUST));
+    let layers = layered(
+        &[
+            ("crates/app/src/main.rs", "everything"),
+            ("crates/app/src/runner.rs", "everything"),
+            ("crates/engine/src/lib.rs", "everything"),
+            ("crates/engine/src/model.rs", "everything"),
+        ],
+        &[("everything", &[])],
+    );
+
+    assert!(graph::violations(&edges, &layers).is_empty());
+}
+
+#[test]
+fn an_edge_reached_by_several_references_sits_on_the_earliest_of_them() {
+    let edges = graph::edges(&sources_under("graph/rust", &lang::RUST));
+    let at = edges
+        .get(&(
+            std::path::PathBuf::from("src/config.rs"),
+            std::path::PathBuf::from("src/git.rs"),
+        ))
+        .expect("config depends on git");
+
+    assert_eq!(at.start_line, 1);
 }

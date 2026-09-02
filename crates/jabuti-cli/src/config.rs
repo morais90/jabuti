@@ -14,6 +14,14 @@ pub(crate) struct Settings {
     pub(crate) policy: Policy,
     pub(crate) exclude: Vec<String>,
     pub(crate) tools: BTreeMap<String, bool>,
+    pub(crate) layers: Vec<Layer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Layer {
+    pub(crate) name: String,
+    pub(crate) paths: Vec<String>,
+    pub(crate) depends_on: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -26,6 +34,15 @@ struct Document {
     tools: BTreeMap<String, ToolEntry>,
     #[serde(default)]
     languages: BTreeMap<String, LanguageEntry>,
+    #[serde(default)]
+    layers: BTreeMap<String, LayerEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LayerEntry {
+    paths: Vec<String>,
+    #[serde(default)]
+    depends_on: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,7 +132,42 @@ fn settings(document: Document) -> Result<Settings> {
             .into_iter()
             .map(|(name, entry)| (name, entry.enabled))
             .collect(),
+        layers: layers(document.layers)?,
     })
+}
+
+fn layers(declared: BTreeMap<String, LayerEntry>) -> Result<Vec<Layer>> {
+    let names: Vec<&str> = declared.keys().map(String::as_str).collect();
+
+    for (name, entry) in &declared {
+        checked(name, entry, &names)?;
+    }
+
+    Ok(declared
+        .into_iter()
+        .map(|(name, entry)| Layer {
+            name,
+            paths: entry.paths,
+            depends_on: entry.depends_on,
+        })
+        .collect())
+}
+
+fn checked(name: &str, entry: &LayerEntry, names: &[&str]) -> Result<()> {
+    if entry.paths.is_empty() {
+        bail!("layer {name} names no paths");
+    }
+
+    for target in &entry.depends_on {
+        if !names.contains(&target.as_str()) {
+            bail!(
+                "layer {name} depends on {target}, which is not a declared layer (declared: {})",
+                names.join(", ")
+            );
+        }
+    }
+
+    Ok(())
 }
 
 fn adjusted(current: RuleConfig, entry: Entry) -> Result<RuleConfig> {

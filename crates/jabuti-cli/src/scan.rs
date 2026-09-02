@@ -134,7 +134,7 @@ pub(crate) fn sources(roots: &[PathBuf], exclude: &[String]) -> Result<Vec<PathB
         .filter(|path| path.is_file() && lang::detect(path).is_some())
         .collect();
 
-    paths.sort();
+    paths.sort_by_key(|path| (path.is_symlink(), path.clone()));
 
     let mut seen = BTreeSet::new();
     paths.retain(|path| seen.insert(path.canonicalize().unwrap_or_else(|_| path.clone())));

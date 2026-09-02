@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use jabuti_core::graph::{self, Source};
-use jabuti_core::model::Unreadable;
+use jabuti_core::lang::LangSpec;
+use jabuti_core::model::{FileFacts, Unreadable};
 use jabuti_core::{lang, report, syntax};
 use rayon::prelude::*;
 
@@ -71,10 +72,7 @@ fn examine(path: &PathBuf) -> Option<Result<Source, Unreadable>> {
     Some(outcome)
 }
 
-fn facts_of(
-    source: &str,
-    spec: &'static lang::LangSpec,
-) -> Result<jabuti_core::model::FileFacts, syntax::SyntaxError> {
+fn facts_of(source: &str, spec: &'static LangSpec) -> Result<FileFacts, syntax::SyntaxError> {
     syntax::parse(source, spec).map(|parsed| parsed.facts())
 }
 
@@ -147,4 +145,49 @@ fn plural(count: usize, noun: &str) -> String {
     } else {
         format!("{count} {noun}s")
     }
+}
+
+pub(crate) fn known(paths: &[PathBuf]) -> (Vec<Source>, Vec<Unreadable>) {
+    let mut sources = Vec::new();
+    let mut unreadable = Vec::new();
+
+    for path in paths {
+        let Some(spec) = lang::detect(path) else {
+            continue;
+        };
+        let shown = crate::scan::display(path);
+
+        match spec.id {
+            lang::LanguageId::Rust => sources.push(Source {
+                path: PathBuf::from(shown),
+                language: spec.id,
+                facts: FileFacts::default(),
+            }),
+            lang::LanguageId::Kotlin => match examine(path) {
+                Some(Ok(source)) => sources.push(source),
+                Some(Err(skipped)) => unreadable.push(skipped),
+                None => {}
+            },
+        }
+    }
+
+    (sources, unreadable)
+}
+
+pub(crate) fn contents(path: &Path) -> Option<String> {
+    std::fs::read_to_string(path).ok()
+}
+
+pub(crate) fn source_of(
+    shown: &str,
+    spec: &'static LangSpec,
+    contents: Option<&str>,
+) -> Option<Source> {
+    let facts = syntax::parse(contents?, spec).ok()?.facts();
+
+    Some(Source {
+        path: PathBuf::from(shown),
+        language: spec.id,
+        facts,
+    })
 }

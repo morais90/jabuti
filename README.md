@@ -13,7 +13,7 @@ which is exactly what this tool goes looking for.
 
 </div>
 
-> **Status: early but usable.** `jabuti check` reads Rust and Kotlin, reports seven rules and
+> **Status: early but usable.** `jabuti check` reads Rust and Kotlin, reports eight rules and
 > computes three more that are held back, and can fold in the linters a project already runs.
 
 ## Why this exists
@@ -91,7 +91,8 @@ crates/jabuti-cli/src/git.rs
 ```
 
 Nothing is judged and nothing fails. It is the same dependency graph read in the other direction, as
-context rather than a verdict.
+context rather than a verdict. The graph also holds a boundary when you declare one: name the layers
+and what each may depend on, and a crossing is reported at the line that made it.
 
 The dependencies are found wherever they are written, not only in the import list. This repository
 is its own example: no file contains `use crate::git`, yet two of them call `crate::git::run` on the
