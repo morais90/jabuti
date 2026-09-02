@@ -53,11 +53,17 @@ impl Changes {
         self.entry(path).is_some_and(|touched| touched.covers(span))
     }
 
-    fn entry(&self, path: &Path) -> Option<&Touched> {
+    pub(crate) fn relative(&self, path: &Path) -> Option<PathBuf> {
         let absolute = path.canonicalize().ok()?;
-        let relative = absolute.strip_prefix(&self.root).ok()?;
 
-        self.touched.get(relative)
+        absolute
+            .strip_prefix(&self.root)
+            .ok()
+            .map(Path::to_path_buf)
+    }
+
+    fn entry(&self, path: &Path) -> Option<&Touched> {
+        self.touched.get(&self.relative(path)?)
     }
 }
 

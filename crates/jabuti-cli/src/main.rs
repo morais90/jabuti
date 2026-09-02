@@ -1,5 +1,6 @@
 mod churn;
 mod config;
+mod drift;
 mod git;
 mod graph;
 mod scan;
@@ -11,7 +12,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use jabuti_core::model::{Rule, Severity};
+use jabuti_core::model::{Finding, Rule, Severity};
 use jabuti_core::report;
 
 #[derive(Debug, Parser)]
@@ -86,7 +87,7 @@ fn run_tools(
     root: &std::path::Path,
     settings: &config::Settings,
     changes: Option<&since::Changes>,
-) -> Vec<jabuti_core::model::Finding> {
+) -> Vec<Finding> {
     let mut findings = Vec::new();
 
     for tool in tools::ALL {
@@ -107,11 +108,11 @@ fn run_tools(
 }
 
 fn admitted(
-    reported: Vec<jabuti_core::model::Finding>,
+    reported: Vec<Finding>,
     root: &std::path::Path,
     settings: &config::Settings,
     changes: Option<&since::Changes>,
-) -> Vec<jabuti_core::model::Finding> {
+) -> Vec<Finding> {
     reported
         .into_iter()
         .filter_map(|finding| settings.policy.admit(finding))
@@ -119,12 +120,28 @@ fn admitted(
         .collect()
 }
 
-fn in_scope(
-    finding: &jabuti_core::model::Finding,
-    root: &std::path::Path,
-    changes: Option<&since::Changes>,
-) -> bool {
+fn in_scope(finding: &Finding, root: &std::path::Path, changes: Option<&since::Changes>) -> bool {
     changes.is_none_or(|changes| changes.touches(&root.join(&finding.path), finding.span))
+}
+
+fn drifted(
+    paths: &[PathBuf],
+    settings: &config::Settings,
+    changes: Option<&since::Changes>,
+    since: Option<&str>,
+) -> Result<Vec<Finding>> {
+    let (Some(reference), Some(changes)) = (since, changes) else {
+        return Ok(Vec::new());
+    };
+
+    drift::findings(paths, settings, changes, reference)
+}
+
+fn gates(settings: &config::Settings, rule: Rule) -> bool {
+    settings
+        .policy
+        .config(rule)
+        .is_some_and(|config| config.severity == Severity::Error)
 }
 
 fn enabled(settings: &config::Settings, rule: Rule) -> bool {
@@ -231,11 +248,19 @@ fn check(paths: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
     if changes.is_some() && enabled(&settings, Rule::Hotspot) {
         eprintln!("jabuti: hotspot ranks a whole repository, so it is not evaluated with --since");
     }
+    if since.is_none() && gates(&settings, Rule::NewDependency) {
+        eprintln!(
+            "jabuti: new-dependency compares against an earlier revision, so it needs --since"
+        );
+    }
 
     let mut outcome = scan::scan(paths, &settings, changes.as_ref(), history.as_ref())?;
     outcome
         .findings
         .extend(run_tools(&root, &settings, changes.as_ref()));
+    outcome
+        .findings
+        .extend(drifted(paths, &settings, changes.as_ref(), since)?);
     outcome.findings.sort_by(|left, right| {
         left.path
             .cmp(&right.path)

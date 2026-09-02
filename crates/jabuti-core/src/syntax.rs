@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::ops::Range;
 
 use tree_sitter::{Node, Parser, Query, QueryCursor, QueryMatch, StreamingIterator, Tree};
@@ -363,27 +364,35 @@ fn widest_path(node: Node<'_>, source: &str) -> Option<String> {
 }
 
 fn record(facts: &mut FileFacts, capture: &str, node: Node<'_>, source: &str) {
+    let at = span_of(node);
+
     match capture {
         "package" => facts.module = text_of(node, source),
         "declaration" => {
             facts.declares.insert(text_of(node, source));
         }
-        "reference.name" => {
-            facts.names.insert(text_of(node, source));
-        }
+        "reference.name" => remember(&mut facts.names, text_of(node, source), at),
         "reference.path" => {
             if let Some(path) = widest_path(node, source) {
-                facts.paths.insert(path);
+                remember(&mut facts.paths, path, at);
             }
         }
         "reference.token" => {
             if let Some(path) = token_path(node, source) {
-                facts.paths.insert(path);
+                remember(&mut facts.paths, path, at);
             }
         }
-        "reference.list" => facts.paths.extend(list_paths(node, source)),
+        "reference.list" => {
+            for path in list_paths(node, source) {
+                remember(&mut facts.paths, path, at);
+            }
+        }
         _ => {}
     }
+}
+
+fn remember(seen: &mut BTreeMap<String, Span>, name: String, at: Span) {
+    seen.entry(name).or_insert(at);
 }
 
 fn list_paths(node: Node<'_>, source: &str) -> Vec<String> {

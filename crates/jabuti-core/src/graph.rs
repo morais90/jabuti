@@ -1,8 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::lang::LanguageId;
-use crate::model::FileFacts;
+use crate::model::{FileFacts, Span};
 
 #[derive(Debug, Clone)]
 pub struct Source {
@@ -11,16 +11,16 @@ pub struct Source {
     pub facts: FileFacts,
 }
 
-pub type Edges = BTreeSet<(PathBuf, PathBuf)>;
+pub type Edges = BTreeMap<(PathBuf, PathBuf), Span>;
 
 pub fn edges(sources: &[Source]) -> Edges {
     let index = Index::of(sources);
     let mut found = Edges::new();
 
     for source in sources {
-        for target in index.targets(source) {
+        for (target, at) in index.targets(source) {
             if target != source.path {
-                found.insert((source.path.clone(), target));
+                found.entry((source.path.clone(), target)).or_insert(at);
             }
         }
     }
@@ -29,14 +29,14 @@ pub fn edges(sources: &[Source]) -> Edges {
 }
 
 #[derive(Debug, Default)]
-struct Index {
+pub struct Index {
     modules: BTreeMap<(PathBuf, Vec<String>), PathBuf>,
     crates: BTreeMap<(String, Vec<String>), PathBuf>,
     declarations: BTreeMap<(String, String), PathBuf>,
 }
 
 impl Index {
-    fn of(sources: &[Source]) -> Self {
+    pub fn of(sources: &[Source]) -> Self {
         let mut index = Self::default();
 
         for source in sources {
@@ -67,7 +67,7 @@ impl Index {
         }
     }
 
-    fn targets(&self, source: &Source) -> Vec<PathBuf> {
+    pub fn targets(&self, source: &Source) -> Vec<(PathBuf, Span)> {
         match source.language {
             LanguageId::Rust => rust_targets(source, &self.modules, &self.crates),
             LanguageId::Kotlin => kotlin_targets(source, &self.declarations),
@@ -117,18 +117,18 @@ fn rust_targets(
     source: &Source,
     modules: &BTreeMap<(PathBuf, Vec<String>), PathBuf>,
     crates: &BTreeMap<(String, Vec<String>), PathBuf>,
-) -> Vec<PathBuf> {
+) -> Vec<(PathBuf, Span)> {
     let (root, here) = rust_module(&source.path);
     let mut found = Vec::new();
 
-    for path in &source.facts.paths {
+    for (path, at) in &source.facts.paths {
         let segments: Vec<&str> = path.split("::").collect();
         let inside = anchored(&segments, &here)
             .and_then(|absolute| longest(modules, &root, absolute))
             .filter(|target| target != &source.path);
 
         if let Some(target) = inside.or_else(|| in_another_crate(&segments, crates)) {
-            found.push(target);
+            found.push((target, *at));
         }
     }
 
@@ -200,21 +200,21 @@ fn longest(
 fn kotlin_targets(
     source: &Source,
     declarations: &BTreeMap<(String, String), PathBuf>,
-) -> Vec<PathBuf> {
+) -> Vec<(PathBuf, Span)> {
     let mut found = Vec::new();
 
-    for path in &source.facts.paths {
+    for (path, at) in &source.facts.paths {
         if let Some((package, name)) = path.rsplit_once('.')
             && let Some(target) = declarations.get(&(package.to_owned(), name.to_owned()))
         {
-            found.push(target.clone());
+            found.push((target.clone(), *at));
         }
     }
 
-    for name in &source.facts.names {
+    for (name, at) in &source.facts.names {
         let key = (source.facts.module.clone(), name.clone());
         if let Some(target) = declarations.get(&key) {
-            found.push(target.clone());
+            found.push((target.clone(), *at));
         }
     }
 

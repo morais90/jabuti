@@ -62,6 +62,7 @@ pub enum Rule {
     DuplicateBlock,
     ErrorMasking,
     Hotspot,
+    NewDependency,
     CognitiveComplexity,
     CyclomaticComplexity,
     FileLines,
@@ -70,11 +71,12 @@ pub enum Rule {
 }
 
 impl Rule {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Churn,
         Self::DuplicateBlock,
         Self::ErrorMasking,
         Self::Hotspot,
+        Self::NewDependency,
         Self::CognitiveComplexity,
         Self::CyclomaticComplexity,
         Self::FileLines,
@@ -88,6 +90,7 @@ impl Rule {
             Self::DuplicateBlock => "duplicate-block",
             Self::ErrorMasking => "error-masking",
             Self::Hotspot => "hotspot",
+            Self::NewDependency => "new-dependency",
             Self::CognitiveComplexity => "cognitive-complexity",
             Self::CyclomaticComplexity => "cyclomatic-complexity",
             Self::FileLines => "file-lines",
@@ -218,8 +221,8 @@ pub struct Reading {
 pub struct FileFacts {
     pub module: String,
     pub declares: BTreeSet<String>,
-    pub paths: BTreeSet<String>,
-    pub names: BTreeSet<String>,
+    pub paths: BTreeMap<String, Span>,
+    pub names: BTreeMap<String, Span>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

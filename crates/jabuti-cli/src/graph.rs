@@ -81,7 +81,7 @@ fn facts_of(
 fn reversed(edges: &graph::Edges) -> BTreeMap<PathBuf, BTreeSet<PathBuf>> {
     let mut reversed: BTreeMap<PathBuf, BTreeSet<PathBuf>> = BTreeMap::new();
 
-    for (from, to) in edges {
+    for (from, to) in edges.keys() {
         reversed.entry(to.clone()).or_default().insert(from.clone());
     }
 

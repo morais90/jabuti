@@ -13,8 +13,18 @@ fn facts_of(relative: &str, spec: &'static lang::LangSpec) -> FileFacts {
 fn rendered(facts: &FileFacts) -> String {
     let mut lines = vec![format!("module {}", facts.module)];
     lines.extend(facts.declares.iter().map(|name| format!("declares {name}")));
-    lines.extend(facts.paths.iter().map(|path| format!("path {path}")));
-    lines.extend(facts.names.iter().map(|name| format!("name {name}")));
+    lines.extend(
+        facts
+            .paths
+            .iter()
+            .map(|(path, at)| format!("path {path} at {}", at.start_line)),
+    );
+    lines.extend(
+        facts
+            .names
+            .iter()
+            .map(|(name, at)| format!("name {name} at {}", at.start_line)),
+    );
 
     lines.join("\n")
 }
@@ -26,21 +36,21 @@ fn a_rust_file_reports_every_path_it_writes_wherever_it_wrote_it() {
     assert_eq!(
         rendered(&facts),
         "module \n\
-         path crate::config::Settings\n\
-         path crate::git::run\n\
-         path crate::policy\n\
-         path crate::policy::Policy\n\
-         path crate::policy::Rule\n\
-         path crate::policy::defaults::strict\n\
-         path crate::report::render::agent::Line\n\
-         path crate::tools::probe::name\n\
-         path self::inner::Helper\n\
-         path serde::Serialize\n\
-         path std::collections::BTreeMap\n\
-         path super::git\n\
-         path super::scan\n\
-         path super::since::Changes::new\n\
-         path super::tools::probe"
+         path crate::config::Settings at 1\n\
+         path crate::git::run at 19\n\
+         path crate::policy at 3\n\
+         path crate::policy::Policy at 3\n\
+         path crate::policy::Rule at 3\n\
+         path crate::policy::defaults::strict at 20\n\
+         path crate::report::render::agent::Line at 2\n\
+         path crate::tools::probe::name at 27\n\
+         path self::inner::Helper at 6\n\
+         path serde::Serialize at 8\n\
+         path std::collections::BTreeMap at 7\n\
+         path super::git at 4\n\
+         path super::scan at 5\n\
+         path super::since::Changes::new at 21\n\
+         path super::tools::probe at 5"
     );
 }
 
@@ -52,7 +62,7 @@ fn a_path_into_another_package_survives_extraction_and_dies_at_resolution() {
             .facts
             .paths
             .iter()
-            .any(|path| path.starts_with("std::"))
+            .any(|(path, _)| path.starts_with("std::"))
     });
 
     assert!(
@@ -63,7 +73,7 @@ fn a_path_into_another_package_survives_extraction_and_dies_at_resolution() {
     let edges = graph::edges(&sources);
 
     assert!(
-        edges.iter().all(|(_, to)| to.starts_with("src/")),
+        edges.keys().all(|(_, to)| to.starts_with("src/")),
         "{}",
         drawn(&edges)
     );
@@ -74,7 +84,7 @@ fn a_path_written_inside_a_macro_is_still_a_reference() {
     let facts = facts_of("rust/references.rs", &lang::RUST);
 
     assert!(
-        facts.paths.contains("crate::tools::probe::name"),
+        facts.paths.contains_key("crate::tools::probe::name"),
         "{:?}",
         facts.paths
     );
@@ -85,7 +95,7 @@ fn a_reference_needs_a_separator_so_a_self_receiver_is_not_one() {
     let facts = facts_of("rust/references.rs", &lang::RUST);
 
     assert!(
-        !facts.paths.iter().any(|path| path == "self"),
+        !facts.paths.keys().any(|path| path == "self"),
         "{:?}",
         facts.paths
     );
@@ -144,7 +154,7 @@ fn gather(root: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
 
 fn drawn(edges: &graph::Edges) -> String {
     edges
-        .iter()
+        .keys()
         .map(|(from, to)| format!("{} -> {}", from.display(), to.display()))
         .collect::<Vec<_>>()
         .join("\n")

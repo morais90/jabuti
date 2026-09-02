@@ -13,7 +13,7 @@ which is exactly what this tool goes looking for.
 
 </div>
 
-> **Status: early but usable.** `jabuti check` reads Rust and Kotlin, reports four rules and
+> **Status: early but usable.** `jabuti check` reads Rust and Kotlin, reports seven rules and
 > computes three more that are held back, and can fold in the linters a project already runs.
 
 ## Why this exists

@@ -7,19 +7,19 @@ declares BookList
 declares CatalogService
 declares Registry
 declares describe
-path java.time.LocalDateTime
-path org.example.service.BookLifecycle
-path org.example.storage.BookRepository
-name Author
-name Book
-name BookList
-name BookRepository
-name BookSearch
-name Int
-name Lifecycle
-name List
-name LocalDateTime
-name Shelf
-name String
-name author
-name repository
+path java.time.LocalDateTime at 5
+path org.example.service.BookLifecycle at 4
+path org.example.storage.BookRepository at 3
+name Author at 23
+name Book at 7
+name BookList at 10
+name BookRepository at 9
+name BookSearch at 12
+name Int at 10
+name Lifecycle at 20
+name List at 7
+name LocalDateTime at 13
+name Shelf at 15
+name String at 23
+name author at 23
+name repository at 11
