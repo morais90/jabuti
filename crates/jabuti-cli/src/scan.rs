@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use ignore::WalkBuilder;
 use ignore::overrides::OverrideBuilder;
 use jabuti_core::duplication::{self, FileFragments};
@@ -37,12 +37,13 @@ struct Reviewed {
 
 pub(crate) fn scan(
     roots: &[PathBuf],
+    project: &Path,
     settings: &Settings,
     changes: Option<&Changes>,
     churn: Option<&Churn>,
 ) -> Result<Outcome> {
     let minimum_nodes = duplication_limit(&settings.policy);
-    let mut paths = sources(roots, &settings.exclude)?;
+    let mut paths = sources(roots, &settings.exclude, project)?;
     if let (Some(changes), None) = (changes, minimum_nodes) {
         paths.retain(|path| changes.covers(path));
     }
@@ -54,6 +55,7 @@ pub(crate) fn scan(
                 path,
                 &Review {
                     policy: &settings.policy,
+                    project,
                     changes,
                     churn,
                     minimum_nodes,
@@ -109,12 +111,20 @@ fn gather(reviewed: Vec<Reviewed>) -> Outcome {
     outcome
 }
 
-pub(crate) fn sources(roots: &[PathBuf], exclude: &[String]) -> Result<Vec<PathBuf>> {
-    let Some((first, rest)) = roots.split_first() else {
+pub(crate) fn sources(
+    roots: &[PathBuf],
+    exclude: &[String],
+    project: &Path,
+) -> Result<Vec<PathBuf>> {
+    let absolute: Vec<PathBuf> = roots
+        .iter()
+        .map(|root| inside(root, project))
+        .collect::<Result<_>>()?;
+    let Some((first, rest)) = absolute.split_first() else {
         return Ok(Vec::new());
     };
 
-    let mut overrides = OverrideBuilder::new(first);
+    let mut overrides = OverrideBuilder::new(project);
     for pattern in exclude {
         overrides
             .add(&format!("!{pattern}"))
@@ -151,7 +161,7 @@ fn masked_errors(
     let Some(spec) = lang::detect(path) else {
         return Vec::new();
     };
-    if spec.is_test_path(path) {
+    if spec.is_test_path(Path::new(shown)) {
         return Vec::new();
     }
 
@@ -184,22 +194,24 @@ fn in_diff(finding: &Finding, changes: Option<&Changes>) -> bool {
 
 struct Review<'a> {
     policy: &'a Policy,
+    project: &'a Path,
     changes: Option<&'a Changes>,
     churn: Option<&'a Churn>,
     minimum_nodes: Option<u32>,
 }
 
 fn review(path: &Path, context: &Review<'_>) -> Reviewed {
+    let shown = display(path, context.project);
     let Ok(source) = std::fs::read_to_string(path) else {
-        return rejected(path, "the file could not be read");
+        return rejected(shown, "the file could not be read");
     };
 
     let Some(spec) = lang::detect(path) else {
-        return rejected(path, "no language claims this extension");
+        return rejected(shown, "no language claims this extension");
     };
     let parsed = match syntax::parse(&source, spec) {
         Ok(parsed) => parsed,
-        Err(reason) => return rejected(path, &reason.to_string()),
+        Err(reason) => return rejected(shown, &reason.to_string()),
     };
 
     let lines = LineIndex::new(&source, &parsed.comment_ranges());
@@ -209,7 +221,7 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
     let counted = count_units(&units);
 
     let file = FileUnderReview {
-        path: display(path),
+        path: shown,
         language: spec.id,
         units,
         lines: &lines,
@@ -235,7 +247,7 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
     Reviewed {
         readings: context.policy.read(&file),
         fragments: context.minimum_nodes.map(|minimum| FileFragments {
-            path: display(path),
+            path: file.path.clone(),
             fragments: parsed.fragments(minimum),
         }),
         findings,
@@ -245,10 +257,10 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
     }
 }
 
-fn rejected(path: &Path, reason: &str) -> Reviewed {
+fn rejected(shown: String, reason: &str) -> Reviewed {
     Reviewed {
         unreadable: Some(Unreadable {
-            path: display(path),
+            path: shown,
             reason: reason.to_owned(),
         }),
         ..Reviewed::default()
@@ -261,8 +273,23 @@ fn count_units(unit: &Unit) -> usize {
     counted + unit.children.iter().map(count_units).sum::<usize>()
 }
 
-pub(crate) fn display(path: &Path) -> String {
-    path.strip_prefix("./")
+fn inside(root: &Path, project: &Path) -> Result<PathBuf> {
+    let absolute = root
+        .canonicalize()
+        .with_context(|| format!("resolving {}", root.display()))?;
+    if !absolute.starts_with(project) {
+        bail!(
+            "{} is outside the project at {}; run from a directory under the project or move jabuti.toml",
+            root.display(),
+            project.display()
+        );
+    }
+
+    Ok(absolute)
+}
+
+pub(crate) fn display(path: &Path, project: &Path) -> String {
+    path.strip_prefix(project)
         .unwrap_or(path)
         .display()
         .to_string()

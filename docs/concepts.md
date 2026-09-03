@@ -101,6 +101,11 @@ The important part of that picture is that measuring and deciding are separate s
 the left of the diamond is arithmetic. Everything to the right is policy, and policy is what your
 `jabuti.toml` controls.
 
+That file is looked for in the working directory and then in every directory above it, and the
+directory holding it is the project root. Paths in every report, `exclude` patterns and layer paths
+are all relative to that root, so the answer is the same whether the command runs from the root or
+from three directories down.
+
 ## Scoping to a change
 
 By default `jabuti check` looks at everything. On a codebase with any history, most of what it finds

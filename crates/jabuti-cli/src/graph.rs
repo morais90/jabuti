@@ -14,18 +14,19 @@ use crate::since::Changes;
 
 pub(crate) fn impact(
     roots: &[PathBuf],
+    project: &Path,
     settings: &Settings,
     changes: &Changes,
     limit: usize,
 ) -> Result<String> {
-    let paths = crate::scan::sources(roots, &settings.exclude)?;
-    let (sources, unreadable) = read(&paths);
+    let paths = crate::scan::sources(roots, &settings.exclude, project)?;
+    let (sources, unreadable) = read(&paths, project);
     let dependents = reversed(&graph::edges(&sources));
 
     let touched: Vec<PathBuf> = paths
         .iter()
         .filter(|path| changes.covers(path))
-        .map(|path| PathBuf::from(crate::scan::display(path)))
+        .map(|path| PathBuf::from(crate::scan::display(path, project)))
         .collect();
 
     let mut rendered = render(&touched, &dependents, limit);
@@ -34,8 +35,11 @@ pub(crate) fn impact(
     Ok(rendered)
 }
 
-fn read(paths: &[PathBuf]) -> (Vec<Source>, Vec<Unreadable>) {
-    let reviewed: Vec<Result<Source, Unreadable>> = paths.par_iter().filter_map(examine).collect();
+fn read(paths: &[PathBuf], project: &Path) -> (Vec<Source>, Vec<Unreadable>) {
+    let reviewed: Vec<Result<Source, Unreadable>> = paths
+        .par_iter()
+        .filter_map(|path| examine(path, project))
+        .collect();
     let mut sources = Vec::new();
     let mut unreadable = Vec::new();
 
@@ -49,9 +53,9 @@ fn read(paths: &[PathBuf]) -> (Vec<Source>, Vec<Unreadable>) {
     (sources, unreadable)
 }
 
-fn examine(path: &PathBuf) -> Option<Result<Source, Unreadable>> {
+fn examine(path: &Path, project: &Path) -> Option<Result<Source, Unreadable>> {
     let spec = lang::detect(path)?;
-    let shown = crate::scan::display(path);
+    let shown = crate::scan::display(path, project);
 
     let outcome = match std::fs::read_to_string(path).map(|source| facts_of(&source, spec)) {
         Ok(Ok(facts)) => Ok(Source {
@@ -147,7 +151,7 @@ fn plural(count: usize, noun: &str) -> String {
     }
 }
 
-pub(crate) fn known(paths: &[PathBuf]) -> (Vec<Source>, Vec<Unreadable>) {
+pub(crate) fn known(paths: &[PathBuf], project: &Path) -> (Vec<Source>, Vec<Unreadable>) {
     let mut sources = Vec::new();
     let mut unreadable = Vec::new();
 
@@ -155,7 +159,7 @@ pub(crate) fn known(paths: &[PathBuf]) -> (Vec<Source>, Vec<Unreadable>) {
         let Some(spec) = lang::detect(path) else {
             continue;
         };
-        let shown = crate::scan::display(path);
+        let shown = crate::scan::display(path, project);
 
         match spec.id {
             lang::LanguageId::Rust => sources.push(Source {
@@ -163,7 +167,7 @@ pub(crate) fn known(paths: &[PathBuf]) -> (Vec<Source>, Vec<Unreadable>) {
                 language: spec.id,
                 facts: FileFacts::default(),
             }),
-            lang::LanguageId::Kotlin => match examine(path) {
+            lang::LanguageId::Kotlin => match examine(path, project) {
                 Some(Ok(source)) => sources.push(source),
                 Some(Err(skipped)) => unreadable.push(skipped),
                 None => {}

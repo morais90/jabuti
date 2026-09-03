@@ -180,7 +180,17 @@ pub static RUST: LangSpec = LangSpec {
     metadata_nodes: &["attribute_item", "inner_attribute_item"],
     decorators_before: &["attribute_item"],
     decorators_within: &["inner_attribute_item"],
-    test_markers: &["test]", "bench]", "test_case", "cfg(test)"],
+    test_markers: &[
+        "test]",
+        "[test(",
+        "::test(",
+        "bench]",
+        "[bench(",
+        "::bench(",
+        "rstest(",
+        "test_case",
+        "cfg(test)",
+    ],
     test_paths: &["tests", "benches", "examples"],
     cognitive: CognitiveSpec {
         conditional: "if_expression",

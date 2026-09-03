@@ -127,8 +127,9 @@ Each rule and its calibration is written up under [`docs/`](docs).
 $ just install
 ```
 
-Configuration is optional. When a `jabuti.toml` sits in the working directory it adjusts limits and
-severities:
+Configuration is optional. jabuti looks for a `jabuti.toml` in the working directory and then in
+each directory above it, the way git finds its repository, and the directory holding it becomes the
+project root that paths are shown relative to. When one is found it adjusts limits and severities:
 
 ```toml
 exclude = ["generated/**"]

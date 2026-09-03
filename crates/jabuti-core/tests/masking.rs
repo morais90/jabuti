@@ -4,6 +4,7 @@ use common::parse_fixture;
 use jabuti_core::model::{Detail, MaskingKind, Rule, Severity};
 use jabuti_core::policy::{Policy, RuleConfig};
 use jabuti_core::{lang, masking, syntax};
+use rstest::rstest;
 
 fn masked(source: &str) -> Vec<(MaskingKind, String)> {
     parse_fixture(source)
@@ -173,6 +174,29 @@ fn an_async_test_wrapper_is_recognised_like_a_plain_test() {
     let source = "#[tokio::test]\nasync fn checks() {\n    let a = g().unwrap();\n}\n";
 
     assert_eq!(masked(source), []);
+}
+
+#[rstest]
+#[case("#[tokio::test(flavor = \"multi_thread\")]")]
+#[case("#[test_log::test(tokio::test)]")]
+#[case("#[rstest(value, case(1))]")]
+#[case("#[divan::bench(args = [1, 2])]")]
+fn a_test_attribute_carrying_arguments_is_still_a_test(#[case] attribute: &str) {
+    let source = format!("{attribute}\nasync fn checks() {{\n    let a = g().unwrap();\n}}\n");
+
+    assert_eq!(masked(&source), []);
+}
+
+#[rstest]
+#[case("#[deprecated(note = \"use latest() instead\")]")]
+#[case("#[cfg(feature = \"workbench(x)\")]")]
+#[case("#[doc = \"the greatest(x) of them\"]")]
+fn an_attribute_that_only_mentions_a_test_word_in_its_arguments_is_not_a_test(
+    #[case] attribute: &str,
+) {
+    let source = format!("{attribute}\nfn live() {{\n    let a = g().unwrap();\n}}\n");
+
+    assert_eq!(masked(&source), [panics("unwrap")]);
 }
 
 #[test]

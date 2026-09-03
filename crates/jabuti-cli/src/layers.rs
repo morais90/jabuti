@@ -19,10 +19,10 @@ pub(crate) fn findings(
         return Ok((Vec::new(), Vec::new()));
     };
 
-    let paths = crate::scan::sources(roots, &settings.exclude)?;
+    let paths = crate::scan::sources(roots, &settings.exclude, project)?;
     let layers = assign(&settings.layers, project, &paths)?;
-    let (indexed, unreadable) = crate::graph::known(&paths);
-    let edges = outgoing(&paths, &Index::of(&indexed), changes);
+    let (indexed, unreadable) = crate::graph::known(&paths, project);
+    let edges = outgoing(&paths, project, &Index::of(&indexed), changes);
 
     let found = graph::violations(&edges, &layers)
         .into_iter()
@@ -105,7 +105,7 @@ fn members_of(layer: &Layer, project: &Path, paths: &[PathBuf]) -> Result<Vec<Pa
             path.canonicalize()
                 .is_ok_and(|absolute| selects.matched(&absolute, false).is_whitelist())
         })
-        .map(|path| PathBuf::from(crate::scan::display(path)))
+        .map(|path| PathBuf::from(crate::scan::display(path, project)))
         .collect())
 }
 
@@ -120,14 +120,14 @@ fn matcher_for(layer: &Layer, project: &Path) -> Result<Override> {
     builder.build().context("building layer matcher")
 }
 
-fn outgoing(paths: &[PathBuf], index: &Index, changes: Option<&Changes>) -> Edges {
+fn outgoing(paths: &[PathBuf], project: &Path, index: &Index, changes: Option<&Changes>) -> Edges {
     let mut edges = Edges::new();
 
     for path in paths {
         if changes.is_some_and(|changes| !changes.covers(path)) {
             continue;
         }
-        for (from, target, at) in edges_from(path, index) {
+        for (from, target, at) in edges_from(path, project, index) {
             edges.entry((from, target)).or_insert(at);
         }
     }
@@ -135,11 +135,11 @@ fn outgoing(paths: &[PathBuf], index: &Index, changes: Option<&Changes>) -> Edge
     edges
 }
 
-fn edges_from(path: &Path, index: &Index) -> Vec<(PathBuf, PathBuf, Span)> {
+fn edges_from(path: &Path, project: &Path, index: &Index) -> Vec<(PathBuf, PathBuf, Span)> {
     let Some(spec) = lang::detect(path) else {
         return Vec::new();
     };
-    let shown = crate::scan::display(path);
+    let shown = crate::scan::display(path, project);
     let Some(source) =
         crate::graph::source_of(&shown, spec, crate::graph::contents(path).as_deref())
     else {

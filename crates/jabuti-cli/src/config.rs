@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use jabuti_core::lang::LanguageId;
@@ -61,6 +61,29 @@ struct ToolEntry {
 struct Entry {
     limit: Option<u32>,
     severity: Option<String>,
+}
+
+pub(crate) fn discover() -> Result<(PathBuf, Settings)> {
+    let here = std::env::current_dir()
+        .context("reading the current directory")?
+        .canonicalize()
+        .context("resolving the current directory")?;
+
+    let boundary = repository_root().unwrap_or_else(|| here.clone());
+    let root = here
+        .ancestors()
+        .take_while(|directory| directory.starts_with(&boundary))
+        .find(|directory| directory.join(FILE_NAME).is_file())
+        .map_or(here.clone(), Path::to_path_buf);
+    let settings = load(&root)?;
+
+    Ok((root, settings))
+}
+
+fn repository_root() -> Option<PathBuf> {
+    let top = crate::git::run(&["rev-parse", "--show-toplevel"]).ok()?;
+
+    PathBuf::from(top.trim()).canonicalize().ok()
 }
 
 pub(crate) fn load(directory: &Path) -> Result<Settings> {

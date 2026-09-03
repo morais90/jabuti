@@ -8,7 +8,7 @@ mod scan;
 mod since;
 mod tools;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::Result;
@@ -85,7 +85,7 @@ fn main() -> ExitCode {
 }
 
 fn run_tools(
-    root: &std::path::Path,
+    root: &Path,
     settings: &config::Settings,
     changes: Option<&since::Changes>,
 ) -> Vec<Finding> {
@@ -110,7 +110,7 @@ fn run_tools(
 
 fn admitted(
     reported: Vec<Finding>,
-    root: &std::path::Path,
+    root: &Path,
     settings: &config::Settings,
     changes: Option<&since::Changes>,
 ) -> Vec<Finding> {
@@ -121,12 +121,13 @@ fn admitted(
         .collect()
 }
 
-fn in_scope(finding: &Finding, root: &std::path::Path, changes: Option<&since::Changes>) -> bool {
+fn in_scope(finding: &Finding, root: &Path, changes: Option<&since::Changes>) -> bool {
     changes.is_none_or(|changes| changes.touches(&root.join(&finding.path), finding.span))
 }
 
 fn drifted(
     paths: &[PathBuf],
+    project: &Path,
     settings: &config::Settings,
     changes: Option<&since::Changes>,
     since: Option<&str>,
@@ -135,7 +136,7 @@ fn drifted(
         return Ok((Vec::new(), Vec::new()));
     };
 
-    drift::findings(paths, settings, changes, reference)
+    drift::findings(paths, project, settings, changes, reference)
 }
 
 fn gates(settings: &config::Settings, rule: Rule) -> bool {
@@ -189,11 +190,13 @@ fn run() -> Result<ExitCode> {
 }
 
 fn report_impact(paths: &[PathBuf], since: &str, limit: usize) -> Result<ExitCode> {
-    let root = std::env::current_dir()?;
-    let settings = config::load(&root)?;
-    let changes = since::Changes::since(since)?;
+    let (root, settings) = config::discover()?;
+    let changes = since::Changes::since(since, &root)?;
 
-    print!("{}", graph::impact(paths, &settings, &changes, limit)?);
+    print!(
+        "{}",
+        graph::impact(paths, &root, &settings, &changes, limit)?
+    );
 
     Ok(ExitCode::SUCCESS)
 }
@@ -218,8 +221,8 @@ fn list_languages() -> ExitCode {
 }
 
 fn list_tools() -> Result<ExitCode> {
+    let (_, settings) = config::discover()?;
     let root = std::env::current_dir()?;
-    let settings = config::load(&root)?;
 
     for tool in tools::ALL {
         let note = match tool.status(&root, enabled_tool(&settings, tool.name)) {
@@ -242,9 +245,10 @@ fn enabled_tool(settings: &config::Settings, name: &str) -> bool {
 }
 
 fn check(paths: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -> Result<ExitCode> {
-    let root = std::env::current_dir()?;
-    let settings = config::load(&root)?;
-    let changes = since.map(since::Changes::since).transpose()?;
+    let (root, settings) = config::discover()?;
+    let changes = since
+        .map(|reference| since::Changes::since(reference, &root))
+        .transpose()?;
     let history = history_when_needed(&settings);
     if changes.is_some() && enabled(&settings, Rule::Hotspot) {
         eprintln!("jabuti: hotspot ranks a whole repository, so it is not evaluated with --since");
@@ -255,11 +259,12 @@ fn check(paths: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
         );
     }
 
-    let mut outcome = scan::scan(paths, &settings, changes.as_ref(), history.as_ref())?;
+    let mut outcome = scan::scan(paths, &root, &settings, changes.as_ref(), history.as_ref())?;
+    let here = std::env::current_dir()?;
     outcome
         .findings
-        .extend(run_tools(&root, &settings, changes.as_ref()));
-    let (drifted, skipped) = drifted(paths, &settings, changes.as_ref(), since)?;
+        .extend(run_tools(&here, &settings, changes.as_ref()));
+    let (drifted, skipped) = drifted(paths, &root, &settings, changes.as_ref(), since)?;
     outcome.findings.extend(drifted);
     outcome.unreadable.extend(skipped);
     let (crossed, skipped) = layers::findings(paths, &root, &settings, changes.as_ref())?;

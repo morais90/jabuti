@@ -51,7 +51,10 @@ jabuti also runs the linters your project already has, folding their findings in
 
 ## Configuration
 
-Create a `jabuti.toml` in the directory you run the command from:
+Create a `jabuti.toml` at the root of the project. It is found from any directory below it within
+the same repository, and every path shown, every `exclude` pattern and every layer path is relative to
+the directory holding it. A path given on the command line that lies outside that project is refused,
+and one that does not exist is an error rather than an empty report:
 
 ```toml
 exclude = ["generated/**"]

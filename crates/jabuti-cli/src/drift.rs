@@ -10,6 +10,7 @@ use crate::since::Changes;
 
 pub(crate) fn findings(
     roots: &[PathBuf],
+    project: &Path,
     settings: &Settings,
     changes: &Changes,
     reference: &str,
@@ -18,8 +19,8 @@ pub(crate) fn findings(
     let base = crate::git::run(&["merge-base", "HEAD", reference])?
         .trim()
         .to_owned();
-    let paths = crate::scan::sources(roots, &settings.exclude)?;
-    let (indexed, unreadable) = crate::graph::known(&paths);
+    let paths = crate::scan::sources(roots, &settings.exclude, project)?;
+    let (indexed, unreadable) = crate::graph::known(&paths, project);
     let index = Index::of(&indexed);
 
     let mut found = Vec::new();
@@ -30,7 +31,7 @@ pub(crate) fn findings(
         let Some(severity) = gating(settings, spec) else {
             continue;
         };
-        let shown = crate::scan::display(path);
+        let shown = crate::scan::display(path, project);
 
         let Some(inside) = changes.relative(path) else {
             continue;

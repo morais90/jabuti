@@ -278,3 +278,23 @@ fn a_symlink_to_a_source_file_does_not_replace_the_file_it_points_at() {
         .stdout(contains("src/lib.rs:3  warning  error-masking"))
         .stdout(contains("1 file and 1 unit"));
 }
+
+#[test]
+fn every_rule_has_a_page_explaining_it_in_the_repository() {
+    let repository = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    if !repository.join("justfile").is_file() {
+        return;
+    }
+
+    let pages = repository.join("docs/rules");
+    let missing: Vec<&str> = jabuti_core::model::Rule::ALL
+        .into_iter()
+        .map(jabuti_core::model::Rule::id)
+        .filter(|id| !pages.join(format!("{id}.md")).is_file())
+        .collect();
+
+    assert!(
+        missing.is_empty(),
+        "rules without a page under docs/rules: {missing:?}"
+    );
+}

@@ -25,14 +25,15 @@ impl Touched {
 #[derive(Debug)]
 pub(crate) struct Changes {
     root: PathBuf,
+    project: PathBuf,
     touched: BTreeMap<PathBuf, Touched>,
 }
 
 impl Changes {
-    pub(crate) fn since(reference: &str) -> Result<Self> {
+    pub(crate) fn since(reference: &str, project: &Path) -> Result<Self> {
         let root = PathBuf::from(crate::git::run(&["rev-parse", "--show-toplevel"])?.trim());
         let diff = crate::git::run(&["diff", "--unified=0", "--merge-base", reference])?;
-        let untracked = crate::git::run(&["ls-files", "--others", "--exclude-standard"])?;
+        let untracked = crate::git::run_at(&root, &["ls-files", "--others", "--exclude-standard"])?;
 
         let mut touched = hunks(&diff);
         for path in untracked.lines().filter(|line| !line.is_empty()) {
@@ -41,6 +42,7 @@ impl Changes {
 
         Ok(Self {
             root: root.canonicalize().unwrap_or(root),
+            project: project.to_path_buf(),
             touched,
         })
     }
@@ -54,7 +56,7 @@ impl Changes {
     }
 
     pub(crate) fn relative(&self, path: &Path) -> Option<PathBuf> {
-        let absolute = path.canonicalize().ok()?;
+        let absolute = self.project.join(path).canonicalize().ok()?;
 
         absolute
             .strip_prefix(&self.root)
