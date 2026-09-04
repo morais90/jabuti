@@ -59,7 +59,7 @@ pub fn agent(
     rendered
 }
 
-pub fn unreadable(unreadable: &[Unreadable], limit: usize) -> String {
+fn unreadable(unreadable: &[Unreadable], limit: usize) -> String {
     let mut rendered = String::new();
     if unreadable.is_empty() {
         return rendered;

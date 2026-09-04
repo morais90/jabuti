@@ -122,33 +122,18 @@ This is also the setting that makes it practical to fail a build on findings. A 
 already too long stays quiet until someone edits it, so you can turn the gate on today instead of
 waiting for a cleanup that never gets scheduled.
 
-## Asking what a change reaches
+## What the graph sees
 
-A gate tells you whether the code you just wrote is acceptable. The other question worth asking is
-what that code is connected to, and it is best asked before the edit rather than after:
-
-```console
-$ jabuti graph impact --since main
-1 file changed, 5 files reached.
-
-crates/jabuti-cli/src/git.rs
-  crates/jabuti-cli/src/churn.rs
-  crates/jabuti-cli/src/graph.rs
-  crates/jabuti-cli/src/main.rs
-  crates/jabuti-cli/src/scan.rs
-  crates/jabuti-cli/src/since.rs
-```
-
-Each changed file is followed by the files that depend on it, directly or through others. Nothing is
-judged and nothing fails; this is context, not a verdict.
+Two rules, `new-dependency` and `layer-violation`, are answered from a graph of which files depend
+on which. The graph is built the same way for both, and its limits are the limits of both rules.
 
 ### What counts as a dependency
 
 A file depends on another when it names something that other file declares. That happens in more
 ways than an import list suggests, and reading only the imports gets it wrong. In this repository,
 for example, no file contains `use crate::git`, yet two of them call `crate::git::run` directly on the
-line that uses it. An import-only answer would say nothing depends on `git.rs`, and you would change
-its signature believing that.
+line that uses it. An import-only graph would say nothing depends on `git.rs`, and a boundary
+around it would hold nothing.
 
 So the whole path is read, wherever it is written:
 
@@ -160,7 +145,7 @@ So the whole path is read, wherever it is written:
 | A path inside a macro | `format!("{}", crate::git::run(...))` |
 | In Kotlin, a bare name from the same package | `Book`, with no import, because Kotlin does not need one |
 
-That last row is the one that matters most in Kotlin and is invisible to any import-based answer.
+That last row is the one that matters most in Kotlin and is invisible to any import-based graph.
 Measured on three Kotlin projects, between one edge in eight and one in five is a same-package
 reference with no import to find it by.
 
@@ -178,14 +163,14 @@ Cargo produces. Code kept elsewhere, under `lib/` say, does not resolve. Across 
 a reference is matched by crate name, and the crate is assumed to live in a directory called after
 it, so a crate whose directory name differs from the name in its `Cargo.toml` is not found.
 
-Name resolution can also point at the wrong file when two declarations share a name, which adds a
-file to the answer rather than removing one. That is the safer of the two mistakes: a file listed
-that did not need checking costs you a moment, and a file missing costs you the change.
+Name resolution can also point at the wrong file when two declarations share a name, which adds an
+edge to the graph rather than removing one. That is the safer of the two mistakes: a dependency
+reported that was not there costs you a moment, and a dependency missed costs you the boundary.
 
 ### Holding a boundary
 
-The same graph can enforce a rule as well as answer a question. Declare which files form a layer and
-which layers each may depend on, and every crossing is reported at the line that made it:
+Declare which files form a layer and which layers each may depend on, and every crossing is
+reported at the line that made it:
 
 ```toml
 [layers]

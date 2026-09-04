@@ -73,26 +73,11 @@ This is also what makes an absolute threshold adoptable. A legacy function that 
 limit stays quiet until someone touches it, so a project can turn the gate on today rather than
 after a cleanup it will never schedule.
 
-## Asking what a change reaches
+## Holding a boundary
 
-A gate answers whether the code is acceptable. The other useful question is what it is wired to, and
-an agent needs that answer before it edits rather than after:
-
-```console
-$ jabuti graph impact --since main
-1 file changed, 5 files reached.
-
-crates/jabuti-cli/src/git.rs
-  crates/jabuti-cli/src/churn.rs
-  crates/jabuti-cli/src/graph.rs
-  crates/jabuti-cli/src/main.rs
-  crates/jabuti-cli/src/scan.rs
-  crates/jabuti-cli/src/since.rs
-```
-
-Nothing is judged and nothing fails. It is the same dependency graph read in the other direction, as
-context rather than a verdict. The graph also holds a boundary when you declare one: name the layers
-and what each may depend on, and a crossing is reported at the line that made it.
+Two of the rules read the dependencies between files rather than the files themselves. Declare the
+layers of a project and what each may depend on, and a crossing is reported at the line that made
+it; under `--since`, a dependency the change introduced is reported the same way.
 
 The dependencies are found wherever they are written, not only in the import list. This repository
 is its own example: no file contains `use crate::git`, yet two of them call `crate::git::run` on the
