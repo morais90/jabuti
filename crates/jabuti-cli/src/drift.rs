@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use jabuti_core::graph::{Index, Source};
+use jabuti_core::graph::index::{Index, Source};
 use jabuti_core::lang::{self, LangSpec};
 use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span, Unreadable};
 

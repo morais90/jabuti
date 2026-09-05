@@ -37,6 +37,12 @@ jabuti produces facts; the agent consuming it produces judgement.
 ## Extensibility
 
 - Keep the three extension axes distinct: a new rule on an existing sensor, a new sensor, a new language.
+- Keep each context in its own module tree, shaped like a crate of its own: `code`, `graph`, `history`
+  and `tools` in both crates. A context owns its rules, its measures, its language tables, its
+  queries and its tests, and reaches only the kernel (`model`, `policy`, `report`, `lang`, `syntax`),
+  never another context. A test in each crate holds that boundary. Composition happens in the
+  kernel of the binary, so a context can grow, be replaced or become a subcommand without touching
+  the others.
 - Give every measure a page under `docs/measures/` and every registered `RuleId` a page under
   `docs/rules/` plus at least one fixture. A measure page explains the number; a rule page explains
   the limit, the severity and what a reader should make of a finding.

@@ -48,46 +48,6 @@ fn no_two_languages_share_a_name_or_an_extension() {
 }
 
 #[test]
-fn every_node_kind_a_language_names_exists_in_its_grammar() {
-    for spec in lang::ALL {
-        let declared = spec.declared_node_kinds();
-        assert!(!declared.is_empty(), "{:?} declares nothing", spec.id);
-
-        for (kind, named) in declared {
-            assert!(
-                spec.knows_node_kind(kind, named),
-                "{:?} names {kind}, which its grammar does not have",
-                spec.id
-            );
-        }
-
-        let fields = spec.declared_fields();
-        assert!(!fields.is_empty(), "{:?} declares no fields", spec.id);
-
-        for field in fields {
-            assert!(spec.knows_field(field), "{:?} names field {field}", spec.id);
-        }
-    }
-}
-
-#[test]
-fn a_language_that_wraps_its_else_branch_declares_the_wrapper() {
-    assert!(
-        lang::RUST
-            .declared_node_kinds()
-            .contains(&("else_clause", true)),
-        "rust wraps the else branch and must say so"
-    );
-    assert!(
-        !lang::KOTLIN
-            .declared_node_kinds()
-            .iter()
-            .any(|(kind, _)| *kind == "else_clause"),
-        "kotlin has no wrapper to declare"
-    );
-}
-
-#[test]
 fn the_grammar_version_a_language_reports_is_the_one_we_depend_on() {
     let manifest = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
         .expect("the manifest is readable");
@@ -135,15 +95,4 @@ fn an_empty_name_is_never_a_node_kind_the_grammar_has() {
 #[case("spline", false)]
 fn a_grammar_answers_whether_it_has_a_field(#[case] field: &str, #[case] known: bool) {
     assert_eq!(lang::RUST.knows_field(field), known);
-}
-
-#[test]
-fn a_file_under_a_test_directory_is_recognised_by_its_path() {
-    assert!(lang::RUST.is_test_path(Path::new("crates/x/tests/behaviour.rs")));
-    assert!(lang::RUST.is_test_path(Path::new("crates/x/benches/speed.rs")));
-    assert!(!lang::RUST.is_test_path(Path::new("crates/x/src/live.rs")));
-
-    assert!(lang::KOTLIN.is_test_path(Path::new("app/src/test/kotlin/T.kt")));
-    assert!(lang::KOTLIN.is_test_path(Path::new("app/src/androidTest/kotlin/T.kt")));
-    assert!(!lang::KOTLIN.is_test_path(Path::new("app/src/main/kotlin/T.kt")));
 }

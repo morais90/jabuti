@@ -1,12 +1,9 @@
-mod cognitive;
-pub mod duplication;
-pub mod external;
+pub mod code;
 pub mod graph;
-pub mod hotspot;
+pub mod history;
 pub mod lang;
-pub mod masking;
-pub mod metrics;
 pub mod model;
 pub mod policy;
 pub mod report;
 pub mod syntax;
+pub mod tools;

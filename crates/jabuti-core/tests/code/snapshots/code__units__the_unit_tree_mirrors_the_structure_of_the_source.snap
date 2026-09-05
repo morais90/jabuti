@@ -1,0 +1,16 @@
+---
+source: crates/jabuti-core/tests/code/units.rs
+expression: outline(&file)
+---
+File - 1..35
+  Module parser 1..22
+    Type Config 2..4
+    Type Config 6..15
+      Function new 7..9
+      Function doubled 11..14
+        Closure - 12..12
+    Type Visitor 17..21
+      Function visit 18..20
+  Type Mode 24..27
+  Function outer 29..35
+    Function inner 30..32

@@ -1,8 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use jabuti_core::graph::Source;
+use jabuti_core::graph::facts::{self, FileFacts};
+use jabuti_core::graph::index::Source;
 use jabuti_core::lang::LangSpec;
-use jabuti_core::model::{FileFacts, Unreadable};
+use jabuti_core::model::Unreadable;
 use jabuti_core::{lang, syntax};
 
 fn examine(path: &Path, project: &Path) -> Option<Result<Source, Unreadable>> {
@@ -29,7 +30,7 @@ fn examine(path: &Path, project: &Path) -> Option<Result<Source, Unreadable>> {
 }
 
 fn facts_of(source: &str, spec: &'static LangSpec) -> Result<FileFacts, syntax::SyntaxError> {
-    syntax::parse(source, spec).map(|parsed| parsed.facts())
+    syntax::parse(source, spec).map(|parsed| facts::facts(&parsed))
 }
 
 pub(crate) fn known(paths: &[PathBuf], project: &Path) -> (Vec<Source>, Vec<Unreadable>) {
@@ -68,7 +69,7 @@ pub(crate) fn source_of(
     spec: &'static LangSpec,
     contents: Option<&str>,
 ) -> Option<Source> {
-    let facts = syntax::parse(contents?, spec).ok()?.facts();
+    let facts = facts::facts(&syntax::parse(contents?, spec).ok()?);
 
     Some(Source {
         path: PathBuf::from(shown),

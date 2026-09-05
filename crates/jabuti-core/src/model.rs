@@ -1,5 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
-use std::ops::Range;
+use std::collections::BTreeMap;
 
 use serde::Serialize;
 
@@ -17,25 +16,6 @@ pub enum UnitKind {
     Type,
     Function,
     Closure,
-}
-
-impl UnitKind {
-    pub fn measured_separately(self) -> bool {
-        matches!(
-            self,
-            Self::File | Self::Module | Self::Type | Self::Function
-        )
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Unit {
-    pub name: Option<String>,
-    pub kind: UnitKind,
-    pub span: Span,
-    pub bytes: Range<usize>,
-    pub parameters: u32,
-    pub children: Vec<Unit>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -170,50 +150,6 @@ pub struct Finding {
     pub detail: Detail,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DecisionEffect {
-    Branch,
-    Discount,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Decision {
-    pub position: usize,
-    pub effect: DecisionEffect,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MaskingKind {
-    Panic,
-    Discard,
-    Swallow,
-}
-
-impl MaskingKind {
-    pub fn consequence(self) -> &'static str {
-        match self {
-            Self::Panic => "the failure becomes a panic",
-            Self::Discard => "the failure is dropped without being read",
-            Self::Swallow => "the failure is caught and nothing happens",
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Masking {
-    pub kind: MaskingKind,
-    pub construct: String,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Fragment {
-    pub hash: u64,
-    pub span: Span,
-    pub bytes: Range<usize>,
-    pub nodes: u32,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Reading {
     pub path: String,
@@ -223,22 +159,8 @@ pub struct Reading {
     pub values: BTreeMap<&'static str, u32>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct FileFacts {
-    pub module: String,
-    pub declares: BTreeSet<String>,
-    pub paths: BTreeMap<String, Span>,
-    pub names: BTreeMap<String, Span>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Unreadable {
     pub path: String,
     pub reason: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Increment {
-    pub position: usize,
-    pub amount: u32,
 }

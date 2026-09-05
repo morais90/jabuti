@@ -155,14 +155,21 @@ src/syntax.rs        implementation + #[cfg(test)] mod tests
 **This**
 
 ```
-src/syntax.rs                  implementation only
-tests/syntax.rs                its tests
-tests/common/mod.rs            shared scaffolding, as a directory module
-tests/fixtures/rust/units.rs   the input
+src/syntax.rs                       kernel implementation only
+tests/syntax.rs                     its tests
+tests/common/mod.rs                 kernel scaffolding, as a directory module
+tests/fixtures/syntax/malformed.rs  the input
+
+src/code/units.rs                   a context module
+tests/code/main.rs                  one test binary per context, `mod units;` inside
+tests/code/units.rs                 its tests
+tests/code/common.rs                the context's own scaffolding
+tests/fixtures/code/rust/units.rs   the context's own fixtures
 ```
 
 `tests/common.rs` as a plain file would be compiled as a test binary of its own. Always the
-directory form.
+directory form for the kernel; inside a context directory `common.rs` is a submodule of `main.rs`
+and is fine.
 
 ---
 

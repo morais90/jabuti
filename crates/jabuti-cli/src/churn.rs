@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use jabuti_core::history::churn;
 
 #[derive(Debug)]
 pub(crate) struct Churn {
@@ -16,7 +17,7 @@ impl Churn {
 
         Ok(Self {
             root: root.canonicalize().unwrap_or(root),
-            commits: tally(&log),
+            commits: churn::tally(&log),
         })
     }
 
@@ -34,24 +35,4 @@ impl Churn {
             .ok()
             .map(Path::to_path_buf)
     }
-}
-
-fn tally(log: &str) -> BTreeMap<PathBuf, u32> {
-    let mut commits: BTreeMap<PathBuf, u32> = BTreeMap::new();
-
-    for line in log.lines() {
-        if let Some(path) = touched_path(line) {
-            *commits.entry(path).or_default() += 1;
-        }
-    }
-
-    commits
-}
-
-fn touched_path(line: &str) -> Option<PathBuf> {
-    let mut columns = line.split('\t');
-    let _added = columns.next()?;
-    let _removed = columns.next()?;
-
-    columns.next().map(PathBuf::from)
 }

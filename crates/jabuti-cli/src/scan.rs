@@ -4,13 +4,16 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use ignore::WalkBuilder;
 use ignore::overrides::OverrideBuilder;
-use jabuti_core::duplication::{self, FileFragments};
-use jabuti_core::hotspot::{self, FileSummary};
-use jabuti_core::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
-use jabuti_core::model::{Finding, Reading, Unit, UnitKind, Unreadable};
-use jabuti_core::policy::{FileUnderReview, Policy};
+use jabuti_core::code::duplication::{self, FileFragments};
+use jabuti_core::code::masking;
+use jabuti_core::code::metrics::{self, CognitiveIndex, DecisionIndex, LineIndex};
+use jabuti_core::code::review::{self, FileUnderReview};
+use jabuti_core::code::units::{self, Unit};
+use jabuti_core::history::hotspot::{self, FileSummary};
+use jabuti_core::model::{Finding, Reading, UnitKind, Unreadable};
+use jabuti_core::policy::Policy;
 use jabuti_core::report::Scanned;
-use jabuti_core::{lang, masking, syntax};
+use jabuti_core::{lang, syntax};
 use rayon::prelude::*;
 
 use crate::churn::Churn;
@@ -161,11 +164,11 @@ fn masked_errors(
     let Some(spec) = lang::detect(path) else {
         return Vec::new();
     };
-    if spec.is_test_path(Path::new(shown)) {
+    if jabuti_core::code::lang::is_test_path(spec.id, Path::new(shown)) {
         return Vec::new();
     }
 
-    masking::findings(shown, spec.id, &parsed.maskings(), policy)
+    masking::findings(shown, spec.id, &masking::maskings(parsed), policy)
 }
 
 fn covered(paths: &[PathBuf], reviewed: Vec<Reviewed>, changes: Option<&Changes>) -> Vec<Reviewed> {
@@ -214,10 +217,10 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
         Err(reason) => return rejected(shown, &reason.to_string()),
     };
 
-    let lines = LineIndex::new(&source, &parsed.comment_ranges());
-    let decisions = DecisionIndex::new(&parsed.decisions());
-    let cognitive = CognitiveIndex::new(&parsed.increments());
-    let units = parsed.units();
+    let lines = LineIndex::new(&source, &metrics::comment_ranges(&parsed));
+    let decisions = DecisionIndex::new(&metrics::decisions(&parsed));
+    let cognitive = CognitiveIndex::new(&metrics::increments(&parsed));
+    let units = units::units(&parsed);
     let counted = count_units(&units);
 
     let file = FileUnderReview {
@@ -237,7 +240,7 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
         complexity: cognitive.total(&file.units),
     };
 
-    let mut findings = context.policy.evaluate(&file);
+    let mut findings = review::evaluate(context.policy, &file);
     findings.extend(masked_errors(&file.path, path, &parsed, context.policy));
     findings.sort_by_key(|finding| finding.span.start_line);
     if let Some(changes) = context.changes {
@@ -245,10 +248,10 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
     }
 
     Reviewed {
-        readings: context.policy.read(&file),
+        readings: review::read(&file),
         fragments: context.minimum_nodes.map(|minimum| FileFragments {
             path: file.path.clone(),
-            fragments: parsed.fragments(minimum),
+            fragments: duplication::fragments(&parsed, minimum),
         }),
         findings,
         units: counted,

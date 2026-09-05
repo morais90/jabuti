@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::lang::LanguageId;
-use crate::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
-use crate::model::{Detail, Finding, Reading, Rule, RuleId, Severity, Unit, UnitKind};
+use crate::model::{Finding, Rule, RuleId, Severity};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuleConfig {
@@ -92,134 +91,6 @@ impl Policy {
                 ..finding
             }),
             None => Some(finding),
-        }
-    }
-
-    pub fn evaluate(&self, file: &FileUnderReview<'_>) -> Vec<Finding> {
-        let mut findings = Vec::new();
-
-        self.check(Rule::FileLines, file, &file.units, &mut findings);
-        self.check(Rule::Churn, file, &file.units, &mut findings);
-        self.walk(file, &file.units, &mut findings);
-
-        findings.sort_by(|left, right| {
-            left.span
-                .start_line
-                .cmp(&right.span.start_line)
-                .then(left.rule.cmp(&right.rule))
-        });
-        findings
-    }
-
-    pub fn read(&self, file: &FileUnderReview<'_>) -> Vec<Reading> {
-        let mut readings = vec![reading(file, &file.units, &[Rule::FileLines, Rule::Churn])];
-        gather_readings(file, &file.units, &mut readings);
-
-        readings
-    }
-
-    fn walk(&self, file: &FileUnderReview<'_>, unit: &Unit, findings: &mut Vec<Finding>) {
-        if unit.kind == UnitKind::Function {
-            self.check(Rule::FunctionLines, file, unit, findings);
-            self.check(Rule::CyclomaticComplexity, file, unit, findings);
-            self.check(Rule::CognitiveComplexity, file, unit, findings);
-            self.check(Rule::Parameters, file, unit, findings);
-        }
-
-        for child in &unit.children {
-            self.walk(file, child, findings);
-        }
-    }
-
-    fn check(
-        &self,
-        rule: Rule,
-        file: &FileUnderReview<'_>,
-        unit: &Unit,
-        findings: &mut Vec<Finding>,
-    ) {
-        let Some(config) = self.config_for(file.language, rule) else {
-            return;
-        };
-        if config.severity == Severity::Off {
-            return;
-        }
-
-        let measured = file.measure(rule, unit);
-        if measured <= config.limit {
-            return;
-        }
-
-        findings.push(Finding {
-            rule: RuleId::Native(rule),
-            severity: config.severity,
-            path: file.path.clone(),
-            span: unit.span,
-            subject: unit.name.clone(),
-            detail: Detail::Threshold {
-                measured,
-                limit: config.limit,
-            },
-        });
-    }
-}
-
-const PER_FUNCTION: [Rule; 4] = [
-    Rule::FunctionLines,
-    Rule::CyclomaticComplexity,
-    Rule::CognitiveComplexity,
-    Rule::Parameters,
-];
-
-fn gather_readings(file: &FileUnderReview<'_>, unit: &Unit, readings: &mut Vec<Reading>) {
-    if unit.kind == UnitKind::Function {
-        readings.push(reading(file, unit, &PER_FUNCTION));
-    }
-
-    for child in &unit.children {
-        gather_readings(file, child, readings);
-    }
-}
-
-fn reading(file: &FileUnderReview<'_>, unit: &Unit, rules: &[Rule]) -> Reading {
-    Reading {
-        path: file.path.clone(),
-        line: unit.span.start_line,
-        subject: unit.name.clone(),
-        kind: unit.kind,
-        values: rules
-            .iter()
-            .map(|rule| (rule.id(), file.measure(*rule, unit)))
-            .collect(),
-    }
-}
-
-#[derive(Debug)]
-pub struct FileUnderReview<'a> {
-    pub path: String,
-    pub language: LanguageId,
-    pub units: Unit,
-    pub lines: &'a LineIndex,
-    pub decisions: &'a DecisionIndex,
-    pub cognitive: &'a CognitiveIndex,
-    pub churn: u32,
-}
-
-const NOT_MEASURED_PER_UNIT: u32 = 0;
-
-impl FileUnderReview<'_> {
-    pub(crate) fn measure(&self, rule: Rule, unit: &Unit) -> u32 {
-        match rule {
-            Rule::Churn => self.churn,
-            Rule::DuplicateBlock
-            | Rule::ErrorMasking
-            | Rule::Hotspot
-            | Rule::LayerViolation
-            | Rule::NewDependency => NOT_MEASURED_PER_UNIT,
-            Rule::CognitiveComplexity => self.cognitive.cognitive(unit),
-            Rule::Parameters => unit.parameters,
-            Rule::CyclomaticComplexity => self.decisions.cyclomatic(unit),
-            Rule::FileLines | Rule::FunctionLines => self.lines.loc(unit.span).total,
         }
     }
 }

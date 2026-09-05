@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::process::Command;
 
-use jabuti_core::external;
 use jabuti_core::model::Finding;
+use jabuti_core::tools::cargo_diagnostics;
 
 pub(crate) struct Tool {
     pub(crate) name: &'static str,
@@ -68,7 +68,7 @@ impl Tool {
             .map_err(|error| format!("running {}: {error}", self.name))?;
 
         let text = String::from_utf8_lossy(&output.stdout);
-        let findings = external::cargo_diagnostics(self.name, &text);
+        let findings = cargo_diagnostics(self.name, &text);
 
         if findings.is_empty() && !output.status.success() {
             return Err(format!(

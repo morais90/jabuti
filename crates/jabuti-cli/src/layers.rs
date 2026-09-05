@@ -2,9 +2,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use ignore::overrides::{Override, OverrideBuilder};
-use jabuti_core::graph::{self, Edges, Index, Layers};
-use jabuti_core::lang;
+use jabuti_core::graph::index::{Edges, Index};
+use jabuti_core::graph::layers::Layers;
 use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span, Unreadable};
+use jabuti_core::{graph, lang};
 
 use crate::config::{Layer, Settings};
 use crate::since::Changes;
@@ -24,7 +25,7 @@ pub(crate) fn findings(
     let (indexed, unreadable) = crate::graph::known(&paths, project);
     let edges = outgoing(&paths, project, &Index::of(&indexed), changes);
 
-    let found = graph::violations(&edges, &layers)
+    let found = graph::layers::violations(&edges, &layers)
         .into_iter()
         .filter(|violation| {
             changes.is_none_or(|changes| changes.touches(&violation.from, violation.at))
