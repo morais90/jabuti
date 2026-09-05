@@ -13,8 +13,9 @@ which is exactly what this tool goes looking for.
 
 </div>
 
-> **Status: early but usable.** `jabuti check` reads Rust and Kotlin, reports nine rules and
-> computes three more that are held back, and can fold in the linters a project already runs.
+> **Status: early but usable.** `jabuti check` reads Rust and Kotlin, reports nine rules and holds
+> back four more, one of which reads the test coverage a project produces, and can fold in the
+> linters a project already runs.
 
 ## Why this exists
 

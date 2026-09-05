@@ -45,6 +45,7 @@ pub enum Rule {
     LayerViolation,
     NewDependency,
     SpeculativeApi,
+    UncoveredNewCode,
     CognitiveComplexity,
     CyclomaticComplexity,
     FileLines,
@@ -53,7 +54,7 @@ pub enum Rule {
 }
 
 impl Rule {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Churn,
         Self::DuplicateBlock,
         Self::ErrorMasking,
@@ -61,6 +62,7 @@ impl Rule {
         Self::LayerViolation,
         Self::NewDependency,
         Self::SpeculativeApi,
+        Self::UncoveredNewCode,
         Self::CognitiveComplexity,
         Self::CyclomaticComplexity,
         Self::FileLines,
@@ -77,6 +79,7 @@ impl Rule {
             Self::LayerViolation => "layer-violation",
             Self::NewDependency => "new-dependency",
             Self::SpeculativeApi => "speculative-api",
+            Self::UncoveredNewCode => "uncovered-new-code",
             Self::CognitiveComplexity => "cognitive-complexity",
             Self::CyclomaticComplexity => "cyclomatic-complexity",
             Self::FileLines => "file-lines",

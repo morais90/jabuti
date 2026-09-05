@@ -51,6 +51,7 @@ fn shared_defaults() -> BTreeMap<RuleId, RuleConfig> {
         (RuleId::Native(Rule::LayerViolation), reporting(0)),
         (RuleId::Native(Rule::NewDependency), reporting(0)),
         (RuleId::Native(Rule::SpeculativeApi), reporting(0)),
+        (RuleId::Native(Rule::UncoveredNewCode), silent(0)),
         (RuleId::Native(Rule::Parameters), reporting(4)),
     ])
 }

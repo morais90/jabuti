@@ -110,7 +110,7 @@ fn length_is_measured_on_functions_and_not_on_the_types_that_hold_them() {
 }
 
 #[test]
-fn the_default_policy_reports_nine_of_the_twelve_rules() {
+fn the_default_policy_reports_nine_of_the_thirteen_rules() {
     let reported: Vec<Rule> = Rule::ALL
         .into_iter()
         .filter(|rule| {

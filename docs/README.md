@@ -43,9 +43,11 @@ say a lot.
 | [`file-lines`](rules/file-lines.md) | 1000 | off |
 | [`cyclomatic-complexity`](rules/cyclomatic-complexity.md) | 10 | off |
 | [`churn`](rules/churn.md) | none | off |
+| [`uncovered-new-code`](rules/uncovered-new-code.md) | none | off |
 
-The last three are switched off by default. Their pages explain why, and what you gain by turning
-them on if your project wants them.
+The last four are switched off by default. Their pages explain why, and what you gain by turning
+them on if your project wants them. `uncovered-new-code` is off for a different reason from the other
+three: it needs a coverage report, which your build produces or a tool produces for it.
 
 ## External tools
 

@@ -3,3 +3,8 @@ exclude = ["crates/jabuti-core/tests/fixtures/**"]
 [rules]
 function-lines = { limit = 60, severity = "error" }
 cognitive-complexity = { limit = 7, severity = "error" }
+
+uncovered-new-code = { severity = "warning" }
+
+[tools.cargo-llvm-cov]
+enabled = true

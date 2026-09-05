@@ -1,3 +1,5 @@
+mod coverage;
+
 use jabuti_core::model::{Detail, Finding, RuleId, Severity, Span};
 use jabuti_core::tools;
 

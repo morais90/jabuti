@@ -8,7 +8,8 @@ output into the same shape as everything else: one line per finding, one exit co
 
 ```console
 $ jabuti tools
-clippy     enable with [tools.clippy] enabled = true
+clippy           enable with [tools.clippy] enabled = true
+cargo-llvm-cov   enable with [tools.cargo-llvm-cov] enabled = true
 ```
 
 Every tool has three independent states, and running requires all three.
@@ -76,8 +77,34 @@ seconds at best and considerably longer on a cold cache.
 a decision you make rather than a surprise you discover. Turning it on is a line in a file that lives
 in your repository, so the choice is shared with everyone working in it.
 
+## Two kinds of output
+
+A tool produces one of two things.
+
+**Diagnostics.** Clippy prints findings, and jabuti folds each one into the report as
+`clippy/<lint>`, next to its own rules. This is the shape of a linter: the tool already knows what
+is wrong, and jabuti's job is to carry that verdict in the same line format, with the same `--since`
+scoping and the same `[rules]` overrides.
+
+**A file a rule reads.** `cargo-llvm-cov` prints nothing you see. It runs the project's tests under
+instrumentation and writes an LCOV report to `target/jabuti/coverage.lcov`, and the native rule
+[`uncovered-new-code`](rules/uncovered-new-code.md) reads that file to find new lines no test
+reached. The tool knows how to produce coverage for one ecosystem; the rule knows what to make of it
+for any language, because LCOV and JaCoCo XML say the same thing whoever wrote them. A project that
+already produces coverage in its build can skip the tool and name its own report under `[coverage]`.
+
+When jabuti itself runs inside an instrumented test run (its own suite under `cargo llvm-cov` is the
+case that matters), the enclosing run has installed itself as the compiler wrapper for every child
+process. A tool launched with that environment intact would call the wrapper, which compiles its
+target under the wrapper again, without end. jabuti drops the inherited wrapper before launching any
+tool, so a nested producer builds and tests the project it was pointed at, and nothing else.
+
+Either way the tool is off by default, for the reason above, and turning it on is the same line in
+`jabuti.toml`.
+
 ## Adding a tool
 
-The registry currently holds clippy. A tool is described by the marker that makes it applicable, the
-command that probes it, the command that runs it, and how to read its output. Cargo-based tools all
-share the diagnostic format, so the next Rust tool is mostly a matter of declaring it.
+The registry holds clippy and `cargo-llvm-cov`. A tool is described by the marker that makes it
+applicable, the command that probes it, the command that runs it, and what it produces: diagnostics
+to fold into findings, or a file at a known path that a rule reads. Cargo-based tools share the
+diagnostic format, so the next Rust linter is mostly a matter of declaring it.

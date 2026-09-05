@@ -1,3 +1,5 @@
+pub mod coverage;
+
 use serde::Deserialize;
 
 use crate::model::{Detail, Finding, RuleId, Severity, Span};

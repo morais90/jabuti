@@ -111,7 +111,7 @@ fn list_tools() -> Result<ExitCode> {
             tools::Status::Ready => "will run".to_owned(),
         };
 
-        println!("{:<10} {note}", tool.name);
+        println!("{:<16} {note}", tool.name);
     }
 
     Ok(ExitCode::SUCCESS)
@@ -136,23 +136,17 @@ fn check(roots: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
         ));
     }
     let here = std::env::current_dir()?;
-    outcome
-        .findings
-        .extend(tools::findings(&here, &settings, changes.as_ref()));
+    outcome.findings.extend(tools::findings(&tools::Scan {
+        here: &here,
+        project: &root,
+        paths: &paths,
+        settings: &settings,
+        changes: changes.as_ref(),
+    }));
     let (found, skipped) = graph::findings(&paths, &root, &settings, changes.as_ref())?;
     outcome.findings.extend(found);
     outcome.unreadable.extend(skipped);
-    outcome
-        .unreadable
-        .sort_by(|left, right| left.path.cmp(&right.path));
-    outcome
-        .unreadable
-        .dedup_by(|left, right| left.path == right.path);
-    outcome.findings.sort_by(|left, right| {
-        left.path
-            .cmp(&right.path)
-            .then(left.span.start_line.cmp(&right.span.start_line))
-    });
+    order(&mut outcome);
 
     print!(
         "{}",
@@ -175,11 +169,29 @@ fn check(roots: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
     Ok(ExitCode::SUCCESS)
 }
 
+fn order(outcome: &mut code::Outcome) {
+    outcome
+        .unreadable
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    outcome
+        .unreadable
+        .dedup_by(|left, right| left.path == right.path);
+    outcome.findings.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.span.start_line.cmp(&right.span.start_line))
+    });
+}
+
 fn scope_notices(settings: &config::Settings, scoped: bool) {
     if scoped && settings.enabled(Rule::Hotspot) {
         eprintln!("jabuti: hotspot ranks a whole repository, so it is not evaluated with --since");
     }
-    for rule in [Rule::NewDependency, Rule::SpeculativeApi] {
+    for rule in [
+        Rule::NewDependency,
+        Rule::SpeculativeApi,
+        Rule::UncoveredNewCode,
+    ] {
         if !scoped && settings.gates(rule) {
             eprintln!(
                 "jabuti: {} compares against an earlier revision, so it needs --since",

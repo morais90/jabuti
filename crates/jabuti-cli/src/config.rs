@@ -15,6 +15,7 @@ pub(crate) struct Settings {
     pub(crate) exclude: Vec<String>,
     pub(crate) tools: BTreeMap<String, bool>,
     pub(crate) layers: Vec<Layer>,
+    pub(crate) coverage: Option<PathBuf>,
 }
 
 impl Settings {
@@ -54,6 +55,12 @@ struct Document {
     languages: BTreeMap<String, LanguageEntry>,
     #[serde(default)]
     layers: BTreeMap<String, LayerEntry>,
+    coverage: Option<CoverageEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CoverageEntry {
+    report: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]
@@ -167,6 +174,7 @@ fn settings(document: Document) -> Result<Settings> {
             .map(|(name, entry)| (name, entry.enabled))
             .collect(),
         layers: layers(document.layers)?,
+        coverage: document.coverage.map(|entry| entry.report),
     })
 }
 

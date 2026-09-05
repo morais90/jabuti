@@ -125,7 +125,8 @@ impl FileUnderReview<'_> {
             | Rule::Hotspot
             | Rule::LayerViolation
             | Rule::NewDependency
-            | Rule::SpeculativeApi => NOT_MEASURED_PER_UNIT,
+            | Rule::SpeculativeApi
+            | Rule::UncoveredNewCode => NOT_MEASURED_PER_UNIT,
             Rule::CognitiveComplexity => self.cognitive.cognitive(unit),
             Rule::Parameters => unit.parameters,
             Rule::CyclomaticComplexity => self.decisions.cyclomatic(unit),
