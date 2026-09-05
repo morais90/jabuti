@@ -1,8 +1,12 @@
 use std::path::Path;
 use std::process::Command;
 
+use anyhow::{Result, bail};
 use jabuti_core::model::Finding;
 use jabuti_core::tools::cargo_diagnostics;
+
+use crate::config::Settings;
+use crate::git::since::Changes;
 
 pub(crate) struct Tool {
     pub(crate) name: &'static str,
@@ -95,4 +99,57 @@ impl Tool {
             .output()
             .is_ok_and(|output| output.status.success())
     }
+}
+
+pub(crate) fn known(settings: &Settings) -> Result<()> {
+    let known: Vec<&str> = ALL.iter().map(|tool| tool.name).collect();
+    for name in settings.tools.keys() {
+        if !known.contains(&name.as_str()) {
+            bail!("unknown tool {name}, jabuti knows {}", known.join(", "));
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) fn enabled(settings: &Settings, name: &str) -> bool {
+    settings.tools.get(name).copied().unwrap_or(false)
+}
+
+pub(crate) fn findings(
+    root: &Path,
+    settings: &Settings,
+    changes: Option<&Changes>,
+) -> Vec<Finding> {
+    let mut findings = Vec::new();
+
+    for tool in ALL {
+        if !tool.status(root, enabled(settings, tool.name)).runnable() {
+            continue;
+        }
+
+        match tool.run(root) {
+            Ok(reported) => findings.extend(admitted(reported, root, settings, changes)),
+            Err(reason) => eprintln!("jabuti: {reason}"),
+        }
+    }
+
+    findings
+}
+
+fn admitted(
+    reported: Vec<Finding>,
+    root: &Path,
+    settings: &Settings,
+    changes: Option<&Changes>,
+) -> Vec<Finding> {
+    reported
+        .into_iter()
+        .filter_map(|finding| settings.policy.admit(finding))
+        .filter(|finding| in_scope(finding, root, changes))
+        .collect()
+}
+
+fn in_scope(finding: &Finding, root: &Path, changes: Option<&Changes>) -> bool {
+    changes.is_none_or(|changes| changes.touches(&root.join(&finding.path), finding.span))
 }

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use jabuti_core::lang::LanguageId;
-use jabuti_core::model::{RuleId, Severity};
+use jabuti_core::model::{Rule, RuleId, Severity};
 use jabuti_core::policy::{Policy, RuleConfig};
 use serde::Deserialize;
 
@@ -15,6 +15,20 @@ pub(crate) struct Settings {
     pub(crate) exclude: Vec<String>,
     pub(crate) tools: BTreeMap<String, bool>,
     pub(crate) layers: Vec<Layer>,
+}
+
+impl Settings {
+    pub(crate) fn enabled(&self, rule: Rule) -> bool {
+        self.policy
+            .config(rule)
+            .is_some_and(|config| config.severity != Severity::Off)
+    }
+
+    pub(crate) fn gates(&self, rule: Rule) -> bool {
+        self.policy
+            .config(rule)
+            .is_some_and(|config| config.severity == Severity::Error)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,13 +152,6 @@ fn settings(document: Document) -> Result<Settings> {
 
     for (name, entry) in document.languages {
         language_rules(&mut policy, &name, entry)?;
-    }
-
-    let known: Vec<&str> = crate::tools::ALL.iter().map(|tool| tool.name).collect();
-    for name in document.tools.keys() {
-        if !known.contains(&name.as_str()) {
-            bail!("unknown tool {name}, jabuti knows {}", known.join(", "));
-        }
     }
 
     Ok(Settings {

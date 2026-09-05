@@ -1,19 +1,18 @@
-mod churn;
+mod code;
 mod config;
-mod drift;
 mod git;
 mod graph;
-mod layers;
-mod scan;
-mod since;
+mod history;
+mod project;
 mod tools;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use jabuti_core::model::{Finding, Rule, Severity, Unreadable};
+use jabuti_core::history::hotspot::{self, FileSummary};
+use jabuti_core::model::Rule;
 use jabuti_core::report;
 
 #[derive(Debug, Parser)]
@@ -65,91 +64,6 @@ fn main() -> ExitCode {
     }
 }
 
-fn run_tools(
-    root: &Path,
-    settings: &config::Settings,
-    changes: Option<&since::Changes>,
-) -> Vec<Finding> {
-    let mut findings = Vec::new();
-
-    for tool in tools::ALL {
-        if !tool
-            .status(root, enabled_tool(settings, tool.name))
-            .runnable()
-        {
-            continue;
-        }
-
-        match tool.run(root) {
-            Ok(reported) => findings.extend(admitted(reported, root, settings, changes)),
-            Err(reason) => eprintln!("jabuti: {reason}"),
-        }
-    }
-
-    findings
-}
-
-fn admitted(
-    reported: Vec<Finding>,
-    root: &Path,
-    settings: &config::Settings,
-    changes: Option<&since::Changes>,
-) -> Vec<Finding> {
-    reported
-        .into_iter()
-        .filter_map(|finding| settings.policy.admit(finding))
-        .filter(|finding| in_scope(finding, root, changes))
-        .collect()
-}
-
-fn in_scope(finding: &Finding, root: &Path, changes: Option<&since::Changes>) -> bool {
-    changes.is_none_or(|changes| changes.touches(&root.join(&finding.path), finding.span))
-}
-
-fn drifted(
-    paths: &[PathBuf],
-    project: &Path,
-    settings: &config::Settings,
-    changes: Option<&since::Changes>,
-    since: Option<&str>,
-) -> Result<(Vec<Finding>, Vec<Unreadable>)> {
-    let (Some(reference), Some(changes)) = (since, changes) else {
-        return Ok((Vec::new(), Vec::new()));
-    };
-
-    drift::findings(paths, project, settings, changes, reference)
-}
-
-fn gates(settings: &config::Settings, rule: Rule) -> bool {
-    settings
-        .policy
-        .config(rule)
-        .is_some_and(|config| config.severity == Severity::Error)
-}
-
-fn enabled(settings: &config::Settings, rule: Rule) -> bool {
-    settings
-        .policy
-        .config(rule)
-        .is_some_and(|config| config.severity != Severity::Off)
-}
-
-fn history_when_needed(settings: &config::Settings) -> Option<churn::Churn> {
-    if !enabled(settings, Rule::Churn) && !enabled(settings, Rule::Hotspot) {
-        return None;
-    }
-
-    match churn::Churn::of_repository() {
-        Ok(history) => Some(history),
-        Err(reason) => {
-            eprintln!(
-                "jabuti: churn and hotspot need a git repository, so they were not evaluated ({reason})"
-            );
-            None
-        }
-    }
-}
-
 fn run() -> Result<ExitCode> {
     match Cli::parse().command {
         Command::Languages => Ok(list_languages()),
@@ -184,10 +98,11 @@ fn list_languages() -> ExitCode {
 
 fn list_tools() -> Result<ExitCode> {
     let (_, settings) = config::discover()?;
+    tools::known(&settings)?;
     let root = std::env::current_dir()?;
 
     for tool in tools::ALL {
-        let note = match tool.status(&root, enabled_tool(&settings, tool.name)) {
+        let note = match tool.status(&root, tools::enabled(&settings, tool.name)) {
             tools::Status::NotApplicable => "not applicable here".to_owned(),
             tools::Status::Unavailable => format!("install with `{}`", tool.install_hint),
             tools::Status::Disabled => {
@@ -202,35 +117,30 @@ fn list_tools() -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn enabled_tool(settings: &config::Settings, name: &str) -> bool {
-    settings.tools.get(name).copied().unwrap_or(false)
-}
-
-fn check(paths: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -> Result<ExitCode> {
+fn check(roots: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -> Result<ExitCode> {
     let (root, settings) = config::discover()?;
+    tools::known(&settings)?;
     let changes = since
-        .map(|reference| since::Changes::since(reference, &root))
+        .map(|reference| git::since::Changes::since(reference, &root))
         .transpose()?;
-    let history = history_when_needed(&settings);
-    if changes.is_some() && enabled(&settings, Rule::Hotspot) {
-        eprintln!("jabuti: hotspot ranks a whole repository, so it is not evaluated with --since");
-    }
-    if since.is_none() && gates(&settings, Rule::NewDependency) {
-        eprintln!(
-            "jabuti: new-dependency compares against an earlier revision, so it needs --since"
-        );
-    }
+    let history = history::load(&settings);
+    scope_notices(&settings, since.is_some());
 
-    let mut outcome = scan::scan(paths, &root, &settings, changes.as_ref(), history.as_ref())?;
+    let paths = project::sources(roots, &settings.exclude, &root)?;
+    let churn = history::commits(history.as_ref(), &paths);
+    let mut outcome = code::scan(&paths, &root, &settings.policy, changes.as_ref(), &churn);
+    if changes.is_none() {
+        outcome.findings.extend(hotspot::hotspots(
+            &summaries(&outcome.measured),
+            &settings.policy,
+        ));
+    }
     let here = std::env::current_dir()?;
     outcome
         .findings
-        .extend(run_tools(&here, &settings, changes.as_ref()));
-    let (drifted, skipped) = drifted(paths, &root, &settings, changes.as_ref(), since)?;
-    outcome.findings.extend(drifted);
-    outcome.unreadable.extend(skipped);
-    let (crossed, skipped) = layers::findings(paths, &root, &settings, changes.as_ref())?;
-    outcome.findings.extend(crossed);
+        .extend(tools::findings(&here, &settings, changes.as_ref()));
+    let (found, skipped) = graph::findings(&paths, &root, &settings, changes.as_ref())?;
+    outcome.findings.extend(found);
     outcome.unreadable.extend(skipped);
     outcome
         .unreadable
@@ -263,4 +173,27 @@ fn check(paths: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
     }
 
     Ok(ExitCode::SUCCESS)
+}
+
+fn scope_notices(settings: &config::Settings, scoped: bool) {
+    if scoped && settings.enabled(Rule::Hotspot) {
+        eprintln!("jabuti: hotspot ranks a whole repository, so it is not evaluated with --since");
+    }
+    if !scoped && settings.gates(Rule::NewDependency) {
+        eprintln!(
+            "jabuti: new-dependency compares against an earlier revision, so it needs --since"
+        );
+    }
+}
+
+fn summaries(measured: &[code::Measured]) -> Vec<FileSummary> {
+    measured
+        .iter()
+        .map(|file| FileSummary {
+            path: file.path.clone(),
+            span: file.span,
+            churn: file.churn,
+            complexity: file.complexity,
+        })
+        .collect()
 }

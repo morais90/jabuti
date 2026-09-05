@@ -1,24 +1,19 @@
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
-use ignore::WalkBuilder;
-use ignore::overrides::OverrideBuilder;
 use jabuti_core::code::duplication::{self, FileFragments};
 use jabuti_core::code::masking;
 use jabuti_core::code::metrics::{self, CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::code::review::{self, FileUnderReview};
 use jabuti_core::code::units::{self, Unit};
-use jabuti_core::history::hotspot::{self, FileSummary};
-use jabuti_core::model::{Finding, Reading, UnitKind, Unreadable};
+use jabuti_core::model::{Finding, Reading, Rule, Severity, Span, UnitKind, Unreadable};
 use jabuti_core::policy::Policy;
 use jabuti_core::report::Scanned;
 use jabuti_core::{lang, syntax};
 use rayon::prelude::*;
 
-use crate::churn::Churn;
-use crate::config::Settings;
-use crate::since::Changes;
+use crate::git::since::Changes;
+use crate::project;
 
 #[derive(Debug, Default)]
 pub(crate) struct Outcome {
@@ -26,6 +21,15 @@ pub(crate) struct Outcome {
     pub(crate) readings: Vec<Reading>,
     pub(crate) scanned: Scanned,
     pub(crate) unreadable: Vec<Unreadable>,
+    pub(crate) measured: Vec<Measured>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Measured {
+    pub(crate) path: String,
+    pub(crate) span: Span,
+    pub(crate) churn: u32,
+    pub(crate) complexity: u32,
 }
 
 #[derive(Debug, Default)]
@@ -35,18 +39,18 @@ struct Reviewed {
     fragments: Option<FileFragments>,
     units: usize,
     unreadable: Option<Unreadable>,
-    summary: Option<FileSummary>,
+    measured: Option<Measured>,
 }
 
 pub(crate) fn scan(
-    roots: &[PathBuf],
+    paths: &[PathBuf],
     project: &Path,
-    settings: &Settings,
+    policy: &Policy,
     changes: Option<&Changes>,
-    churn: Option<&Churn>,
-) -> Result<Outcome> {
-    let minimum_nodes = duplication_limit(&settings.policy);
-    let mut paths = sources(roots, &settings.exclude, project)?;
+    churn: &BTreeMap<PathBuf, u32>,
+) -> Outcome {
+    let minimum_nodes = duplication_limit(policy);
+    let mut paths = paths.to_vec();
     if let (Some(changes), None) = (changes, minimum_nodes) {
         paths.retain(|path| changes.covers(path));
     }
@@ -57,7 +61,7 @@ pub(crate) fn scan(
             review(
                 path,
                 &Review {
-                    policy: &settings.policy,
+                    policy,
                     project,
                     changes,
                     churn,
@@ -67,9 +71,9 @@ pub(crate) fn scan(
         })
         .collect();
 
-    let summaries: Vec<FileSummary> = reviewed
+    let measured: Vec<Measured> = reviewed
         .iter()
-        .filter_map(|file| file.summary.clone())
+        .filter_map(|file| file.measured.clone())
         .collect();
 
     let repeated: Vec<FileFragments> = reviewed
@@ -79,23 +83,13 @@ pub(crate) fn scan(
 
     let mut outcome = gather(covered(&paths, reviewed, changes));
     outcome.findings.extend(
-        duplication::duplicates(&repeated, &settings.policy)
+        duplication::duplicates(&repeated, policy)
             .into_iter()
             .filter(|finding| in_diff(finding, changes)),
     );
+    outcome.measured = measured;
 
-    if changes.is_none() {
-        outcome
-            .findings
-            .extend(hotspot::hotspots(&summaries, &settings.policy));
-        outcome.findings.sort_by(|left, right| {
-            left.path
-                .cmp(&right.path)
-                .then(left.span.start_line.cmp(&right.span.start_line))
-        });
-    }
-
-    Ok(outcome)
+    outcome
 }
 
 fn gather(reviewed: Vec<Reviewed>) -> Outcome {
@@ -112,47 +106,6 @@ fn gather(reviewed: Vec<Reviewed>) -> Outcome {
     }
 
     outcome
-}
-
-pub(crate) fn sources(
-    roots: &[PathBuf],
-    exclude: &[String],
-    project: &Path,
-) -> Result<Vec<PathBuf>> {
-    let absolute: Vec<PathBuf> = roots
-        .iter()
-        .map(|root| inside(root, project))
-        .collect::<Result<_>>()?;
-    let Some((first, rest)) = absolute.split_first() else {
-        return Ok(Vec::new());
-    };
-
-    let mut overrides = OverrideBuilder::new(project);
-    for pattern in exclude {
-        overrides
-            .add(&format!("!{pattern}"))
-            .with_context(|| format!("invalid exclude pattern {pattern}"))?;
-    }
-
-    let mut builder = WalkBuilder::new(first);
-    builder.overrides(overrides.build()?);
-    for root in rest {
-        builder.add(root);
-    }
-
-    let mut paths: Vec<PathBuf> = builder
-        .build()
-        .flatten()
-        .map(ignore::DirEntry::into_path)
-        .filter(|path| path.is_file() && lang::detect(path).is_some())
-        .collect();
-
-    paths.sort_by_key(|path| (path.is_symlink(), path.clone()));
-
-    let mut seen = BTreeSet::new();
-    paths.retain(|path| seen.insert(path.canonicalize().unwrap_or_else(|_| path.clone())));
-
-    Ok(paths)
 }
 
 fn masked_errors(
@@ -186,8 +139,8 @@ fn covered(paths: &[PathBuf], reviewed: Vec<Reviewed>, changes: Option<&Changes>
 
 fn duplication_limit(policy: &Policy) -> Option<u32> {
     policy
-        .config(jabuti_core::model::Rule::DuplicateBlock)
-        .filter(|config| config.severity != jabuti_core::model::Severity::Off)
+        .config(Rule::DuplicateBlock)
+        .filter(|config| config.severity != Severity::Off)
         .map(|config| config.limit)
 }
 
@@ -199,12 +152,12 @@ struct Review<'a> {
     policy: &'a Policy,
     project: &'a Path,
     changes: Option<&'a Changes>,
-    churn: Option<&'a Churn>,
+    churn: &'a BTreeMap<PathBuf, u32>,
     minimum_nodes: Option<u32>,
 }
 
 fn review(path: &Path, context: &Review<'_>) -> Reviewed {
-    let shown = display(path, context.project);
+    let shown = project::display(path, context.project);
     let Ok(source) = std::fs::read_to_string(path) else {
         return rejected(shown, "the file could not be read");
     };
@@ -230,10 +183,10 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
         lines: &lines,
         decisions: &decisions,
         cognitive: &cognitive,
-        churn: context.churn.map_or(0, |churn| churn.commits(path)),
+        churn: context.churn.get(path).copied().unwrap_or(0),
     };
 
-    let summary = FileSummary {
+    let measured = Measured {
         path: file.path.clone(),
         span: file.units.span,
         churn: file.churn,
@@ -256,7 +209,7 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
         findings,
         units: counted,
         unreadable: None,
-        summary: Some(summary),
+        measured: Some(measured),
     }
 }
 
@@ -274,26 +227,4 @@ fn count_units(unit: &Unit) -> usize {
     let counted = usize::from(unit.kind != UnitKind::File);
 
     counted + unit.children.iter().map(count_units).sum::<usize>()
-}
-
-fn inside(root: &Path, project: &Path) -> Result<PathBuf> {
-    let absolute = root
-        .canonicalize()
-        .with_context(|| format!("resolving {}", root.display()))?;
-    if !absolute.starts_with(project) {
-        bail!(
-            "{} is outside the project at {}; run from a directory under the project or move jabuti.toml",
-            root.display(),
-            project.display()
-        );
-    }
-
-    Ok(absolute)
-}
-
-pub(crate) fn display(path: &Path, project: &Path) -> String {
-    path.strip_prefix(project)
-        .unwrap_or(path)
-        .display()
-        .to_string()
 }

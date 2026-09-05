@@ -5,22 +5,22 @@ use jabuti_core::graph::index::{Index, Source};
 use jabuti_core::lang::{self, LangSpec};
 use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span, Unreadable};
 
+use super::sources;
 use crate::config::Settings;
-use crate::since::Changes;
+use crate::git::since::Changes;
+use crate::project;
 
 pub(crate) fn findings(
-    roots: &[PathBuf],
+    paths: &[PathBuf],
     project: &Path,
     settings: &Settings,
     changes: &Changes,
-    reference: &str,
 ) -> Result<(Vec<Finding>, Vec<Unreadable>)> {
     let rule = RuleId::Native(Rule::NewDependency);
-    let base = crate::git::run(&["merge-base", "HEAD", reference])?
+    let base = crate::git::run(&["merge-base", "HEAD", changes.reference()])?
         .trim()
         .to_owned();
-    let paths = crate::scan::sources(roots, &settings.exclude, project)?;
-    let (indexed, unreadable) = crate::graph::known(&paths, project);
+    let (indexed, unreadable) = sources::known(paths, project);
     let index = Index::of(&indexed);
 
     let mut found = Vec::new();
@@ -31,7 +31,7 @@ pub(crate) fn findings(
         let Some(severity) = gating(settings, spec) else {
             continue;
         };
-        let shown = crate::scan::display(path, project);
+        let shown = project::display(path, project);
 
         let Some(inside) = changes.relative(path) else {
             continue;
@@ -39,12 +39,10 @@ pub(crate) fn findings(
         let Some(before) = previous(&base, &inside) else {
             continue;
         };
-        let Some(now) =
-            crate::graph::source_of(&shown, spec, crate::graph::contents(path).as_deref())
-        else {
+        let Some(now) = sources::source_of(&shown, spec, sources::contents(path).as_deref()) else {
             continue;
         };
-        let Some(then) = crate::graph::source_of(&shown, spec, Some(&before)) else {
+        let Some(then) = sources::source_of(&shown, spec, Some(&before)) else {
             continue;
         };
 

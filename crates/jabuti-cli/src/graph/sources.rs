@@ -8,7 +8,7 @@ use jabuti_core::{lang, syntax};
 
 fn examine(path: &Path, project: &Path) -> Option<Result<Source, Unreadable>> {
     let spec = lang::detect(path)?;
-    let shown = crate::scan::display(path, project);
+    let shown = crate::project::display(path, project);
 
     let outcome = match std::fs::read_to_string(path).map(|source| facts_of(&source, spec)) {
         Ok(Ok(facts)) => Ok(Source {
@@ -41,7 +41,7 @@ pub(crate) fn known(paths: &[PathBuf], project: &Path) -> (Vec<Source>, Vec<Unre
         let Some(spec) = lang::detect(path) else {
             continue;
         };
-        let shown = crate::scan::display(path, project);
+        let shown = crate::project::display(path, project);
 
         match spec.id {
             lang::LanguageId::Rust => sources.push(Source {

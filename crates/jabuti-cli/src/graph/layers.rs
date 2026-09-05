@@ -7,11 +7,13 @@ use jabuti_core::graph::layers::Layers;
 use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span, Unreadable};
 use jabuti_core::{graph, lang};
 
+use super::sources;
 use crate::config::{Layer, Settings};
-use crate::since::Changes;
+use crate::git::since::Changes;
+use crate::project;
 
 pub(crate) fn findings(
-    roots: &[PathBuf],
+    paths: &[PathBuf],
     project: &Path,
     settings: &Settings,
     changes: Option<&Changes>,
@@ -20,10 +22,9 @@ pub(crate) fn findings(
         return Ok((Vec::new(), Vec::new()));
     };
 
-    let paths = crate::scan::sources(roots, &settings.exclude, project)?;
-    let layers = assign(&settings.layers, project, &paths)?;
-    let (indexed, unreadable) = crate::graph::known(&paths, project);
-    let edges = outgoing(&paths, project, &Index::of(&indexed), changes);
+    let layers = assign(&settings.layers, project, paths)?;
+    let (indexed, unreadable) = sources::known(paths, project);
+    let edges = outgoing(paths, project, &Index::of(&indexed), changes);
 
     let found = graph::layers::violations(&edges, &layers)
         .into_iter()
@@ -106,7 +107,7 @@ fn members_of(layer: &Layer, project: &Path, paths: &[PathBuf]) -> Result<Vec<Pa
             path.canonicalize()
                 .is_ok_and(|absolute| selects.matched(&absolute, false).is_whitelist())
         })
-        .map(|path| PathBuf::from(crate::scan::display(path, project)))
+        .map(|path| PathBuf::from(project::display(path, project)))
         .collect())
 }
 
@@ -140,10 +141,8 @@ fn edges_from(path: &Path, project: &Path, index: &Index) -> Vec<(PathBuf, PathB
     let Some(spec) = lang::detect(path) else {
         return Vec::new();
     };
-    let shown = crate::scan::display(path, project);
-    let Some(source) =
-        crate::graph::source_of(&shown, spec, crate::graph::contents(path).as_deref())
-    else {
+    let shown = project::display(path, project);
+    let Some(source) = sources::source_of(&shown, spec, sources::contents(path).as_deref()) else {
         return Vec::new();
     };
 
