@@ -137,8 +137,11 @@ and process metrics mined from git history. This is where the market is weakest.
 has its own complexity tool with its own definition, and almost nothing exposes churn, hotspots or
 refactoring ratio outside a paid dashboard.
 
-**Orchestrated sensors** are consolidated tools such as clippy and cargo-deny. jabuti provisions,
-invokes and normalizes them into the same finding model. It does not reimplement them; clippy alone
+**Orchestrated sensors** are consolidated tools such as clippy and `cargo-llvm-cov`.
+`jabuti tools install` provisions every applicable registered tool that is unavailable, regardless of
+whether it is enabled for checks. Installation does not enable a tool or write `jabuti.toml`, and
+`jabuti check` never provisions. It invokes only enabled tools and folds their diagnostics or
+generated reports into the same finding model. jabuti does not reimplement them; clippy alone
 contributes hundreds of Rust lints for free.
 
 Language knowledge lives in declarative tree-sitter queries rather than imperative walkers, so a new

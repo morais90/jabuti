@@ -67,9 +67,10 @@ with no further configuration:
 enabled = true
 ```
 
-Like every tool, it is off by default and jabuti does not install it. `jabuti tools` says whether it
-is applicable, available and enabled, and what to do about whichever is missing.
-[`docs/tools.md`](../tools.md) explains the three states.
+Like every tool, it is off by default. `jabuti tools install` includes it when it is applicable and
+unavailable, whether or not it is enabled, but does not enable it or write `jabuti.toml`. Bare
+`jabuti tools` reports whether it is applicable, available and enabled.
+[`docs/tools.md`](../tools.md) explains installation and the three states.
 
 ## What is deliberately not reported
 

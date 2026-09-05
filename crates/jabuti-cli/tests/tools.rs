@@ -50,6 +50,25 @@ fn a_tool_nobody_has_heard_of_stops_the_run() {
 }
 
 #[test]
+fn install_rejects_an_unknown_configured_tool_before_running_commands() {
+    let directory = project(&[
+        ("jabuti.toml", "[tools.spline]\nenabled = true\n"),
+        (
+            "Cargo.toml",
+            "[package]\nname = \"x\"\nversion = \"0.1.0\"\n",
+        ),
+        ("src/lib.rs", "fn small() {}\n"),
+    ]);
+
+    tools(&directory)
+        .arg("install")
+        .env("PATH", "")
+        .assert()
+        .code(2)
+        .stderr(contains("unknown tool spline"));
+}
+
+#[test]
 fn a_disabled_tool_never_runs_even_where_it_applies() {
     let directory = project(&[
         (
@@ -123,7 +142,7 @@ fn a_tool_that_cannot_be_found_says_how_to_install_it() {
         .env("PATH", "")
         .assert()
         .success()
-        .stdout(contains("install with `rustup component add clippy`"));
+        .stdout(contains("install with `jabuti tools install`"));
 }
 
 #[test]
@@ -204,4 +223,309 @@ fn a_file_that_cannot_be_parsed_says_where_the_trouble_starts() {
         .assert()
         .success()
         .stdout(contains("src/broken.rs  unreadable syntax from line 6"));
+}
+
+#[cfg(unix)]
+mod provisioning {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt as _;
+    use std::path::{Path, PathBuf};
+
+    use predicates::prelude::PredicateBooleanExt as _;
+    use predicates::str::contains;
+    use tempfile::TempDir;
+
+    use super::{jabuti, project, tools};
+
+    const CARGO: &str = r#"#!/bin/sh
+printf 'cargo' >> "$JABUTI_FAKE_LOG"
+for argument in "$@"; do
+    printf '\t%s' "$argument" >> "$JABUTI_FAKE_LOG"
+done
+printf '\n' >> "$JABUTI_FAKE_LOG"
+printf 'cargo child stdout\n'
+printf 'cargo child stderr\n' >&2
+
+if [ "$#" -eq 2 ] && [ "$1" = "clippy" ] && [ "$2" = "--version" ]; then
+    if [ -f "$JABUTI_FAKE_STATE/clippy" ]; then
+        exit 0
+    fi
+    exit 1
+fi
+
+if [ "$#" -eq 2 ] && [ "$1" = "llvm-cov" ] && [ "$2" = "--version" ]; then
+    if [ -f "$JABUTI_FAKE_STATE/cargo-llvm-cov" ]; then
+        exit 0
+    fi
+    exit 1
+fi
+
+if [ "$#" -eq 5 ] && [ "$1" = "install" ] && [ "$2" = "cargo-llvm-cov" ] && [ "$3" = "--version" ] && [ "$4" = "0.9.0" ] && [ "$5" = "--locked" ]; then
+    : > "$JABUTI_FAKE_STATE/cargo-llvm-cov"
+    exit 0
+fi
+
+exit 91
+"#;
+
+    const RUSTUP: &str = r#"#!/bin/sh
+printf 'rustup' >> "$JABUTI_FAKE_LOG"
+for argument in "$@"; do
+    printf '\t%s' "$argument" >> "$JABUTI_FAKE_LOG"
+done
+printf '\n' >> "$JABUTI_FAKE_LOG"
+
+if [ "$JABUTI_FAKE_MODE" = "silent-command-failure" ]; then
+    exit 42
+fi
+
+printf 'rustup child stdout\n'
+printf 'rustup child stderr\n' >&2
+
+if [ "$JABUTI_FAKE_MODE" = "command-failure" ]; then
+    exit 41
+fi
+
+if [ "$#" -eq 3 ] && [ "$1" = "component" ] && [ "$2" = "add" ] && [ "$3" = "clippy" ]; then
+    if [ "$JABUTI_FAKE_MODE" != "post-probe-failure" ]; then
+        : > "$JABUTI_FAKE_STATE/clippy"
+    fi
+    exit 0
+fi
+
+if [ "$#" -eq 3 ] && [ "$1" = "component" ] && [ "$2" = "add" ] && [ "$3" = "llvm-tools-preview" ]; then
+    : > "$JABUTI_FAKE_STATE/llvm-tools-preview"
+    exit 0
+fi
+
+exit 92
+"#;
+
+    const PROVISION_LOG: &str = "cargo\tclippy\t--version\n\
+rustup\tcomponent\tadd\tclippy\n\
+cargo\tclippy\t--version\n\
+cargo\tllvm-cov\t--version\n\
+cargo\tinstall\tcargo-llvm-cov\t--version\t0.9.0\t--locked\n\
+rustup\tcomponent\tadd\tllvm-tools-preview\n\
+cargo\tllvm-cov\t--version\n";
+
+    struct FakeTools {
+        project: TempDir,
+        bin: PathBuf,
+        state: PathBuf,
+        log: PathBuf,
+    }
+
+    impl FakeTools {
+        fn new(applicable: bool) -> Self {
+            let mut files = vec![("src/lib.rs", "fn small() {}\n")];
+            if applicable {
+                files.push((
+                    "Cargo.toml",
+                    "[package]\nname = \"x\"\nversion = \"0.1.0\"\n",
+                ));
+            }
+            let project = project(&files);
+            let bin = project.path().join("fake-bin");
+            let state = project.path().join("fake-state");
+            let log = project.path().join("provision.log");
+            fs::create_dir_all(&bin).expect("fake executable directory");
+            fs::create_dir_all(&state).expect("fake state directory");
+            executable(&bin.join("cargo"), CARGO);
+            executable(&bin.join("rustup"), RUSTUP);
+
+            Self {
+                project,
+                bin,
+                state,
+                log,
+            }
+        }
+
+        fn install(&self, mode: &str) -> assert_cmd::Command {
+            let mut command = tools(&self.project);
+            command
+                .arg("install")
+                .env("PATH", &self.bin)
+                .env("JABUTI_FAKE_LOG", &self.log)
+                .env("JABUTI_FAKE_STATE", &self.state)
+                .env("JABUTI_FAKE_MODE", mode);
+            command
+        }
+
+        fn list(&self) -> assert_cmd::Command {
+            let mut command = tools(&self.project);
+            command
+                .env("PATH", &self.bin)
+                .env("JABUTI_FAKE_LOG", &self.log)
+                .env("JABUTI_FAKE_STATE", &self.state)
+                .env("JABUTI_FAKE_MODE", "normal");
+            command
+        }
+
+        fn check(&self) -> assert_cmd::Command {
+            let mut command = jabuti(&self.project);
+            command
+                .env("PATH", &self.bin)
+                .env("JABUTI_FAKE_LOG", &self.log)
+                .env("JABUTI_FAKE_STATE", &self.state)
+                .env("JABUTI_FAKE_MODE", "normal");
+            command
+        }
+
+        fn mark_available(&self, tool: &str) {
+            fs::write(self.state.join(tool), "").expect("availability marker");
+        }
+
+        fn recorded(&self) -> String {
+            if self.log.exists() {
+                fs::read_to_string(&self.log).expect("provision log")
+            } else {
+                String::new()
+            }
+        }
+    }
+
+    fn executable(path: &Path, contents: &str) {
+        fs::write(path, contents).expect("fake executable");
+        let mut permissions = fs::metadata(path).expect("fake metadata").permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).expect("fake executable permissions");
+    }
+
+    #[test]
+    fn install_uses_the_curated_command_sequence_for_every_applicable_unavailable_tool() {
+        let fake = FakeTools::new(true);
+
+        fake.install("normal")
+            .assert()
+            .success()
+            .stdout("Installed clippy.\nInstalled cargo-llvm-cov.\n")
+            .stderr("");
+
+        assert_eq!(fake.recorded(), PROVISION_LOG);
+    }
+
+    #[test]
+    fn install_does_not_enable_tools_or_write_configuration() {
+        let fake = FakeTools::new(true);
+        fake.install("normal")
+            .assert()
+            .success()
+            .stdout("Installed clippy.\nInstalled cargo-llvm-cov.\n")
+            .stderr("");
+        fs::write(&fake.log, "").expect("log reset");
+
+        fake.list().assert().success().stdout(
+            contains("enable with [tools.clippy] enabled = true")
+                .and(contains(
+                    "enable with [tools.cargo-llvm-cov] enabled = true",
+                ))
+                .and(contains("will run").not()),
+        );
+        assert!(!fake.project.path().join("jabuti.toml").exists());
+    }
+
+    #[test]
+    fn install_runs_no_commands_when_no_registered_tool_applies() {
+        let fake = FakeTools::new(false);
+
+        fake.install("normal")
+            .assert()
+            .success()
+            .stdout("No tools need installation.\n")
+            .stderr("");
+
+        assert_eq!(fake.recorded(), "");
+    }
+
+    #[test]
+    fn install_only_probes_tools_that_are_already_available() {
+        let fake = FakeTools::new(true);
+        fake.mark_available("clippy");
+        fake.mark_available("cargo-llvm-cov");
+
+        fake.install("normal")
+            .assert()
+            .success()
+            .stdout("No tools need installation.\n")
+            .stderr("");
+
+        assert_eq!(
+            fake.recorded(),
+            "cargo\tclippy\t--version\ncargo\tllvm-cov\t--version\n"
+        );
+    }
+
+    #[test]
+    fn a_failed_install_command_exits_two_and_stops_provisioning() {
+        let fake = FakeTools::new(true);
+
+        fake.install("command-failure")
+            .assert()
+            .code(2)
+            .stdout("")
+            .stderr(
+                contains("installing clippy with rustup exited with")
+                    .and(contains("rustup child stderr")),
+            );
+
+        assert_eq!(
+            fake.recorded(),
+            "cargo\tclippy\t--version\nrustup\tcomponent\tadd\tclippy\n"
+        );
+    }
+
+    #[test]
+    fn an_install_command_with_no_stderr_still_exits_two_with_its_status() {
+        let fake = FakeTools::new(true);
+
+        fake.install("silent-command-failure")
+            .assert()
+            .code(2)
+            .stdout("")
+            .stderr("jabuti: installing clippy with rustup exited with exit status: 42\n");
+
+        assert_eq!(
+            fake.recorded(),
+            "cargo\tclippy\t--version\nrustup\tcomponent\tadd\tclippy\n"
+        );
+    }
+
+    #[test]
+    fn a_tool_still_unavailable_after_installation_exits_two() {
+        let fake = FakeTools::new(true);
+
+        fake.install("post-probe-failure")
+            .assert()
+            .code(2)
+            .stdout("")
+            .stderr(contains("clippy is still unavailable after installation"));
+
+        assert_eq!(
+            fake.recorded(),
+            "cargo\tclippy\t--version\nrustup\tcomponent\tadd\tclippy\ncargo\tclippy\t--version\n"
+        );
+    }
+
+    #[test]
+    fn check_probes_but_never_provisions_missing_tools() {
+        let fake = FakeTools::new(true);
+        fs::write(
+            fake.project.path().join("jabuti.toml"),
+            "[rules]\nhotspot = { severity = \"off\" }\n\n[tools.clippy]\nenabled = true\n\n[tools.cargo-llvm-cov]\nenabled = true\n",
+        )
+        .expect("configuration written");
+
+        fake.check()
+            .assert()
+            .success()
+            .stdout(contains("No findings").and(contains("child stdout").not()))
+            .stderr("");
+
+        assert_eq!(
+            fake.recorded(),
+            "cargo\tclippy\t--version\ncargo\tllvm-cov\t--version\n"
+        );
+    }
 }

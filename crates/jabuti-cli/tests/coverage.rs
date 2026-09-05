@@ -325,9 +325,7 @@ fn the_coverage_producer_says_how_to_install_itself_when_it_cannot_be_found() {
         .env("PATH", "")
         .assert()
         .success()
-        .stdout(contains(
-            "install with `cargo install cargo-llvm-cov && rustup component add llvm-tools-preview`",
-        ));
+        .stdout(contains("install with `jabuti tools install`"));
 }
 
 #[test]

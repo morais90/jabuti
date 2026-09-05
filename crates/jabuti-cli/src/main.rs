@@ -30,7 +30,10 @@ struct Cli {
 enum Command {
     Languages,
 
-    Tools,
+    Tools {
+        #[command(subcommand)]
+        action: Option<ToolsAction>,
+    },
 
     Check {
         #[arg(default_value = ".")]
@@ -45,6 +48,11 @@ enum Command {
         #[arg(long, default_value_t = report::DEFAULT_LIMIT)]
         limit: usize,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum ToolsAction {
+    Install,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -67,7 +75,10 @@ fn main() -> ExitCode {
 fn run() -> Result<ExitCode> {
     match Cli::parse().command {
         Command::Languages => Ok(list_languages()),
-        Command::Tools => list_tools(),
+        Command::Tools { action: None } => list_tools(),
+        Command::Tools {
+            action: Some(ToolsAction::Install),
+        } => install_tools(),
         Command::Check {
             paths,
             since,
@@ -104,7 +115,7 @@ fn list_tools() -> Result<ExitCode> {
     for tool in tools::ALL {
         let note = match tool.status(&root, tools::enabled(&settings, tool.name)) {
             tools::Status::NotApplicable => "not applicable here".to_owned(),
-            tools::Status::Unavailable => format!("install with `{}`", tool.install_hint),
+            tools::Status::Unavailable => "install with `jabuti tools install`".to_owned(),
             tools::Status::Disabled => {
                 format!("enable with [tools.{}] enabled = true", tool.name)
             }
@@ -112,6 +123,23 @@ fn list_tools() -> Result<ExitCode> {
         };
 
         println!("{:<16} {note}", tool.name);
+    }
+
+    Ok(ExitCode::SUCCESS)
+}
+
+fn install_tools() -> Result<ExitCode> {
+    let (_, settings) = config::discover()?;
+    tools::known(&settings)?;
+    let root = std::env::current_dir()?;
+    let installed = tools::install(&root)?;
+
+    if installed.is_empty() {
+        println!("No tools need installation.");
+    } else {
+        for name in installed {
+            println!("Installed {name}.");
+        }
     }
 
     Ok(ExitCode::SUCCESS)

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use jabuti_core::model::Finding;
 use jabuti_core::tools::cargo_diagnostics;
 use jabuti_core::tools::coverage::Format;
@@ -19,10 +19,15 @@ pub(crate) enum Output {
     Coverage { file: &'static str },
 }
 
+struct Provision {
+    program: &'static str,
+    arguments: &'static [&'static str],
+}
+
 pub(crate) struct Tool {
     pub(crate) name: &'static str,
     pub(crate) applies_when: &'static [&'static str],
-    pub(crate) install_hint: &'static str,
+    provision: &'static [Provision],
     probe: &'static [&'static str],
     invoke: &'static [&'static str],
     output: Output,
@@ -31,7 +36,10 @@ pub(crate) struct Tool {
 pub(crate) static CLIPPY: Tool = Tool {
     name: "clippy",
     applies_when: &["Cargo.toml"],
-    install_hint: "rustup component add clippy",
+    provision: &[Provision {
+        program: "rustup",
+        arguments: &["component", "add", "clippy"],
+    }],
     probe: &["cargo", "clippy", "--version"],
     invoke: &[
         "cargo",
@@ -47,7 +55,22 @@ pub(crate) static CLIPPY: Tool = Tool {
 pub(crate) static LLVM_COV: Tool = Tool {
     name: "cargo-llvm-cov",
     applies_when: &["Cargo.toml"],
-    install_hint: "cargo install cargo-llvm-cov && rustup component add llvm-tools-preview",
+    provision: &[
+        Provision {
+            program: "cargo",
+            arguments: &[
+                "install",
+                "cargo-llvm-cov",
+                "--version",
+                "0.9.0",
+                "--locked",
+            ],
+        },
+        Provision {
+            program: "rustup",
+            arguments: &["component", "add", "llvm-tools-preview"],
+        },
+    ],
     probe: &["cargo", "llvm-cov", "--version"],
     invoke: &[
         "cargo",
@@ -80,8 +103,14 @@ impl Status {
 }
 
 impl Tool {
+    fn applies(&self, root: &Path) -> bool {
+        self.applies_when
+            .iter()
+            .any(|marker| root.join(marker).exists())
+    }
+
     pub(crate) fn status(&self, root: &Path, enabled: bool) -> Status {
-        if !self.applies_when.iter().any(|m| root.join(m).exists()) {
+        if !self.applies(root) {
             return Status::NotApplicable;
         }
         if !self.responds(root) {
@@ -92,6 +121,42 @@ impl Tool {
         }
 
         Status::Ready
+    }
+
+    fn install(&self, root: &Path) -> Result<()> {
+        for provision in self.provision {
+            let output = command(provision.program, root)
+                .args(provision.arguments)
+                .output()
+                .with_context(|| format!("installing {} with {}", self.name, provision.program))?;
+            if !output.status.success() {
+                let reason = String::from_utf8_lossy(&output.stderr)
+                    .lines()
+                    .last()
+                    .unwrap_or_default()
+                    .to_owned();
+                if reason.is_empty() {
+                    bail!(
+                        "installing {} with {} exited with {}",
+                        self.name,
+                        provision.program,
+                        output.status
+                    );
+                }
+                bail!(
+                    "installing {} with {} exited with {}: {reason}",
+                    self.name,
+                    provision.program,
+                    output.status
+                );
+            }
+        }
+
+        if !self.responds(root) {
+            bail!("{} is still unavailable after installation", self.name);
+        }
+
+        Ok(())
     }
 
     pub(crate) fn run(&self, root: &Path, project: &Path) -> Result<Vec<Finding>, String> {
@@ -160,6 +225,19 @@ impl Tool {
             .output()
             .is_ok_and(|output| output.status.success())
     }
+}
+
+pub(crate) fn install(root: &Path) -> Result<Vec<&'static str>> {
+    let mut installed = Vec::new();
+    for tool in ALL {
+        if !tool.applies(root) || tool.responds(root) {
+            continue;
+        }
+        tool.install(root)?;
+        installed.push(tool.name);
+    }
+
+    Ok(installed)
 }
 
 fn command(program: &str, root: &Path) -> Command {

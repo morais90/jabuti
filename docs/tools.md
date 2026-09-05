@@ -46,14 +46,33 @@ The identifier is `<tool>/<lint>`, which is what you use to adjust or silence it
 "clippy/struct_field_names" = { severity = "off" }
 ```
 
-## Nothing is installed for you
+## Installing missing tools
 
-If a tool is applicable but not available, jabuti tells you the command to install it and carries on
-without it. It does not download or install anything itself.
+```console
+$ jabuti tools install
+Installed clippy.
+Installed cargo-llvm-cov.
+```
 
-For clippy that is not a limitation, it is correctness. Clippy is a component of your Rust toolchain
-and has to match your compiler version. A version pinned by us independently of your toolchain would
-be the wrong version.
+Successful lines follow registry order. When nothing needs installation, the command prints
+`No tools need installation.`
+
+The install action takes no tool names. It provisions every registered tool that is applicable and
+unavailable, whether or not `[tools.*].enabled` is true. It does not enable a tool or write
+`jabuti.toml`. Bare `jabuti tools` remains a read-only status listing, and `jabuti check` never
+provisions or downloads anything.
+
+Each registry entry carries a curated, exact sequence of programs and arguments. jabuti starts them
+directly, never through a shell:
+
+- Clippy: `rustup component add clippy`.
+- `cargo-llvm-cov`: `cargo install cargo-llvm-cov --version 0.9.0 --locked`, then
+  `rustup component add llvm-tools-preview`.
+
+The rustup commands run in the project directory, so they install components for its active
+toolchain. These commands change tool availability only; runtime analyzer settings still come from
+the project. Tools that are already available or do not apply are left alone. If an installer cannot
+start, exits unsuccessfully or leaves the tool unavailable, `jabuti tools install` stops and exits 2.
 
 ## Your configuration is the configuration
 
