@@ -77,13 +77,43 @@ fn a_file_recorded_twice_adds_its_hits_up() {
 }
 
 #[test]
-fn a_line_record_that_does_not_parse_is_skipped_rather_than_failing_the_report() {
-    let file = lcov()
-        .file(Path::new("/home/someone/checkout/src/other.rs"))
-        .cloned()
-        .expect("the file is in the report");
+fn an_lcov_line_record_accepts_an_optional_checksum() {
+    let coverage = Coverage::parse(
+        Format::Lcov,
+        "SF:src/lib.rs\nDA:7,2,abc123\nend_of_record\n",
+    )
+    .expect("valid LCOV");
 
-    assert_eq!(hits_of(&file, 1..=4), [Some(0), Some(1), Some(0), None]);
+    assert_eq!(
+        coverage
+            .file(Path::new("/checkout/src/lib.rs"))
+            .and_then(|file| file.hits(7)),
+        Some(2)
+    );
+}
+
+#[rstest]
+#[case("", "line number")]
+#[case("not-a-line,0", "line number")]
+#[case("7", "hit count")]
+#[case("7,not-a-hit-count", "hit count")]
+fn an_lcov_line_record_rejects_a_missing_or_non_numeric_required_field(
+    #[case] record: &str,
+    #[case] expected_field: &str,
+) {
+    let report = format!("SF:src/lib.rs\nDA:{record}\nend_of_record\n");
+    let error = Coverage::parse(Format::Lcov, &report).expect_err("invalid LCOV");
+
+    assert!(
+        matches!(
+            &error,
+            CoverageError::InvalidLcovDataRecord {
+                record: actual_record,
+                field,
+            } if actual_record == record && *field == expected_field
+        ),
+        "{error}"
+    );
 }
 
 #[test]
@@ -177,6 +207,73 @@ fn a_jacoco_file_in_the_default_package_is_found_by_its_name_alone() {
             .file(Path::new("/checkout/src/main/kotlin/Main.kt"))
             .and_then(|file| file.hits(1)),
         Some(1)
+    );
+}
+
+fn jacoco_package(contents: &str) -> Result<Coverage, CoverageError> {
+    Coverage::parse(
+        Format::Jacoco,
+        &format!("<report><package name=\"shop\">{contents}</package></report>"),
+    )
+}
+
+#[test]
+fn a_jacoco_source_file_without_a_name_is_rejected() {
+    let error = jacoco_package("<sourcefile/>").expect_err("name is required");
+
+    assert!(
+        matches!(
+            &error,
+            CoverageError::MissingJacocoAttribute { element, attribute }
+                if *element == "sourcefile" && *attribute == "name"
+        ),
+        "{error}"
+    );
+}
+
+#[rstest]
+#[case("ci=\"0\"", "nr")]
+#[case("nr=\"7\"", "ci")]
+fn a_jacoco_line_without_a_required_number_is_rejected(
+    #[case] attributes: &str,
+    #[case] expected_attribute: &str,
+) {
+    let source = format!("<sourcefile name=\"Main.kt\"><line {attributes}/></sourcefile>");
+    let error = jacoco_package(&source).expect_err("attribute is required");
+
+    assert!(
+        matches!(
+            &error,
+            CoverageError::MissingJacocoAttribute { element, attribute }
+                if *element == "line" && *attribute == expected_attribute
+        ),
+        "{error}"
+    );
+}
+
+#[rstest]
+#[case("nr=\"not-a-line\" ci=\"0\"", "nr", "not-a-line")]
+#[case("nr=\"7\" ci=\"not-a-count\"", "ci", "not-a-count")]
+fn a_jacoco_line_with_a_non_numeric_required_number_is_rejected(
+    #[case] attributes: &str,
+    #[case] expected_attribute: &str,
+    #[case] expected_value: &str,
+) {
+    let source = format!("<sourcefile name=\"Main.kt\"><line {attributes}/></sourcefile>");
+    let error = jacoco_package(&source).expect_err("attribute must be numeric");
+
+    assert!(
+        matches!(
+            &error,
+            CoverageError::InvalidJacocoNumber {
+                element,
+                attribute,
+                value,
+            } if *element == "line"
+                && *attribute == expected_attribute
+                && value == expected_value
+        ),
+        "{error}"
     );
 }
 

@@ -28,6 +28,19 @@ impl Format {
 pub enum CoverageError {
     #[error("not well-formed XML: {0}")]
     Xml(#[from] roxmltree::Error),
+    #[error("LCOV DA record {record:?} has an invalid {field}")]
+    InvalidLcovDataRecord { record: String, field: &'static str },
+    #[error("JaCoCo <{element}> is missing its {attribute} attribute")]
+    MissingJacocoAttribute {
+        element: &'static str,
+        attribute: &'static str,
+    },
+    #[error("JaCoCo <{element}> has a non-numeric {attribute} attribute {value:?}")]
+    InvalidJacocoNumber {
+        element: &'static str,
+        attribute: &'static str,
+        value: String,
+    },
     #[error("no <report> element, so this is not a JaCoCo report")]
     NotJacoco,
     #[error("no SF: record, so this is not an LCOV report")]
@@ -85,8 +98,8 @@ fn lcov(text: &str) -> Result<Coverage, CoverageError> {
             coverage.entry(PathBuf::from(source));
         } else if let Some(data) = line.strip_prefix("DA:")
             && let Some(path) = &current
-            && let Some((number, hits)) = line_and_hits(data)
         {
+            let (number, hits) = line_and_hits(data)?;
             coverage.entry(path.clone()).record(number, hits);
         } else if line == "end_of_record" {
             current = None;
@@ -100,12 +113,29 @@ fn lcov(text: &str) -> Result<Coverage, CoverageError> {
     Ok(coverage)
 }
 
-fn line_and_hits(data: &str) -> Option<(u32, u32)> {
+fn line_and_hits(data: &str) -> Result<(u32, u32), CoverageError> {
     let mut fields = data.split(',');
-    let line = fields.next()?.trim().parse().ok()?;
-    let hits = fields.next()?.trim().parse().ok()?;
+    let line = fields
+        .next()
+        .ok_or_else(|| invalid_lcov_data(data, "line number"))?
+        .trim()
+        .parse()
+        .map_err(|_| invalid_lcov_data(data, "line number"))?;
+    let hits = fields
+        .next()
+        .ok_or_else(|| invalid_lcov_data(data, "hit count"))?
+        .trim()
+        .parse()
+        .map_err(|_| invalid_lcov_data(data, "hit count"))?;
 
-    Some((line, hits))
+    Ok((line, hits))
+}
+
+fn invalid_lcov_data(record: &str, field: &'static str) -> CoverageError {
+    CoverageError::InvalidLcovDataRecord {
+        record: record.to_owned(),
+        field,
+    }
 }
 
 fn jacoco(text: &str) -> Result<Coverage, CoverageError> {
@@ -123,29 +153,36 @@ fn jacoco(text: &str) -> Result<Coverage, CoverageError> {
 
     let mut coverage = Coverage::default();
     for package in children_named(report, "package") {
-        record_package(&mut coverage, package);
+        record_package(&mut coverage, package)?;
     }
 
     Ok(coverage)
 }
 
-fn record_package(coverage: &mut Coverage, package: Node<'_, '_>) {
+fn record_package(coverage: &mut Coverage, package: Node<'_, '_>) -> Result<(), CoverageError> {
     let directory = package.attribute("name").unwrap_or_default();
 
     for source in children_named(package, "sourcefile") {
-        let Some(name) = source.attribute("name") else {
-            continue;
-        };
-        record_source(coverage.entry(Path::new(directory).join(name)), source);
+        let name = source
+            .attribute("name")
+            .ok_or(CoverageError::MissingJacocoAttribute {
+                element: "sourcefile",
+                attribute: "name",
+            })?;
+        record_source(coverage.entry(Path::new(directory).join(name)), source)?;
     }
+
+    Ok(())
 }
 
-fn record_source(file: &mut FileCoverage, source: Node<'_, '_>) {
+fn record_source(file: &mut FileCoverage, source: Node<'_, '_>) -> Result<(), CoverageError> {
     for line in children_named(source, "line") {
-        if let (Some(number), Some(covered)) = (numeric(line, "nr"), numeric(line, "ci")) {
-            file.record(number, covered);
-        }
+        let number = numeric(line, "nr")?;
+        let covered = numeric(line, "ci")?;
+        file.record(number, covered);
     }
+
+    Ok(())
 }
 
 fn children_named<'a, 'input>(
@@ -156,8 +193,21 @@ fn children_named<'a, 'input>(
         .filter(move |child| child.tag_name().name() == name)
 }
 
-fn numeric(node: Node<'_, '_>, attribute: &str) -> Option<u32> {
-    node.attribute(attribute)?.parse().ok()
+fn numeric(node: Node<'_, '_>, attribute: &'static str) -> Result<u32, CoverageError> {
+    let value = node
+        .attribute(attribute)
+        .ok_or(CoverageError::MissingJacocoAttribute {
+            element: "line",
+            attribute,
+        })?;
+
+    value
+        .parse()
+        .map_err(|_| CoverageError::InvalidJacocoNumber {
+            element: "line",
+            attribute,
+            value: value.to_owned(),
+        })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

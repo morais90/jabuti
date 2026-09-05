@@ -89,7 +89,7 @@ stays quiet rather than reporting every line of a file it knows nothing about.
 line the change added can be reported. Editing a function with poor coverage reports nothing about
 the lines that were already there.
 
-## A stale report is not read
+## A stale or malformed report is not read
 
 A report written before the last change to a file describes code that no longer exists. Reading it
 anyway would mark every new line uncovered, because the tests that ran had never seen those lines,
@@ -99,6 +99,10 @@ any changed file the rule reads nothing and says why:
 ```
 jabuti: uncovered-new-code skipped: target/jabuti/coverage.lcov is older than src/tasks.rs
 ```
+
+A malformed required record blocks the rule for the same reason: silently dropping one could turn
+unknown coverage into a clean result. The skip notice names the report and the invalid LCOV `DA:`
+field or JaCoCo attribute. Optional LCOV checksum fields remain valid.
 
 Regenerate the report, or enable the tool that produces it, and the rule runs on the next check.
 When the rule is on and no report is named or produced at all, it says that too:

@@ -41,13 +41,20 @@ fn lcov(directory: &TempDir, file: &str, hits: &[(u32, u32)]) -> String {
     text
 }
 
-fn make_old(directory: &TempDir, name: &str) {
+fn set_modified(directory: &TempDir, name: &str, modified: SystemTime) {
     let file = fs::File::options()
         .write(true)
         .open(directory.path().join(name))
-        .expect("report exists");
-    file.set_modified(SystemTime::UNIX_EPOCH + Duration::from_hours(24))
-        .expect("modification time set");
+        .expect("file exists");
+    file.set_modified(modified).expect("modification time set");
+}
+
+fn make_old(directory: &TempDir, name: &str) {
+    set_modified(
+        directory,
+        name,
+        SystemTime::UNIX_EPOCH + Duration::from_hours(24),
+    );
 }
 
 fn since_head(directory: &TempDir) -> assert_cmd::Command {
@@ -157,6 +164,53 @@ fn a_report_older_than_a_changed_file_is_skipped_rather_than_read() {
         .success()
         .stdout("No findings across 1 file and 2 units.\n")
         .stderr("jabuti: uncovered-new-code skipped: coverage.lcov is older than src/lib.rs\n");
+}
+
+#[test]
+fn a_newer_changed_file_for_a_language_where_the_rule_is_off_does_not_make_the_report_stale() {
+    let directory = repository(&[
+        (
+            "jabuti.toml",
+            "[coverage]\nreport = \"coverage.lcov\"\n\n[rules]\nhotspot = { severity = \"off\" }\nuncovered-new-code = { severity = \"warning\" }\n\n[languages.rust.rules]\nuncovered-new-code = { severity = \"off\" }\n",
+        ),
+        ("src/lib.rs", "fn existing() {}\n"),
+        ("src/main/kotlin/Catalog.kt", "fun existing(): Int = 1\n"),
+    ]);
+    write(
+        &directory,
+        "src/lib.rs",
+        "fn existing() {}\nfn added() {}\n",
+    );
+    write(
+        &directory,
+        "src/main/kotlin/Catalog.kt",
+        "fun existing(): Int = 1\n\nfun added(): Int {\n    return 2\n}\n",
+    );
+    let report = lcov(&directory, "src/main/kotlin/Catalog.kt", &[(3, 0), (4, 0)]);
+    write(&directory, "coverage.lcov", &report);
+    set_modified(
+        &directory,
+        "src/main/kotlin/Catalog.kt",
+        SystemTime::UNIX_EPOCH + Duration::from_hours(24),
+    );
+    set_modified(
+        &directory,
+        "coverage.lcov",
+        SystemTime::UNIX_EPOCH + Duration::from_hours(48),
+    );
+    set_modified(
+        &directory,
+        "src/lib.rs",
+        SystemTime::UNIX_EPOCH + Duration::from_hours(72),
+    );
+
+    since_head(&directory)
+        .assert()
+        .success()
+        .stdout(contains(
+            "src/main/kotlin/Catalog.kt:3  warning  uncovered-new-code  2 lines run by no test",
+        ))
+        .stderr("");
 }
 
 #[test]
