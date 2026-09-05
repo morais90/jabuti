@@ -2,62 +2,312 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use tree_sitter::Node;
 
-use super::lang;
+use super::lang::{self, Table};
 use crate::model::Span;
 use crate::syntax::{self, Parsed};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Declared {
+    pub span: Span,
+    pub public: bool,
+    pub marked: bool,
+    pub owner: Option<String>,
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FileFacts {
     pub module: String,
-    pub declares: BTreeSet<String>,
+    pub declares: BTreeMap<String, Vec<Declared>>,
+    pub exports: BTreeSet<String>,
+    pub glob_exports: BTreeSet<String>,
     pub paths: BTreeMap<String, Span>,
-    pub names: BTreeMap<String, Span>,
+    pub names: BTreeMap<String, BTreeSet<Span>>,
+    pub mentions: BTreeMap<String, BTreeSet<Span>>,
 }
 
 pub fn facts(parsed: &Parsed<'_>) -> FileFacts {
-    let mut facts = FileFacts::default();
+    let table = lang::table(parsed.language());
+    let mut recorder = Recorder {
+        facts: FileFacts::default(),
+        source: parsed.source(),
+        table,
+    };
 
-    parsed.for_each_match(lang::references(parsed.language()), |matched, query| {
+    parsed.for_each_match(table.references(), |matched, query| {
         for capture in matched.captures {
             let name = query.capture_names()[capture.index as usize];
-            record(&mut facts, name, capture.node, parsed.source());
+            recorder.record(name, capture.node);
         }
     });
 
-    facts
+    recorder.facts
 }
 
-fn record(facts: &mut FileFacts, capture: &str, node: Node<'_>, source: &str) {
-    let at = syntax::span_of(node);
+struct Recorder<'a> {
+    facts: FileFacts,
+    source: &'a str,
+    table: &'a Table,
+}
 
-    match capture {
-        "package" => facts.module = syntax::text_of(node, source),
-        "declaration" => {
-            facts.declares.insert(syntax::text_of(node, source));
+impl Recorder<'_> {
+    fn record(&mut self, capture: &str, node: Node<'_>) {
+        match capture {
+            "package" => self.facts.module = syntax::text_of(node, self.source),
+            "declaration" => self.declare(node),
+            "export.module" | "export.use" => self.export(capture, node),
+            "reference.name" => self.name(node),
+            "reference.mention" => self.mention(node),
+            "reference.path" | "reference.token" | "reference.list" => self.path(capture, node),
+            _ => {}
         }
-        "reference.name" => remember(&mut facts.names, syntax::text_of(node, source), at),
-        "reference.path" => {
-            if let Some(path) = widest_path(node, source) {
-                remember(&mut facts.paths, path, at);
-            }
+    }
+
+    fn declare(&mut self, name: Node<'_>) {
+        let Some(item) = name.parent() else {
+            return;
+        };
+        let found = Declared {
+            span: syntax::span_of(item),
+            public: is_public(item, self.source, self.table),
+            marked: is_marked(item, self.source, self.table),
+            owner: owner_of(item, self.source),
+        };
+
+        self.facts
+            .declares
+            .entry(syntax::text_of(name, self.source))
+            .or_default()
+            .push(found);
+    }
+
+    fn export(&mut self, capture: &str, node: Node<'_>) {
+        if !plainly_public(node) {
+            return;
         }
-        "reference.token" => {
-            if let Some(path) = token_path(node, source) {
-                remember(&mut facts.paths, path, at);
-            }
+        if capture == "export.module" {
+            self.facts
+                .exports
+                .insert(syntax::text_of(node, self.source));
+        } else {
+            self.facts.exports.extend(reexported(node, self.source));
+            self.facts
+                .glob_exports
+                .extend(glob_exported(node, self.source));
         }
-        "reference.list" => {
-            for path in list_paths(node, source) {
-                remember(&mut facts.paths, path, at);
-            }
+    }
+
+    fn name(&mut self, node: Node<'_>) {
+        let at = syntax::span_of(node);
+        self.facts
+            .names
+            .entry(syntax::text_of(node, self.source))
+            .or_default()
+            .insert(at);
+    }
+
+    fn mention(&mut self, node: Node<'_>) {
+        if declares_here(node) {
+            return;
         }
-        _ => {}
+        let at = syntax::span_of(node);
+        self.facts
+            .mentions
+            .entry(syntax::text_of(node, self.source))
+            .or_default()
+            .insert(at);
+    }
+
+    fn path(&mut self, capture: &str, node: Node<'_>) {
+        let at = syntax::span_of(node);
+        let paths = match capture {
+            "reference.path" => widest_path(node, self.source).into_iter().collect(),
+            "reference.token" => token_path(node, self.source).into_iter().collect(),
+            _ => list_paths(node, self.source),
+        };
+
+        for path in paths {
+            self.facts.paths.entry(path).or_insert(at);
+        }
     }
 }
 
-fn remember(seen: &mut BTreeMap<String, Span>, name: String, at: Span) {
-    seen.entry(name).or_insert(at);
+fn is_public(item: Node<'_>, source: &str, table: &Table) -> bool {
+    let visibility = modifiers_of(item, table)
+        .into_iter()
+        .find(|node| node.kind() == "visibility_modifier");
+
+    match visibility {
+        None => table.public_by_default,
+        Some(node) if table.public_by_default => !table
+            .restricting_modifiers
+            .contains(&syntax::text_of(node, source).as_str()),
+        Some(node) => node.named_child_count() == 0,
+    }
 }
+
+fn modifiers_of<'tree>(item: Node<'tree>, table: &Table) -> Vec<Node<'tree>> {
+    let mut cursor = item.walk();
+    let mut found = Vec::new();
+
+    for child in item.children(&mut cursor) {
+        if child.kind() == "visibility_modifier" {
+            found.push(child);
+        }
+        if table.decorators_within.contains(&child.kind()) {
+            let mut inner = child.walk();
+            found.extend(child.children(&mut inner));
+        }
+    }
+
+    found
+}
+
+fn is_marked(item: Node<'_>, source: &str, table: &Table) -> bool {
+    decorated_beyond_inert(item, source, table) || inside_test_scope(item, source, table)
+}
+
+fn decorated_beyond_inert(item: Node<'_>, source: &str, table: &Table) -> bool {
+    decorators_of(item, table).iter().any(|decorator| {
+        let name = decorator_name(&syntax::text_of(*decorator, source));
+        !table.inert_decorators.contains(&name.as_str())
+    })
+}
+
+fn inside_test_scope(item: Node<'_>, source: &str, table: &Table) -> bool {
+    let markers = table.id.spec().test_markers;
+    let mut current = Some(item);
+
+    while let Some(node) = current {
+        let marked = decorators_of(node, table).iter().any(|decorator| {
+            let text = syntax::text_of(*decorator, source);
+            markers.iter().any(|mark| text.contains(mark))
+        });
+        if marked {
+            return true;
+        }
+        current = node.parent();
+    }
+
+    false
+}
+
+fn decorators_of<'tree>(item: Node<'tree>, table: &Table) -> Vec<Node<'tree>> {
+    let mut decorators = Vec::new();
+
+    let mut sibling = item.prev_sibling();
+    while let Some(current) = sibling {
+        if table.decorators_before.contains(&current.kind()) {
+            decorators.push(current);
+        } else if !current.is_extra() {
+            break;
+        }
+        sibling = current.prev_sibling();
+    }
+
+    decorators.extend(
+        modifiers_of(item, table)
+            .into_iter()
+            .filter(|node| node.kind() == table.annotation),
+    );
+
+    decorators
+}
+
+fn decorator_name(text: &str) -> String {
+    let inside = text.trim_start_matches(['#', '!', '[', '@']);
+
+    inside
+        .split(['(', ']', '=', ' ', '<'])
+        .next()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn owner_of(item: Node<'_>, source: &str) -> Option<String> {
+    let block = item.parent()?;
+    if block.kind() != "declaration_list" {
+        return None;
+    }
+    let owner = block.parent()?;
+    if owner.kind() != "impl_item" {
+        return None;
+    }
+    let mut typed = owner.child_by_field_name("type")?;
+    if typed.kind() == "generic_type" {
+        typed = typed.child_by_field_name("type")?;
+    }
+
+    Some(syntax::text_of(typed, source))
+}
+
+fn plainly_public(name: Node<'_>) -> bool {
+    let Some(item) = name.parent() else {
+        return false;
+    };
+    let mut cursor = item.walk();
+
+    item.children(&mut cursor)
+        .find(|child| child.kind() == "visibility_modifier")
+        .is_some_and(|visibility| visibility.named_child_count() == 0)
+}
+
+fn reexported(argument: Node<'_>, source: &str) -> Vec<String> {
+    leaves(argument, source)
+        .iter()
+        .filter_map(|path| path.rsplit("::").next())
+        .map(str::to_owned)
+        .collect()
+}
+
+fn glob_exported(argument: Node<'_>, source: &str) -> Vec<String> {
+    globs(argument, source)
+        .iter()
+        .filter_map(|path| {
+            path.strip_suffix("::*")
+                .or_else(|| path.strip_suffix("::self"))
+                .map(str::to_owned)
+        })
+        .collect()
+}
+
+fn globs(node: Node<'_>, source: &str) -> Vec<String> {
+    match node.kind() {
+        "use_wildcard" | "self" => vec![syntax::text_of(node, source)],
+        "scoped_use_list" => prefixed(node, source, globs),
+        _ => Vec::new(),
+    }
+}
+
+fn declares_here(node: Node<'_>) -> bool {
+    let Some(parent) = node.parent() else {
+        return false;
+    };
+    if !DECLARING.contains(&parent.kind()) {
+        return false;
+    }
+
+    ["name", "type"].iter().any(|field| {
+        parent
+            .child_by_field_name(field)
+            .is_some_and(|named| named.id() == node.id())
+    })
+}
+
+const DECLARING: [&str; 13] = [
+    "struct_item",
+    "enum_item",
+    "union_item",
+    "trait_item",
+    "type_item",
+    "function_item",
+    "const_item",
+    "static_item",
+    "impl_item",
+    "class_declaration",
+    "object_declaration",
+    "function_declaration",
+    "type_alias",
+];
 
 fn widest_path(node: Node<'_>, source: &str) -> Option<String> {
     let mut widest = node;
@@ -87,6 +337,14 @@ fn list_paths(node: Node<'_>, source: &str) -> Vec<String> {
 }
 
 fn expanded(node: Node<'_>, source: &str) -> Vec<String> {
+    prefixed(node, source, leaves)
+}
+
+fn prefixed(
+    node: Node<'_>,
+    source: &str,
+    entries: fn(Node<'_>, &str) -> Vec<String>,
+) -> Vec<String> {
     let Some(prefix) = node.child_by_field_name("path") else {
         return Vec::new();
     };
@@ -98,7 +356,7 @@ fn expanded(node: Node<'_>, source: &str) -> Vec<String> {
     let mut cursor = list.walk();
 
     list.named_children(&mut cursor)
-        .flat_map(|entry| leaves(entry, source))
+        .flat_map(|entry| entries(entry, source))
         .map(|leaf| format!("{prefix}::{leaf}"))
         .collect()
 }

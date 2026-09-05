@@ -32,8 +32,12 @@ pub(crate) fn init_repository(directory: &TempDir) {
 }
 
 pub(crate) fn commit(directory: &TempDir, message: &str) {
-    git(directory, &["add", "-A"]);
+    stage(directory);
     git(directory, &["commit", "-qm", message]);
+}
+
+pub(crate) fn stage(directory: &TempDir) {
+    git(directory, &["add", "-A"]);
 }
 
 pub(crate) fn write(directory: &TempDir, name: &str, contents: &str) {

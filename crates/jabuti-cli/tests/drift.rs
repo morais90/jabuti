@@ -68,7 +68,7 @@ fn a_file_this_change_created_reports_no_dependency_because_all_of_them_are_new(
     write(
         &directory,
         "src/extra.rs",
-        "pub fn extra() -> String {\n    crate::git::run(&[\"log\"])\n}\n",
+        "fn extra() -> String {\n    crate::git::run(&[\"log\"])\n}\n",
     );
 
     jabuti(&directory)

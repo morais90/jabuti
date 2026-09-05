@@ -62,7 +62,7 @@ impl Index {
     }
 
     fn add_declarations(&mut self, source: &Source) {
-        for name in &source.facts.declares {
+        for name in source.facts.declares.keys() {
             let key = (source.facts.module.clone(), name.clone());
             self.declarations.insert(key, source.path.clone());
         }
@@ -81,6 +81,13 @@ impl Index {
         }
 
         earliest
+    }
+
+    pub fn descendant_module(&self, of: &Path, names: &[&str]) -> Option<PathBuf> {
+        let (root, mut segments) = rust_module(of);
+        segments.extend(names.iter().map(|name| (*name).to_owned()));
+
+        self.modules.get(&(root, segments)).cloned()
     }
 }
 
@@ -218,9 +225,9 @@ fn kotlin_targets(
         }
     }
 
-    for (name, at) in &source.facts.names {
+    for (name, spans) in &source.facts.names {
         let key = (source.facts.module.clone(), name.clone());
-        if let Some(target) = declarations.get(&key) {
+        if let (Some(target), Some(at)) = (declarations.get(&key), spans.first()) {
             found.push((target.clone(), *at));
         }
     }

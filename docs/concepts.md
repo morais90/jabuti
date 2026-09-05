@@ -124,8 +124,9 @@ waiting for a cleanup that never gets scheduled.
 
 ## What the graph sees
 
-Two rules, `new-dependency` and `layer-violation`, are answered from a graph of which files depend
-on which. The graph is built the same way for both, and its limits are the limits of both rules.
+Three rules, `new-dependency`, `layer-violation` and `speculative-api`, are answered from a graph of
+which files depend on which and which names each declares. The graph is built the same way for all
+three, and its limits are the limits of the rules.
 
 ### What counts as a dependency
 

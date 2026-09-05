@@ -3,10 +3,10 @@ source: crates/jabuti-core/tests/graph/main.rs
 expression: rendered(&facts)
 ---
 module org.example.catalog
-declares BookList
-declares CatalogService
-declares Registry
-declares describe
+declares BookList at 7 public
+declares CatalogService at 9 public
+declares Registry at 19 public
+declares describe at 23 public
 path java.time.LocalDateTime at 5
 path org.example.service.BookLifecycle at 4
 path org.example.storage.BookRepository at 3
@@ -23,3 +23,31 @@ name Shelf at 15
 name String at 23
 name author at 23
 name repository at 11
+mention Author at 23
+mention Book at 7
+mention BookLifecycle at 4
+mention BookList at 10
+mention BookRepository at 3,9
+mention BookSearch at 12
+mention Int at 10
+mention Lifecycle at 4,20
+mention List at 7
+mention LocalDateTime at 5,13
+mention Shelf at 15
+mention String at 23
+mention arrange at 15
+mention author at 23
+mention catalog at 1
+mention example at 1,3,4
+mention findAll at 11
+mention java at 5
+mention limit at 10,11,12
+mention name at 23
+mention now at 13
+mention org at 1,3,4
+mention repository at 9,11
+mention search at 12,15
+mention service at 4
+mention stamp at 13,15
+mention storage at 3
+mention time at 5

@@ -1,17 +1,17 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+mod common;
+mod surface;
+
+use common::{fixture_root, sources_under};
 use jabuti_core::graph::facts::{self, FileFacts};
-use jabuti_core::graph::index::{self, Edges, Source};
+use jabuti_core::graph::index::{self, Edges};
 use jabuti_core::graph::layers::{Layers, Violation, violations};
 use jabuti_core::{lang, syntax};
 
 fn read_fixture(relative: &str) -> String {
     let path = fixture_root().join(relative);
     std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("missing fixture {relative}"))
-}
-
-fn fixture_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/graph")
 }
 
 fn facts_of(relative: &str, spec: &'static lang::LangSpec) -> FileFacts {
@@ -21,30 +21,50 @@ fn facts_of(relative: &str, spec: &'static lang::LangSpec) -> FileFacts {
 
 fn rendered(facts: &FileFacts) -> String {
     let mut lines = vec![format!("module {}", facts.module)];
-    lines.extend(facts.declares.iter().map(|name| format!("declares {name}")));
+    lines.extend(facts.declares.iter().flat_map(|(name, declarations)| {
+        declarations.iter().map(move |declared| {
+            format!(
+                "declares {name} at {} {}{}{}",
+                declared.span.start_line,
+                if declared.public { "public" } else { "private" },
+                if declared.marked { " marked" } else { "" },
+                declared
+                    .owner
+                    .as_ref()
+                    .map(|owner| format!(" on {owner}"))
+                    .unwrap_or_default()
+            )
+        })
+    }));
+    lines.extend(facts.exports.iter().map(|name| format!("exports {name}")));
+    lines.extend(
+        facts
+            .glob_exports
+            .iter()
+            .map(|path| format!("exports {path}::*")),
+    );
     lines.extend(
         facts
             .paths
             .iter()
             .map(|(path, at)| format!("path {path} at {}", at.start_line)),
     );
-    lines.extend(
-        facts
-            .names
-            .iter()
-            .map(|(name, at)| format!("name {name} at {}", at.start_line)),
-    );
+    lines.extend(facts.names.iter().map(|(name, spans)| {
+        let lines: Vec<String> = spans.iter().map(|at| at.start_line.to_string()).collect();
+        format!("name {name} at {}", lines.join(","))
+    }));
+    lines.extend(facts.mentions.iter().map(|(name, spans)| {
+        let lines: Vec<String> = spans.iter().map(|at| at.start_line.to_string()).collect();
+        format!("mention {name} at {}", lines.join(","))
+    }));
 
     lines.join("\n")
 }
 
-#[test]
-fn a_rust_file_reports_every_path_it_writes_wherever_it_wrote_it() {
-    let facts = facts_of("references.rs", &lang::RUST);
-
-    assert_eq!(
-        rendered(&facts),
-        "module \n\
+const RUST_FACTS: &str = "module \n\
+         declares Widget at 13 public\n\
+         declares describe at 27 public on Widget\n\
+         declares draw at 19 public on Widget\n\
          path crate::config::Settings at 1\n\
          path crate::git::run at 20\n\
          path crate::policy::Policy at 3\n\
@@ -61,8 +81,51 @@ fn a_rust_file_reports_every_path_it_writes_wherever_it_wrote_it() {
          path super::git at 4\n\
          path super::scan at 5\n\
          path super::since::Changes::new at 22\n\
-         path super::tools::probe at 5"
-    );
+         path super::tools::probe at 5\n\
+         mention BTreeMap at 8,15\n\
+         mention Changes at 22\n\
+         mention Helper at 7\n\
+         mention Line at 2,6,15\n\
+         mention Named at 3\n\
+         mention Policy at 3\n\
+         mention Row at 6\n\
+         mention Rule at 3\n\
+         mention Serialize at 9\n\
+         mention Settings at 1,14\n\
+         mention String at 27\n\
+         mention Width at 6\n\
+         mention agent at 2,6\n\
+         mention collections at 8\n\
+         mention config at 1\n\
+         mention defaults at 21\n\
+         mention format at 28\n\
+         mention git at 4,20\n\
+         mention head at 20,24\n\
+         mention helper at 22,24\n\
+         mention inner at 7,11\n\
+         mention len at 24\n\
+         mention lines at 15,24\n\
+         mention name at 28\n\
+         mention new at 22\n\
+         mention policy at 3,21,24\n\
+         mention probe at 5,28\n\
+         mention render at 2,6\n\
+         mention report at 2\n\
+         mention run at 20\n\
+         mention scan at 5\n\
+         mention serde at 9\n\
+         mention settings at 14\n\
+         mention since at 22\n\
+         mention std at 8\n\
+         mention strict at 21\n\
+         mention theme at 6\n\
+         mention tools at 5,28";
+
+#[test]
+fn a_rust_file_reports_every_path_it_writes_wherever_it_wrote_it() {
+    let facts = facts_of("references.rs", &lang::RUST);
+
+    assert_eq!(rendered(&facts), RUST_FACTS);
 }
 
 #[test]
@@ -117,49 +180,6 @@ fn a_kotlin_file_reports_its_package_its_declarations_and_every_bare_name() {
     let facts = facts_of("references.kt", &lang::KOTLIN);
 
     insta::assert_snapshot!(rendered(&facts));
-}
-
-fn sources_under(relative: &str, spec: &'static lang::LangSpec) -> Vec<Source> {
-    let root = fixture_root().join(relative);
-
-    let mut paths = Vec::new();
-    gather(&root, &mut paths);
-    paths.sort();
-
-    paths
-        .into_iter()
-        .map(|path| {
-            let source = std::fs::read_to_string(&path).expect("fixture readable");
-            let facts = facts::facts(
-                &syntax::parse(&source, spec)
-                    .unwrap_or_else(|_| panic!("fixture {} parses cleanly", path.display())),
-            );
-            let relative = path
-                .strip_prefix(&root)
-                .expect("under the root")
-                .to_path_buf();
-
-            Source {
-                path: relative,
-                language: spec.id,
-                facts,
-            }
-        })
-        .collect()
-}
-
-fn gather(root: &Path, found: &mut Vec<PathBuf>) {
-    for entry in std::fs::read_dir(root)
-        .expect("fixture directory")
-        .flatten()
-    {
-        let path = entry.path();
-        if path.is_dir() {
-            gather(&path, found);
-        } else {
-            found.push(path);
-        }
-    }
 }
 
 fn drawn(edges: &Edges) -> String {

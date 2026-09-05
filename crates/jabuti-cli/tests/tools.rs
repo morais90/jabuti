@@ -144,7 +144,7 @@ fn a_tool_that_fails_without_reporting_anything_says_so_and_does_not_pass_silent
 fn a_lint_outside_the_changed_lines_is_left_out_when_scoping_to_a_diff() {
     let directory = rust_project(&[("jabuti.toml", CLIPPY_ON)]);
     common::init_repository(&directory);
-    common::write(&directory, "src/other.rs", "pub fn added() {}\n");
+    common::write(&directory, "src/other.rs", "fn added() {}\n");
 
     jabuti(&directory)
         .arg("--since")

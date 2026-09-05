@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct Span {
     pub start_line: u32,
     pub end_line: u32,
@@ -44,6 +44,7 @@ pub enum Rule {
     Hotspot,
     LayerViolation,
     NewDependency,
+    SpeculativeApi,
     CognitiveComplexity,
     CyclomaticComplexity,
     FileLines,
@@ -52,13 +53,14 @@ pub enum Rule {
 }
 
 impl Rule {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Churn,
         Self::DuplicateBlock,
         Self::ErrorMasking,
         Self::Hotspot,
         Self::LayerViolation,
         Self::NewDependency,
+        Self::SpeculativeApi,
         Self::CognitiveComplexity,
         Self::CyclomaticComplexity,
         Self::FileLines,
@@ -74,6 +76,7 @@ impl Rule {
             Self::Hotspot => "hotspot",
             Self::LayerViolation => "layer-violation",
             Self::NewDependency => "new-dependency",
+            Self::SpeculativeApi => "speculative-api",
             Self::CognitiveComplexity => "cognitive-complexity",
             Self::CyclomaticComplexity => "cyclomatic-complexity",
             Self::FileLines => "file-lines",

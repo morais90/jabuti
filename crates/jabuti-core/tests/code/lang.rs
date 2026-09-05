@@ -1,6 +1,4 @@
-use std::path::Path;
-
-use jabuti_core::code::lang::{declared_fields, declared_node_kinds, is_test_path};
+use jabuti_core::code::lang::{declared_fields, declared_node_kinds};
 use jabuti_core::code::{duplication, masking, metrics, units};
 use jabuti_core::lang::{self, LanguageId};
 use jabuti_core::syntax;
@@ -53,33 +51,4 @@ fn a_language_that_wraps_its_else_branch_declares_the_wrapper() {
             .any(|(kind, _)| *kind == "else_clause"),
         "kotlin has no wrapper to declare"
     );
-}
-
-#[test]
-fn a_file_under_a_test_directory_is_recognised_by_its_path() {
-    assert!(is_test_path(
-        LanguageId::Rust,
-        Path::new("crates/x/tests/behaviour.rs")
-    ));
-    assert!(is_test_path(
-        LanguageId::Rust,
-        Path::new("crates/x/benches/speed.rs")
-    ));
-    assert!(!is_test_path(
-        LanguageId::Rust,
-        Path::new("crates/x/src/live.rs")
-    ));
-
-    assert!(is_test_path(
-        LanguageId::Kotlin,
-        Path::new("app/src/test/kotlin/T.kt")
-    ));
-    assert!(is_test_path(
-        LanguageId::Kotlin,
-        Path::new("app/src/androidTest/kotlin/T.kt")
-    ));
-    assert!(!is_test_path(
-        LanguageId::Kotlin,
-        Path::new("app/src/main/kotlin/T.kt")
-    ));
 }

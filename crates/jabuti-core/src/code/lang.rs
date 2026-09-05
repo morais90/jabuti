@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::sync::OnceLock;
 
 use tree_sitter::Query;
@@ -28,13 +27,11 @@ pub(crate) struct CognitiveSpec {
 
 #[derive(Debug)]
 pub(crate) struct Table {
-    id: LanguageId,
+    pub(crate) id: LanguageId,
     pub(crate) implicit_parameters: &'static [&'static str],
     pub(crate) metadata_nodes: &'static [&'static str],
     pub(crate) decorators_before: &'static [&'static str],
     pub(crate) decorators_within: &'static [&'static str],
-    pub(crate) test_markers: &'static [&'static str],
-    test_paths: &'static [&'static str],
     pub(crate) cognitive: CognitiveSpec,
     units_source: &'static str,
     comments_source: &'static str,
@@ -64,8 +61,6 @@ static KOTLIN: Table = Table {
     metadata_nodes: &["annotation", "modifiers"],
     decorators_before: &[],
     decorators_within: &["modifiers", "annotation"],
-    test_markers: &["@Test", "@ParameterizedTest", "@RepeatedTest"],
-    test_paths: &["test", "tests", "*Test"],
     cognitive: CognitiveSpec {
         conditional: "if_expression",
         condition_field: "condition",
@@ -96,18 +91,6 @@ static RUST: Table = Table {
     metadata_nodes: &["attribute_item", "inner_attribute_item"],
     decorators_before: &["attribute_item"],
     decorators_within: &["inner_attribute_item"],
-    test_markers: &[
-        "test]",
-        "[test(",
-        "::test(",
-        "bench]",
-        "[bench(",
-        "::bench(",
-        "rstest(",
-        "test_case",
-        "cfg(test)",
-    ],
-    test_paths: &["tests", "benches", "examples"],
     cognitive: CognitiveSpec {
         conditional: "if_expression",
         condition_field: "condition",
@@ -163,22 +146,4 @@ pub fn declared_fields(language: LanguageId) -> Vec<&'static str> {
 
 fn some(kind: &'static str) -> Option<&'static str> {
     (!kind.is_empty()).then_some(kind)
-}
-
-pub fn is_test_path(language: LanguageId, path: &Path) -> bool {
-    path.components()
-        .filter_map(|component| component.as_os_str().to_str())
-        .any(|directory| {
-            table(language)
-                .test_paths
-                .iter()
-                .any(|name| names_match(name, directory))
-        })
-}
-
-fn names_match(pattern: &str, directory: &str) -> bool {
-    match pattern.strip_prefix('*') {
-        Some(suffix) => directory.ends_with(suffix),
-        None => directory == pattern,
-    }
 }

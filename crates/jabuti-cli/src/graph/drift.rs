@@ -2,8 +2,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use jabuti_core::graph::index::{Index, Source};
-use jabuti_core::lang::{self, LangSpec};
-use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span, Unreadable};
+use jabuti_core::lang;
+use jabuti_core::model::{Detail, Finding, Rule, RuleId, Span, Unreadable};
 
 use super::sources;
 use crate::config::Settings;
@@ -17,9 +17,7 @@ pub(crate) fn findings(
     changes: &Changes,
 ) -> Result<(Vec<Finding>, Vec<Unreadable>)> {
     let rule = RuleId::Native(Rule::NewDependency);
-    let base = crate::git::run(&["merge-base", "HEAD", changes.reference()])?
-        .trim()
-        .to_owned();
+    let base = sources::base_of(changes)?;
     let (indexed, unreadable) = sources::known(paths, project);
     let index = Index::of(&indexed);
 
@@ -28,7 +26,7 @@ pub(crate) fn findings(
         let Some(spec) = lang::detect(path) else {
             continue;
         };
-        let Some(severity) = gating(settings, spec) else {
+        let Some(severity) = super::reporting(settings, spec.id, Rule::NewDependency) else {
             continue;
         };
         let shown = project::display(path, project);
@@ -36,7 +34,7 @@ pub(crate) fn findings(
         let Some(inside) = changes.relative(path) else {
             continue;
         };
-        let Some(before) = previous(&base, &inside) else {
+        let Some(before) = sources::at_base(&base, &inside) else {
             continue;
         };
         let Some(now) = sources::source_of(&shown, spec, sources::contents(path).as_deref()) else {
@@ -61,18 +59,6 @@ pub(crate) fn findings(
     }
 
     Ok((found, unreadable))
-}
-
-fn gating(settings: &Settings, spec: &'static LangSpec) -> Option<Severity> {
-    settings
-        .policy
-        .config_for(spec.id, Rule::NewDependency)
-        .map(|config| config.severity)
-        .filter(|severity| *severity != Severity::Off)
-}
-
-fn previous(base: &str, inside: &Path) -> Option<String> {
-    crate::git::run(&["show", &format!("{base}:{}", inside.display())]).ok()
 }
 
 fn added(index: &Index, now: &Source, then: &Source) -> Vec<(PathBuf, Span)> {

@@ -179,10 +179,13 @@ fn scope_notices(settings: &config::Settings, scoped: bool) {
     if scoped && settings.enabled(Rule::Hotspot) {
         eprintln!("jabuti: hotspot ranks a whole repository, so it is not evaluated with --since");
     }
-    if !scoped && settings.gates(Rule::NewDependency) {
-        eprintln!(
-            "jabuti: new-dependency compares against an earlier revision, so it needs --since"
-        );
+    for rule in [Rule::NewDependency, Rule::SpeculativeApi] {
+        if !scoped && settings.gates(rule) {
+            eprintln!(
+                "jabuti: {} compares against an earlier revision, so it needs --since",
+                rule.id()
+            );
+        }
     }
 }
 

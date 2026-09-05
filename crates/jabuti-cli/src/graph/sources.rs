@@ -1,10 +1,14 @@
 use std::path::{Path, PathBuf};
 
+use anyhow::Result;
 use jabuti_core::graph::facts::{self, FileFacts};
 use jabuti_core::graph::index::Source;
 use jabuti_core::lang::LangSpec;
 use jabuti_core::model::Unreadable;
 use jabuti_core::{lang, syntax};
+use rayon::prelude::*;
+
+use crate::git::since::Changes;
 
 fn examine(path: &Path, project: &Path) -> Option<Result<Source, Unreadable>> {
     let spec = lang::detect(path)?;
@@ -58,6 +62,36 @@ pub(crate) fn known(paths: &[PathBuf], project: &Path) -> (Vec<Source>, Vec<Unre
     }
 
     (sources, unreadable)
+}
+
+pub(crate) fn all(paths: &[PathBuf], project: &Path) -> (Vec<Source>, Vec<Unreadable>) {
+    let examined: Vec<Result<Source, Unreadable>> = paths
+        .par_iter()
+        .filter_map(|path| examine(path, project))
+        .collect();
+    let mut sources = Vec::new();
+    let mut unreadable = Vec::new();
+
+    for outcome in examined {
+        match outcome {
+            Ok(source) => sources.push(source),
+            Err(skipped) => unreadable.push(skipped),
+        }
+    }
+
+    (sources, unreadable)
+}
+
+pub(crate) fn base_of(changes: &Changes) -> Result<String> {
+    Ok(
+        crate::git::run(&["merge-base", "HEAD", changes.reference()])?
+            .trim()
+            .to_owned(),
+    )
+}
+
+pub(crate) fn at_base(base: &str, inside: &Path) -> Option<String> {
+    crate::git::run(&["show", &format!("{base}:{}", inside.display())]).ok()
 }
 
 pub(crate) fn contents(path: &Path) -> Option<String> {

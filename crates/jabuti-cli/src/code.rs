@@ -117,7 +117,7 @@ fn masked_errors(
     let Some(spec) = lang::detect(path) else {
         return Vec::new();
     };
-    if jabuti_core::code::lang::is_test_path(spec.id, Path::new(shown)) {
+    if spec.is_test_path(Path::new(shown)) {
         return Vec::new();
     }
 

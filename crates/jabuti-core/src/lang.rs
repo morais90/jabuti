@@ -34,6 +34,8 @@ pub struct LangSpec {
     pub id: LanguageId,
     pub grammar_version: &'static str,
     pub extensions: &'static [&'static str],
+    pub test_markers: &'static [&'static str],
+    test_paths: &'static [&'static str],
     grammar: fn() -> Language,
     loaded: OnceLock<Language>,
 }
@@ -55,6 +57,23 @@ impl LangSpec {
         Query::new(self.language(), source)
             .unwrap_or_else(|error| panic!("{:?} {name} query does not compile: {error}", self.id))
     }
+
+    pub fn is_test_path(&self, path: &Path) -> bool {
+        path.components()
+            .filter_map(|component| component.as_os_str().to_str())
+            .any(|directory| {
+                self.test_paths
+                    .iter()
+                    .any(|name| names_match(name, directory))
+            })
+    }
+}
+
+fn names_match(pattern: &str, directory: &str) -> bool {
+    match pattern.strip_prefix('*') {
+        Some(suffix) => directory.ends_with(suffix),
+        None => directory == pattern,
+    }
 }
 
 fn kotlin_grammar() -> Language {
@@ -65,6 +84,8 @@ pub static KOTLIN: LangSpec = LangSpec {
     id: LanguageId::Kotlin,
     grammar_version: "1.1.0",
     extensions: &["kt", "kts"],
+    test_markers: &["@Test", "@ParameterizedTest", "@RepeatedTest"],
+    test_paths: &["test", "tests", "*Test"],
     grammar: kotlin_grammar,
     loaded: OnceLock::new(),
 };
@@ -77,6 +98,18 @@ pub static RUST: LangSpec = LangSpec {
     id: LanguageId::Rust,
     grammar_version: "0.24.2",
     extensions: &["rs"],
+    test_markers: &[
+        "test]",
+        "[test(",
+        "::test(",
+        "bench]",
+        "[bench(",
+        "::bench(",
+        "rstest(",
+        "test_case",
+        "cfg(test)",
+    ],
+    test_paths: &["tests", "benches", "examples"],
     grammar: rust_grammar,
     loaded: OnceLock::new(),
 };

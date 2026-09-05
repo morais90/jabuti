@@ -127,7 +127,7 @@ fn a_violation_on_an_untouched_line_of_a_changed_file_stays_quiet_under_since() 
     write(
         &directory,
         "src/domain/book.rs",
-        &format!("{LEAKING_BOOK}\npub fn title() -> &'static str {{\n    \"untitled\"\n}}\n"),
+        &format!("{LEAKING_BOOK}\nfn title() -> &'static str {{\n    \"untitled\"\n}}\n"),
     );
 
     jabuti(&directory)

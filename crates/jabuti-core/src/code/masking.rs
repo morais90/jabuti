@@ -78,9 +78,11 @@ fn markers_around(node: Node<'_>, source: &str, table: &Table) -> bool {
             .filter(|child| table.decorators_within.contains(&child.kind())),
     );
 
+    let markers = table.id.spec().test_markers;
+
     attached.iter().any(|node| {
         node.utf8_text(source.as_bytes())
-            .is_ok_and(|text| table.test_markers.iter().any(|mark| text.contains(mark)))
+            .is_ok_and(|text| markers.iter().any(|mark| text.contains(mark)))
     })
 }
 
