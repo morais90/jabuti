@@ -20,6 +20,25 @@ fn finding(severity: Severity, line: u32, subject: Option<&str>) -> Finding {
     }
 }
 
+fn tool_finding() -> Finding {
+    Finding {
+        rule: RuleId::External {
+            tool: "clippy".to_owned(),
+            lint: "needless_range_loop".to_owned(),
+        },
+        severity: Severity::Warning,
+        path: "src/lib.rs".to_owned(),
+        span: Span {
+            start_line: 3,
+            end_line: 3,
+        },
+        subject: None,
+        detail: Detail::Message {
+            message: "the loop variable is only used to index".to_owned(),
+        },
+    }
+}
+
 fn scanned() -> Scanned {
     Scanned {
         files: 42,
@@ -101,22 +120,7 @@ fn the_json_report_carries_a_schema_a_summary_and_the_findings() {
 
 #[test]
 fn a_finding_from_a_tool_serialises_its_message_instead_of_a_threshold() {
-    let reported = Finding {
-        rule: RuleId::External {
-            tool: "clippy".to_owned(),
-            lint: "needless_range_loop".to_owned(),
-        },
-        severity: Severity::Warning,
-        path: "src/lib.rs".to_owned(),
-        span: Span {
-            start_line: 3,
-            end_line: 3,
-        },
-        subject: None,
-        detail: Detail::Message {
-            message: "the loop variable is only used to index".to_owned(),
-        },
-    };
+    let reported = tool_finding();
 
     let rendered = report::json(&[reported], &[], scanned());
 
@@ -129,6 +133,116 @@ fn a_finding_from_a_tool_serialises_its_message_instead_of_a_threshold() {
         "{rendered}"
     );
     assert!(!rendered.contains("measured"), "{rendered}");
+}
+
+#[test]
+fn the_sarif_report_carries_every_finding_and_unreadable_file() {
+    let findings = [
+        finding(Severity::Error, 120, Some("handle_request")),
+        tool_finding(),
+    ];
+    let unreadable = [
+        unreadable("src/theme.kt", 51),
+        unreadable("src/nav.kt", 314),
+    ];
+
+    let rendered = report::sarif(&findings, &unreadable);
+
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn a_clean_sarif_report_keeps_the_complete_empty_envelope() {
+    let rendered = report::sarif(&[], &[]);
+
+    let expected = r#"{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "jabuti",
+          "semanticVersion": "0.1.0",
+          "informationUri": "https://github.com/morais90/jabuti",
+          "rules": []
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "toolExecutionNotifications": []
+        }
+      ],
+      "results": []
+    }
+  ]
+}
+"#;
+
+    assert_eq!(rendered, expected);
+}
+
+#[test]
+fn sarif_artifact_uris_encode_bytes_and_normalise_the_platform_separator() {
+    let mut reported = finding(Severity::Warning, 7, None);
+    reported.path = format!(
+        "src{}safe-._~ space#100% café.rs",
+        std::path::MAIN_SEPARATOR
+    );
+
+    let rendered = report::sarif(&[reported], &[]);
+
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn sarif_rule_indices_point_into_lexically_sorted_descriptors() {
+    let findings = [
+        finding(Severity::Error, 120, Some("handle_request")),
+        tool_finding(),
+    ];
+    let rendered = report::sarif(&findings, &[]);
+    let document: serde_json::Value = serde_json::from_str(&rendered).expect("valid JSON");
+    let run = &document["runs"][0];
+
+    assert_eq!(
+        run["tool"]["driver"]["rules"],
+        serde_json::json!([
+            { "id": "clippy/needless_range_loop" },
+            { "id": "function-lines" }
+        ])
+    );
+    assert_eq!(run["results"][0]["ruleId"], "function-lines");
+    assert_eq!(run["results"][0]["ruleIndex"], 1);
+    assert_eq!(run["results"][1]["ruleId"], "clippy/needless_range_loop");
+    assert_eq!(run["results"][1]["ruleIndex"], 0);
+}
+
+#[test]
+fn structurally_distinct_rules_with_the_same_public_id_share_one_descriptor() {
+    let mut first = tool_finding();
+    first.rule = RuleId::External {
+        tool: "a".to_owned(),
+        lint: "b/c".to_owned(),
+    };
+    let mut second = tool_finding();
+    second.rule = RuleId::External {
+        tool: "a/b".to_owned(),
+        lint: "c".to_owned(),
+    };
+    let rendered = report::sarif(&[first, second], &[]);
+    let document: serde_json::Value = serde_json::from_str(&rendered).expect("valid JSON");
+    let run = &document["runs"][0];
+
+    assert_eq!(
+        run["tool"]["driver"]["rules"],
+        serde_json::json!([{ "id": "a/b/c" }])
+    );
+    assert_eq!(run["results"][0]["ruleId"], "a/b/c");
+    assert_eq!(run["results"][0]["ruleIndex"], 0);
+    assert_eq!(run["results"][1]["ruleId"], "a/b/c");
+    assert_eq!(run["results"][1]["ruleIndex"], 0);
 }
 
 #[test]

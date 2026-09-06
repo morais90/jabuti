@@ -6,6 +6,11 @@ pages use and how to read what `jabuti check` prints.
 jabuti reads Rust and Kotlin. [Languages](languages.md) covers what each one contributes and why
 their limits differ.
 
+## Output formats
+
+`jabuti check` defaults to compact agent output. [Other output shapes](concepts.md#other-shapes-of-output)
+cover JSON findings, raw measures and SARIF for programmatic consumers.
+
 ## Measures
 
 A measure is a number about your code, or about how that code has changed over time. On its own it says nothing about whether that number is good

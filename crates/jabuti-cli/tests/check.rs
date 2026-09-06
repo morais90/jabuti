@@ -217,6 +217,51 @@ fn the_json_format_names_the_rule_the_way_configuration_does() {
 }
 
 #[test]
+fn the_sarif_format_keeps_the_gate_result_when_the_agent_limit_is_zero() {
+    let directory = project(&[
+        ("jabuti.toml", &error_on_long_functions(5)),
+        ("src/lib.rs", &function_of("wide", 20)),
+    ]);
+
+    let output = jabuti(&directory)
+        .arg("--format")
+        .arg("sarif")
+        .arg("--limit")
+        .arg("0")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+    let document: serde_json::Value = serde_json::from_slice(&output).expect("SARIF is valid JSON");
+
+    assert_eq!(document["version"], "2.1.0");
+    assert_eq!(
+        document["runs"][0]["results"],
+        serde_json::json!([
+            {
+                "ruleId": "function-lines",
+                "ruleIndex": 0,
+                "level": "error",
+                "message": { "text": "wide measured 22, limit 5" },
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": { "uri": "src/lib.rs" },
+                            "region": { "startLine": 1, "endLine": 22 }
+                        }
+                    }
+                ]
+            }
+        ])
+    );
+    assert_eq!(
+        document["runs"][0]["invocations"][0]["executionSuccessful"],
+        true
+    );
+}
+
+#[test]
 fn the_measures_format_reports_a_rule_that_is_switched_off() {
     let directory = project(&[
         (

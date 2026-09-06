@@ -1,3 +1,5 @@
+mod sarif;
+
 use std::fmt::Write;
 
 use serde::Serialize;
@@ -91,25 +93,30 @@ fn not_measured(count: usize) -> String {
 }
 
 fn write_finding(rendered: &mut String, finding: &Finding) {
-    let subject = finding
-        .subject
-        .as_ref()
-        .map_or(String::new(), |name| format!("{name}  "));
-
-    let detail = match &finding.detail {
-        Detail::Threshold { measured, limit } => format!("measured {measured}, limit {limit}"),
-        Detail::Message { message } => message.clone(),
-    };
-
-    writeln!(
+    write!(
         rendered,
-        "{}:{}  {}  {}  {subject}{detail}",
+        "{}:{}  {}  {}  ",
         finding.path,
         finding.span.start_line,
         finding.severity.label(),
         finding.rule.id(),
     )
     .expect("writing to a string never fails");
+    if let Some(subject) = &finding.subject {
+        write!(rendered, "{subject}  ").expect("writing to a string never fails");
+    }
+    write_detail(rendered, &finding.detail);
+    rendered.push('\n');
+}
+
+fn write_detail(rendered: &mut String, detail: &Detail) {
+    match detail {
+        Detail::Threshold { measured, limit } => {
+            write!(rendered, "measured {measured}, limit {limit}")
+                .expect("writing to a string never fails");
+        }
+        Detail::Message { message } => rendered.push_str(message),
+    }
 }
 
 fn files_and_units(scanned: Scanned) -> String {
@@ -180,6 +187,10 @@ pub fn json(findings: &[Finding], unreadable: &[Unreadable], scanned: Scanned) -
     };
 
     rendered(&report)
+}
+
+pub fn sarif(findings: &[Finding], unreadable: &[Unreadable]) -> String {
+    sarif::render(findings, unreadable)
 }
 
 pub fn measures(readings: &[Reading], unreadable: &[Unreadable]) -> String {

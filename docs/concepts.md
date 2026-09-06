@@ -186,7 +186,7 @@ pattern mistake that leaves a layer silently empty and how the rule guards again
 
 ## Other shapes of output
 
-`--format agent` is the default and the one built for reading. Two others exist for programs.
+`--format agent` is the default and the one built for reading. Three others exist for programs.
 
 `--format json` carries the same findings with a schema version, so a build or a bot can consume
 them without parsing text:
@@ -212,6 +212,81 @@ them without parsing text:
 A rule is named the same way here as in your configuration, so anything you read out of the report
 can be written straight back into `jabuti.toml`.
 
+`--format sarif` emits one deterministic run conforming to SARIF 2.1.0 and names the
+[official errata schema](https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json):
+
+```json
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "jabuti",
+          "semanticVersion": "0.1.0",
+          "informationUri": "https://github.com/morais90/jabuti",
+          "rules": [
+            { "id": "function-lines" }
+          ]
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "toolExecutionNotifications": [
+            {
+              "level": "warning",
+              "message": { "text": "unreadable syntax from line 6" },
+              "locations": [
+                {
+                  "physicalLocation": {
+                    "artifactLocation": { "uri": "src/broken.rs" }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "results": [
+        {
+          "ruleId": "function-lines",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": { "text": "handle_request measured 71, limit 60" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/handler.rs" },
+                "region": { "startLine": 120, "endLine": 190 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+The driver carries the version of jabuti that produced the report. Its rule descriptors are sorted
+by identifier and carry identity only. `ruleIndex` links each result to that stable order without
+inventing descriptions or help text, including for rules contributed by external tools.
+
+Every finding becomes exactly one result. Jabuti errors map to SARIF `error`, warnings map to
+`warning`, and the message contains the same factual subject and detail as the agent line. Regions
+contain a one-based `startLine` and inclusive `endLine`. The model measures whole lines, so it does
+not pretend to know columns. Artifact URIs are RFC 3986 percent-encoded paths relative to the project
+root. Absolute checkout paths and URI bases never enter the report.
+
+A clean run keeps the run metadata and carries `"results": []`. SARIF always contains every result
+and every execution notification; `--limit` truncates only the agent format. `partialFingerprints`
+are deliberately absent because the reporting model does not carry source-line content from which
+to calculate them. [GitHub's `upload-sarif` action](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/integrate-with-existing-tools/upload-sarif-file)
+synthesizes them when it can read the source. A direct REST upload without them is accepted, but
+[may duplicate alerts across runs](https://docs.github.com/en/code-security/reference/code-scanning/sarif-files/sarif-support#data-for-preventing-duplicated-alerts).
+
 ## A file jabuti could not read
 
 A grammar can be older than the language it reads, and a file using syntax it does not know cannot be
@@ -220,7 +295,7 @@ be computed over a tree with a hole in it, so jabuti refuses it.
 
 What it must not do is refuse quietly. A caller who sees a clean verdict over code that was never
 looked at has been told something false, and that is the most expensive mistake this tool can make.
-So every file jabuti could not read is named in the output, in all three formats:
+So every file jabuti could not read is named in the output, in all four formats:
 
 ```console
 $ jabuti check .
@@ -231,10 +306,14 @@ src/broken.rs  unreadable syntax from line 6
 ```
 
 In `json` and `measures` the same files arrive under `unreadable`. The `json` summary repeats the
-count, so a consumer reading only that still sees it.
+count, so a consumer reading only that still sees it. In SARIF each file is a warning
+`toolExecutionNotification` with an artifact-only location. It is not a result, because an unreadable
+file describes the limits of the scan rather than a problem found in the source.
 
-The exit code does not change. The verdict on the files that were read is valid, and reporting an
-execution error would throw it away; what the caller needs to know is which files it does not cover.
+`executionSuccessful` remains true because jabuti completed the scan and the results it produced are
+valid. An unreadable file does not change the exit status. GitHub code scanning
+[currently ignores tool execution notifications](https://docs.github.com/en/code-security/reference/code-scanning/sarif-files/sarif-support#supported-properties),
+so retain the SARIF artifact or use the JSON output when those coverage gaps must remain visible.
 [`docs/languages.md`](languages.md) lists the constructs currently behind this.
 
 `--format measures` is different in kind. It reports every number jabuti computed, for every unit,

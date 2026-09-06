@@ -60,6 +60,7 @@ enum Format {
     Agent,
     Json,
     Measures,
+    Sarif,
 }
 
 fn main() -> ExitCode {
@@ -187,6 +188,7 @@ fn check(roots: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
             ),
             Format::Json => report::json(&outcome.findings, &outcome.unreadable, outcome.scanned),
             Format::Measures => report::measures(&outcome.readings, &outcome.unreadable),
+            Format::Sarif => report::sarif(&outcome.findings, &outcome.unreadable),
         }
     );
 

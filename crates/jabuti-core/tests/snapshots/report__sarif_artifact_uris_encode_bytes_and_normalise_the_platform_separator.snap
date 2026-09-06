@@ -1,0 +1,53 @@
+---
+source: crates/jabuti-core/tests/report.rs
+expression: rendered
+---
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "jabuti",
+          "semanticVersion": "0.1.0",
+          "informationUri": "https://github.com/morais90/jabuti",
+          "rules": [
+            {
+              "id": "function-lines"
+            }
+          ]
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "toolExecutionNotifications": []
+        }
+      ],
+      "results": [
+        {
+          "ruleId": "function-lines",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": {
+            "text": "measured 71, limit 60"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/safe-._~%20space%23100%25%20caf%C3%A9.rs"
+                },
+                "region": {
+                  "startLine": 7,
+                  "endLine": 17
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

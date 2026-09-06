@@ -1,0 +1,108 @@
+---
+source: crates/jabuti-core/tests/report.rs
+expression: rendered
+---
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "jabuti",
+          "semanticVersion": "0.1.0",
+          "informationUri": "https://github.com/morais90/jabuti",
+          "rules": [
+            {
+              "id": "clippy/needless_range_loop"
+            },
+            {
+              "id": "function-lines"
+            }
+          ]
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "toolExecutionNotifications": [
+            {
+              "level": "warning",
+              "message": {
+                "text": "unreadable syntax from line 314"
+              },
+              "locations": [
+                {
+                  "physicalLocation": {
+                    "artifactLocation": {
+                      "uri": "src/nav.kt"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "level": "warning",
+              "message": {
+                "text": "unreadable syntax from line 51"
+              },
+              "locations": [
+                {
+                  "physicalLocation": {
+                    "artifactLocation": {
+                      "uri": "src/theme.kt"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "results": [
+        {
+          "ruleId": "function-lines",
+          "ruleIndex": 1,
+          "level": "error",
+          "message": {
+            "text": "handle_request measured 71, limit 60"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/handler.rs"
+                },
+                "region": {
+                  "startLine": 120,
+                  "endLine": 130
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "clippy/needless_range_loop",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": {
+            "text": "the loop variable is only used to index"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib.rs"
+                },
+                "region": {
+                  "startLine": 3,
+                  "endLine": 3
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

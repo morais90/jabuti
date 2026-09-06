@@ -52,6 +52,10 @@ Every finding names its severity, the rule, where it is, what was measured and w
 which is enough to act on without asking a follow-up question. There is no advice in the output:
 the rule name carries the meaning, and deciding what to do about it is the caller's job.
 
+For CI and code-scanning consumers, `jabuti check --format sarif` emits deterministic SARIF 2.1.0
+without changing the exit codes. [The output documentation](docs/concepts.md#other-shapes-of-output)
+describes the contract and the parts GitHub does not display.
+
 Exit codes separate the two failures an agent must never confuse: `0` passed, `1` a gate was
 violated, `2` the tool itself broke. Output is byte-identical across runs, so the same input on the same
 version produces the same bytes and the result can be diffed, cached and trusted.
