@@ -23,10 +23,17 @@ pub(crate) fn findings(
     let (mut found, mut unreadable) = (Vec::new(), Vec::new());
 
     if let Some(changes) = changes {
-        let (drifted, skipped) = drift::findings(paths, project, settings, changes)?;
+        let compares =
+            settings.enabled(Rule::NewDependency) || settings.enabled(Rule::SpeculativeApi);
+        let base = if compares {
+            sources::at_base(paths, project, changes)?
+        } else {
+            BTreeMap::new()
+        };
+        let (drifted, skipped) = drift::findings(paths, project, settings, &base);
         found.extend(drifted);
         unreadable.extend(skipped);
-        let (unused, skipped) = surface::findings(paths, project, settings, changes)?;
+        let (unused, skipped) = surface::findings(paths, project, settings, changes, &base)?;
         found.extend(unused);
         unreadable.extend(skipped);
     }

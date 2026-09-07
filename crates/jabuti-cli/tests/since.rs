@@ -182,5 +182,5 @@ fn an_unknown_reference_stops_the_run_rather_than_passing_the_gate() {
         .arg("no-such-branch")
         .assert()
         .code(2)
-        .stderr(contains("git diff"));
+        .stderr(contains("git merge-base HEAD no-such-branch failed"));
 }

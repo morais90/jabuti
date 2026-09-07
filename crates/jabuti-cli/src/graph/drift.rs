@@ -1,28 +1,26 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
 use jabuti_core::graph::index::{Index, Source};
 use jabuti_core::lang;
 use jabuti_core::model::{Detail, Finding, Rule, RuleId, Span, Unreadable};
 
 use super::sources;
 use crate::config::Settings;
-use crate::git::since::Changes;
 use crate::project;
 
 pub(crate) fn findings(
     paths: &[PathBuf],
     project: &Path,
     settings: &Settings,
-    changes: &Changes,
-) -> Result<(Vec<Finding>, Vec<Unreadable>)> {
+    base: &BTreeMap<String, String>,
+) -> (Vec<Finding>, Vec<Unreadable>) {
     let rule = RuleId::Native(Rule::NewDependency);
-    let base = sources::base_of(changes)?;
     let (indexed, unreadable) = sources::known(paths, project);
     let index = Index::of(&indexed);
 
     let mut found = Vec::new();
-    for path in paths.iter().filter(|path| changes.covers(path)) {
+    for path in paths {
         let Some(spec) = lang::detect(path) else {
             continue;
         };
@@ -30,17 +28,13 @@ pub(crate) fn findings(
             continue;
         };
         let shown = project::display(path, project);
-
-        let Some(inside) = changes.relative(path) else {
-            continue;
-        };
-        let Some(before) = sources::at_base(&base, &inside) else {
+        let Some(before) = base.get(&shown) else {
             continue;
         };
         let Some(now) = sources::source_of(&shown, spec, sources::contents(path).as_deref()) else {
             continue;
         };
-        let Some(then) = sources::source_of(&shown, spec, Some(&before)) else {
+        let Some(then) = sources::source_of(&shown, spec, Some(before)) else {
             continue;
         };
 
@@ -58,7 +52,7 @@ pub(crate) fn findings(
         }
     }
 
-    Ok((found, unreadable))
+    (found, unreadable)
 }
 
 fn added(index: &Index, now: &Source, then: &Source) -> Vec<(PathBuf, Span)> {

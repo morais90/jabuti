@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
@@ -82,16 +83,30 @@ pub(crate) fn all(paths: &[PathBuf], project: &Path) -> (Vec<Source>, Vec<Unread
     (sources, unreadable)
 }
 
-pub(crate) fn base_of(changes: &Changes) -> Result<String> {
-    Ok(
-        crate::git::run(&["merge-base", "HEAD", changes.reference()])?
-            .trim()
-            .to_owned(),
-    )
-}
+pub(crate) fn at_base(
+    paths: &[PathBuf],
+    project: &Path,
+    changes: &Changes,
+) -> Result<BTreeMap<String, String>> {
+    let mut requested: BTreeMap<PathBuf, String> = paths
+        .iter()
+        .filter(|path| changes.covers(path))
+        .filter_map(|path| {
+            Some((
+                changes.relative(path)?,
+                crate::project::display(path, project),
+            ))
+        })
+        .collect();
+    let inside: Vec<PathBuf> = requested.keys().cloned().collect();
 
-pub(crate) fn at_base(base: &str, inside: &Path) -> Option<String> {
-    crate::git::run(&["show", &format!("{base}:{}", inside.display())]).ok()
+    let blobs = crate::git::blobs(changes.base(), &inside)?;
+    let texts = blobs
+        .into_iter()
+        .filter_map(|(relative, text)| Some((requested.remove(&relative)?, text)))
+        .collect();
+
+    Ok(texts)
 }
 
 pub(crate) fn contents(path: &Path) -> Option<String> {

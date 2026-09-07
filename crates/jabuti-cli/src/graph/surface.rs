@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
@@ -17,11 +18,11 @@ pub(crate) fn findings(
     project: &Path,
     settings: &Settings,
     changes: &Changes,
+    base: &BTreeMap<String, String>,
 ) -> Result<(Vec<Finding>, Vec<Unreadable>)> {
     if !settings.enabled(Rule::SpeculativeApi) {
         return Ok((Vec::new(), Vec::new()));
     }
-    let base = sources::base_of(changes)?;
     let universe = project::sources(&[project.to_path_buf()], &settings.exclude, project)?;
     let (all, unreadable) = sources::all(&universe, project);
     let roots = surface::roots(&all, &Index::of(&all));
@@ -37,7 +38,7 @@ pub(crate) fn findings(
         else {
             continue;
         };
-        let then = match at_base(&base, changes, source) {
+        let then = match at_base(base, source) {
             Base::Missing => None,
             Base::Unreadable => continue,
             Base::Facts(facts) => Some(facts),
@@ -88,15 +89,12 @@ enum Base {
     Facts(FileFacts),
 }
 
-fn at_base(base: &str, changes: &Changes, source: &Source) -> Base {
-    let Some(inside) = changes.relative(&source.path) else {
-        return Base::Missing;
-    };
-    let Some(before) = sources::at_base(base, &inside) else {
+fn at_base(base: &BTreeMap<String, String>, source: &Source) -> Base {
+    let Some(before) = base.get(&source.path.display().to_string()) else {
         return Base::Missing;
     };
 
-    match syntax::parse(&before, source.language.spec()) {
+    match syntax::parse(before, source.language.spec()) {
         Ok(parsed) => Base::Facts(facts::facts(&parsed)),
         Err(_) => Base::Unreadable,
     }
