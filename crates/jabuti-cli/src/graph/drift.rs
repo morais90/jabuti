@@ -1,48 +1,28 @@
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use jabuti_core::graph::index::{Index, Source};
-use jabuti_core::lang;
-use jabuti_core::model::{Detail, Finding, Rule, RuleId, Span, Unreadable};
+use jabuti_core::model::{Detail, Finding, Rule, RuleId, Span};
 
-use super::sources;
-use crate::config::Settings;
-use crate::project;
+use super::Scan;
 
-pub(crate) fn findings(
-    paths: &[PathBuf],
-    project: &Path,
-    settings: &Settings,
-    base: &BTreeMap<String, String>,
-) -> (Vec<Finding>, Vec<Unreadable>) {
+pub(crate) fn findings(scan: &Scan<'_>, index: &Index) -> Vec<Finding> {
     let rule = RuleId::Native(Rule::NewDependency);
-    let (indexed, unreadable) = sources::known(paths, project);
-    let index = Index::of(&indexed);
 
     let mut found = Vec::new();
-    for path in paths {
-        let Some(spec) = lang::detect(path) else {
+    for now in scan.sources {
+        let Some(severity) = super::reporting(scan.settings, now.language, Rule::NewDependency)
+        else {
             continue;
         };
-        let Some(severity) = super::reporting(settings, spec.id, Rule::NewDependency) else {
-            continue;
-        };
-        let shown = project::display(path, project);
-        let Some(before) = base.get(&shown) else {
-            continue;
-        };
-        let Some(now) = sources::source_of(&shown, spec, sources::contents(path).as_deref()) else {
-            continue;
-        };
-        let Some(then) = sources::source_of(&shown, spec, Some(before)) else {
+        let Some(Some(then)) = scan.base.get(&now.path) else {
             continue;
         };
 
-        for (target, at) in added(&index, &now, &then) {
+        for (target, at) in added(index, now, then) {
             found.push(Finding {
                 rule: rule.clone(),
                 severity,
-                path: shown.clone(),
+                path: now.path.display().to_string(),
                 span: at,
                 subject: None,
                 detail: Detail::Message {
@@ -52,7 +32,7 @@ pub(crate) fn findings(
         }
     }
 
-    (found, unreadable)
+    found
 }
 
 fn added(index: &Index, now: &Source, then: &Source) -> Vec<(PathBuf, Span)> {

@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
-const KERNEL: [&str; 4] = ["config", "git", "main", "project"];
+const KERNEL: [&str; 6] = ["check", "config", "corpus", "git", "main", "project"];
+const COMPOSERS: [&str; 2] = ["check", "main"];
 const CORE_KERNEL: [&str; 5] = ["lang", "model", "policy", "report", "syntax"];
 const CONTEXTS: [&str; 4] = ["code", "graph", "history", "tools"];
 
@@ -88,10 +89,37 @@ fn a_context_reaches_only_the_kernel_of_either_crate_and_its_own_core_context() 
 
 #[test]
 fn the_kernel_reaches_no_context_except_where_it_composes_them() {
-    for module in KERNEL.into_iter().filter(|module| *module != "main") {
+    for module in KERNEL
+        .into_iter()
+        .filter(|module| !COMPOSERS.contains(module))
+    {
         for file in files_of(module) {
             assert_reaches_only(&file, "crate::", &KERNEL, "");
             assert_reaches_only(&file, "jabuti_core::", &CORE_KERNEL, "");
+        }
+    }
+}
+
+#[test]
+fn only_the_corpus_parses_a_source_file_and_no_analysing_context_reads_one() {
+    for context in CONTEXTS {
+        for file in files_of(context) {
+            let source = std::fs::read_to_string(&file).expect("source readable");
+            assert!(
+                !source.contains("syntax::parse"),
+                "{} parses on its own instead of receiving the corpus",
+                file.display()
+            );
+        }
+    }
+    for context in ["code", "graph"] {
+        for file in files_of(context) {
+            let source = std::fs::read_to_string(&file).expect("source readable");
+            assert!(
+                !source.contains("read_to_string") && !source.contains("fs::read"),
+                "{} reads a file instead of receiving the corpus",
+                file.display()
+            );
         }
     }
 }

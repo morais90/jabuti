@@ -2,7 +2,7 @@ mod common;
 
 use std::fs;
 
-use common::{commit, jabuti, repository, write};
+use common::{binary, commit, jabuti, repository, write};
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 
@@ -167,6 +167,60 @@ fn the_earlier_revision_is_still_read_when_only_this_rule_asks_for_it() {
         "jabuti.toml",
         "[rules]\nspeculative-api = { severity = \"off\" }\n",
     );
+    write(
+        &directory,
+        "src/report.rs",
+        "pub fn render() -> String {\n    crate::git::run(&[\"status\"])\n}\n",
+    );
+
+    jabuti(&directory)
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stdout(contains(
+            "src/report.rs:2  warning  new-dependency  now depends on src/git.rs",
+        ));
+}
+
+#[test]
+fn a_dependency_on_a_file_outside_the_paths_given_on_the_command_line_is_still_resolved() {
+    let directory = repository(&[
+        (
+            "src/main.rs",
+            "mod git;\nmod report;\n\nfn main() {\n    println!(\"{}\", report::render());\n}\n",
+        ),
+        (
+            "src/git.rs",
+            "pub fn run(arguments: &[&str]) -> String {\n    arguments.join(\" \")\n}\n",
+        ),
+        (
+            "src/report/mod.rs",
+            "pub fn render() -> String {\n    String::from(\"nothing\")\n}\n",
+        ),
+    ]);
+    write(
+        &directory,
+        "src/report/mod.rs",
+        "pub fn render() -> String {\n    crate::git::run(&[\"status\"])\n}\n",
+    );
+
+    binary(&directory)
+        .arg("check")
+        .arg("src/report")
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stdout(contains(
+            "src/report/mod.rs:2  warning  new-dependency  now depends on src/git.rs",
+        ));
+}
+
+#[test]
+fn a_dependency_on_a_file_that_no_longer_parses_still_points_at_that_file() {
+    let directory = project();
+    write(&directory, "src/git.rs", "pub fn run( {\n");
     write(
         &directory,
         "src/report.rs",

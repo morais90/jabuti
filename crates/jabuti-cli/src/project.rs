@@ -42,9 +42,30 @@ pub(crate) fn sources(
     paths.sort_by_key(|path| (path.is_symlink(), path.clone()));
 
     let mut seen = BTreeSet::new();
-    paths.retain(|path| seen.insert(path.canonicalize().unwrap_or_else(|_| path.clone())));
+    paths.retain(|path| seen.insert(canonical(path)));
 
     Ok(paths)
+}
+
+pub(crate) fn extended(
+    paths: &[PathBuf],
+    exclude: &[String],
+    project: &Path,
+) -> Result<Vec<PathBuf>> {
+    let given: BTreeSet<PathBuf> = paths.iter().map(|path| canonical(path)).collect();
+    let mut extended = paths.to_vec();
+    for path in sources(&[project.to_path_buf()], exclude, project)? {
+        if !given.contains(&canonical(&path)) {
+            extended.push(path);
+        }
+    }
+    extended.sort_by_key(|path| (path.is_symlink(), path.clone()));
+
+    Ok(extended)
+}
+
+fn canonical(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
 fn inside(root: &Path, project: &Path) -> Result<PathBuf> {

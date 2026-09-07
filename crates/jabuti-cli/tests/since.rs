@@ -1,6 +1,8 @@
 mod common;
 
-use common::{append, error_on_long_functions, function_of, jabuti, repository, write};
+use common::{
+    append, binary, commit, error_on_long_functions, function_of, git, jabuti, repository, write,
+};
 use predicates::str::contains;
 
 #[test]
@@ -174,6 +176,56 @@ fn a_change_on_the_line_before_a_unit_does_not_reach_into_it() {
 }
 
 #[test]
+fn a_changed_file_outside_the_paths_given_on_the_command_line_is_not_reviewed() {
+    let directory = repository(&[
+        ("src/inside/lib.rs", "fn small() {}\n"),
+        ("src/outside/lib.rs", "fn tiny() {}\n"),
+    ]);
+    write(&directory, "src/inside/lib.rs", "fn small() { }\n");
+    write(&directory, "src/outside/lib.rs", "fn tiny() { }\n");
+
+    binary(&directory)
+        .arg("check")
+        .arg("src/inside")
+        .arg("--since")
+        .arg("HEAD")
+        .arg("--format")
+        .arg("json")
+        .assert()
+        .success()
+        .stdout(contains("\"files\": 1,"));
+}
+
+#[test]
+fn a_reference_with_more_than_one_merge_base_stops_the_run_rather_than_picking_one() {
+    let directory = repository(&[("src/lib.rs", "fn small() {}\n")]);
+    git(&directory, &["checkout", "-q", "-b", "left"]);
+    write(&directory, "src/left.rs", "fn left() {}\n");
+    commit(&directory, "left");
+    git(&directory, &["checkout", "-q", "main"]);
+    git(&directory, &["checkout", "-q", "-b", "right"]);
+    write(&directory, "src/right.rs", "fn right() {}\n");
+    commit(&directory, "right");
+    git(&directory, &["checkout", "-q", "left"]);
+    git(
+        &directory,
+        &["merge", "-q", "-m", "left takes right", "right"],
+    );
+    git(&directory, &["checkout", "-q", "right"]);
+    git(
+        &directory,
+        &["merge", "-q", "-m", "right takes left", "left~1"],
+    );
+
+    jabuti(&directory)
+        .arg("--since")
+        .arg("left")
+        .assert()
+        .code(2)
+        .stderr(contains("more than one merge base"));
+}
+
+#[test]
 fn an_unknown_reference_stops_the_run_rather_than_passing_the_gate() {
     let directory = repository(&[("src/live.rs", "fn small() {}\n")]);
 
@@ -182,5 +234,5 @@ fn an_unknown_reference_stops_the_run_rather_than_passing_the_gate() {
         .arg("no-such-branch")
         .assert()
         .code(2)
-        .stderr(contains("git merge-base HEAD no-such-branch failed"));
+        .stderr(contains("git merge-base --all HEAD no-such-branch failed"));
 }

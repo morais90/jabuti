@@ -1,6 +1,6 @@
 mod common;
 
-use common::{error_on_long_functions, function_of, jabuti, project, repository};
+use common::{error_on_long_functions, function_of, jabuti, project, repository, write};
 use predicates::str::contains;
 
 #[test]
@@ -353,4 +353,43 @@ fn every_rule_has_a_page_explaining_it_in_the_repository() {
         missing.is_empty(),
         "rules without a page under docs/rules: {missing:?}"
     );
+}
+
+#[test]
+fn findings_are_listed_by_path_and_line_whichever_rule_produced_them() {
+    let directory = repository(&[
+        (
+            "jabuti.toml",
+            "[rules]\nfunction-lines = { limit = 2, severity = \"warning\" }\n",
+        ),
+        (
+            "src/main.rs",
+            "mod aa;\nmod git;\nmod zz;\n\nfn main() {}\n",
+        ),
+        (
+            "src/git.rs",
+            "pub fn run() -> String {\n    String::new()\n}\n",
+        ),
+        ("src/aa.rs", "pub fn aa() {}\n"),
+        ("src/zz.rs", "fn zz() {}\n"),
+    ]);
+    write(
+        &directory,
+        "src/aa.rs",
+        "pub fn aa() -> String {\n    crate::git::run()\n}\n",
+    );
+    write(
+        &directory,
+        "src/zz.rs",
+        "fn zz() -> u32 {\n    let a = 1;\n    a\n}\n",
+    );
+
+    jabuti(&directory)
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stdout(contains(
+            "src/aa.rs:2  warning  new-dependency  now depends on src/git.rs\nsrc/zz.rs:1  warning  function-lines",
+        ));
 }

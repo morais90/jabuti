@@ -1,80 +1,64 @@
 mod drift;
 mod layers;
-mod sources;
 mod surface;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use jabuti_core::lang::{self, LanguageId};
-use jabuti_core::model::{ConceptBindings, Finding, Rule, Severity, Unreadable};
-use jabuti_core::{graph, syntax};
+use jabuti_core::graph::facts;
+use jabuti_core::graph::index::{Index, Source};
+use jabuti_core::lang::LanguageId;
+use jabuti_core::model::{ConceptBindings, Finding, Rule, Severity};
+use jabuti_core::syntax::Parsed;
 
 use crate::config::Settings;
 use crate::git::since::Changes;
 
-pub(crate) fn findings(
-    paths: &[PathBuf],
-    project: &Path,
-    settings: &Settings,
-    changes: Option<&Changes>,
-) -> Result<(Vec<Finding>, Vec<Unreadable>)> {
-    let (mut found, mut unreadable) = (Vec::new(), Vec::new());
+#[derive(Debug)]
+pub(crate) struct Scan<'a> {
+    pub(crate) paths: &'a [PathBuf],
+    pub(crate) requested: &'a BTreeSet<PathBuf>,
+    pub(crate) sources: &'a [Source],
+    pub(crate) opaque: &'a [String],
+    pub(crate) base: &'a BTreeMap<PathBuf, Option<Source>>,
+    pub(crate) project: &'a Path,
+    pub(crate) settings: &'a Settings,
+    pub(crate) changes: Option<&'a Changes>,
+}
 
-    if let Some(changes) = changes {
-        let compares =
-            settings.enabled(Rule::NewDependency) || settings.enabled(Rule::SpeculativeApi);
-        let base = if compares {
-            sources::at_base(paths, project, changes)?
-        } else {
-            BTreeMap::new()
-        };
-        let (drifted, skipped) = drift::findings(paths, project, settings, &base);
-        found.extend(drifted);
-        unreadable.extend(skipped);
-        let (unused, skipped) = surface::findings(paths, project, settings, changes, &base)?;
-        found.extend(unused);
-        unreadable.extend(skipped);
+impl Scan<'_> {
+    fn examines(&self, source: &Source) -> bool {
+        self.requested.contains(&source.path)
+            && self
+                .changes
+                .is_none_or(|changes| changes.covers(&source.path))
     }
+}
 
-    let (crossed, skipped) = layers::findings(paths, project, settings, changes)?;
-    found.extend(crossed);
-    unreadable.extend(skipped);
+pub(crate) fn findings(scan: &Scan<'_>) -> Result<Vec<Finding>> {
+    let index = Index::of(scan.sources);
+    let mut found = Vec::new();
 
-    Ok((found, unreadable))
+    if scan.changes.is_some() {
+        found.extend(drift::findings(scan, &index));
+        found.extend(surface::findings(scan, &index));
+    }
+    found.extend(layers::findings(scan, &index)?);
+
+    Ok(found)
 }
 
 pub(crate) fn aliases(
-    paths: &[PathBuf],
+    parsed: &Parsed<'_>,
+    language: LanguageId,
     bindings: &ConceptBindings,
-) -> BTreeMap<PathBuf, BTreeMap<String, String>> {
-    if bindings.is_empty() {
+) -> BTreeMap<String, String> {
+    if bindings.is_empty_for(language) {
         return BTreeMap::new();
     }
 
-    let mut found = BTreeMap::new();
-
-    for path in paths {
-        let Some(spec) = lang::detect(path) else {
-            continue;
-        };
-        if bindings.is_empty_for(spec.id) {
-            continue;
-        }
-        let Ok(source) = std::fs::read_to_string(path) else {
-            continue;
-        };
-        let Ok(parsed) = syntax::parse(&source, spec) else {
-            continue;
-        };
-        let aliases = graph::facts::aliases(&parsed);
-        if !aliases.is_empty() {
-            found.insert(path.clone(), aliases);
-        }
-    }
-
-    found
+    facts::aliases(parsed)
 }
 
 fn reporting(settings: &Settings, language: LanguageId, rule: Rule) -> Option<Severity> {

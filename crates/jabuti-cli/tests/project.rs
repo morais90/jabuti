@@ -1,6 +1,7 @@
 mod common;
 
-use common::{binary, repository};
+use common::{binary, repository, write};
+use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 
 #[test]
@@ -23,6 +24,76 @@ fn the_configuration_is_found_above_the_directory_the_command_runs_from() {
         .assert()
         .code(1)
         .stdout(contains("src/lib.rs:1  error  function-lines"));
+}
+
+#[test]
+fn an_unreadable_file_outside_the_paths_given_is_not_named_when_no_rule_reads_the_whole_project() {
+    let directory = repository(&[
+        ("src/inside/lib.rs", "fn small() {}\n"),
+        ("src/outside/broken.rs", "fn broken( {\n"),
+    ]);
+
+    binary(&directory)
+        .arg("check")
+        .arg("src/inside")
+        .assert()
+        .success()
+        .stdout(contains("No findings"))
+        .stdout(contains("src/outside/broken.rs").not());
+}
+
+#[test]
+fn under_since_the_whole_project_is_read_only_when_a_rule_compares_against_the_revision() {
+    let directory = repository(&[
+        (
+            "jabuti.toml",
+            "[rules]\nnew-dependency = { severity = \"off\" }\nspeculative-api = { severity = \"off\" }\n",
+        ),
+        ("src/inside/lib.rs", "fn small() {}\n"),
+        ("src/outside/broken.rs", "fn broken( {\n"),
+    ]);
+    write(&directory, "src/inside/lib.rs", "fn small() { }\n");
+
+    binary(&directory)
+        .arg("check")
+        .arg("src/inside")
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stdout(contains("No findings"))
+        .stdout(contains("src/outside/broken.rs").not());
+}
+
+#[test]
+fn a_symlink_under_the_paths_given_is_still_reviewed_when_the_whole_project_is_read() {
+    let directory = repository(&[
+        (
+            "jabuti.toml",
+            "[rules]\nfunction-lines = { limit = 2, severity = \"error\" }\n",
+        ),
+        ("src/outside/real.rs", "fn wide() {}\n"),
+    ]);
+    std::fs::create_dir_all(directory.path().join("src/inside")).expect("directory created");
+    std::os::unix::fs::symlink(
+        "../outside/real.rs",
+        directory.path().join("src/inside/link.rs"),
+    )
+    .expect("symlink created");
+    write(
+        &directory,
+        "src/outside/real.rs",
+        "fn wide() -> u32 {\n    let a = 1;\n    a\n}\n",
+    );
+
+    binary(&directory)
+        .arg("check")
+        .arg("src/inside")
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .code(1)
+        .stdout(contains("src/inside/link.rs:1  error  function-lines"));
 }
 
 #[test]
@@ -69,7 +140,7 @@ fn a_new_file_is_still_part_of_the_change_when_the_command_runs_from_below_it() 
         ("jabuti.toml", "[rules]\n"),
         ("src/lib.rs", "pub fn a() {}\n"),
     ]);
-    common::write(
+    write(
         &directory,
         "src/deep/inner.rs",
         "pub fn read() -> usize {\n    let value: Option<usize> = None;\n    value.unwrap()\n}\n",

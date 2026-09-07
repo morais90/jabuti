@@ -1,7 +1,6 @@
 pub(crate) mod since;
 
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -54,7 +53,10 @@ pub(crate) fn blobs(revision: &str, paths: &[PathBuf]) -> Result<BTreeMap<PathBu
 fn requests_for(revision: &str, paths: &[PathBuf]) -> String {
     let mut requests = String::new();
     for path in paths {
-        let _ = writeln!(requests, "{revision}:{}", path.display());
+        requests.push_str(revision);
+        requests.push(':');
+        requests.push_str(&path.to_string_lossy());
+        requests.push('\n');
     }
 
     requests

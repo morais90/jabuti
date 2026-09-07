@@ -1,5 +1,7 @@
+mod check;
 mod code;
 mod config;
+mod corpus;
 mod git;
 mod graph;
 mod history;
@@ -11,9 +13,8 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use jabuti_core::history::hotspot::{self, FileSummary};
 use jabuti_core::model::Rule;
-use jabuti_core::report;
+use jabuti_core::{lang, report};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -90,7 +91,7 @@ fn run() -> Result<ExitCode> {
 }
 
 fn list_languages() -> ExitCode {
-    for spec in jabuti_core::lang::ALL {
+    for spec in lang::ALL {
         let extensions: Vec<String> = spec
             .extensions
             .iter()
@@ -149,44 +150,7 @@ fn install_tools() -> Result<ExitCode> {
 }
 
 fn check(roots: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -> Result<ExitCode> {
-    let (root, settings) = config::discover()?;
-    tools::known(&settings)?;
-    let changes = since
-        .map(|reference| git::since::Changes::since(reference, &root))
-        .transpose()?;
-    let history = history::load(&settings);
-    scope_notices(&settings, since.is_some());
-
-    let paths = project::sources(roots, &settings.exclude, &root)?;
-    let aliases = graph::aliases(&paths, &settings.concepts);
-    let churn = history::commits(history.as_ref(), &paths);
-    let request = code::Scan {
-        project: &root,
-        policy: &settings.policy,
-        bindings: &settings.concepts,
-        aliases: &aliases,
-        changes: changes.as_ref(),
-        churn: &churn,
-    };
-    let mut outcome = code::scan(&paths, &request);
-    if changes.is_none() {
-        outcome.findings.extend(hotspot::hotspots(
-            &summaries(&outcome.measured),
-            &settings.policy,
-        ));
-    }
-    let here = std::env::current_dir()?;
-    outcome.findings.extend(tools::findings(&tools::Scan {
-        here: &here,
-        project: &root,
-        paths: &paths,
-        settings: &settings,
-        changes: changes.as_ref(),
-    }));
-    let (found, skipped) = graph::findings(&paths, &root, &settings, changes.as_ref())?;
-    outcome.findings.extend(found);
-    outcome.unreadable.extend(skipped);
-    order(&mut outcome);
+    let outcome = check::verdict(roots, since)?;
 
     print!("{}", rendered(format, &outcome, limit));
 
@@ -209,48 +173,4 @@ fn rendered(format: Format, outcome: &code::Outcome, limit: usize) -> String {
         Format::Measures => report::measures(&outcome.readings, &outcome.unreadable),
         Format::Sarif => report::sarif(&outcome.findings, &outcome.unreadable),
     }
-}
-
-fn order(outcome: &mut code::Outcome) {
-    outcome
-        .unreadable
-        .sort_by(|left, right| left.path.cmp(&right.path));
-    outcome
-        .unreadable
-        .dedup_by(|left, right| left.path == right.path);
-    outcome.findings.sort_by(|left, right| {
-        left.path
-            .cmp(&right.path)
-            .then(left.span.start_line.cmp(&right.span.start_line))
-    });
-}
-
-fn scope_notices(settings: &config::Settings, scoped: bool) {
-    if scoped && settings.enabled(Rule::Hotspot) {
-        eprintln!("jabuti: hotspot ranks a whole repository, so it is not evaluated with --since");
-    }
-    for rule in [
-        Rule::NewDependency,
-        Rule::SpeculativeApi,
-        Rule::UncoveredNewCode,
-    ] {
-        if !scoped && settings.gates(rule) {
-            eprintln!(
-                "jabuti: {} compares against an earlier revision, so it needs --since",
-                rule.id()
-            );
-        }
-    }
-}
-
-fn summaries(measured: &[code::Measured]) -> Vec<FileSummary> {
-    measured
-        .iter()
-        .map(|file| FileSummary {
-            path: file.path.clone(),
-            span: file.span,
-            churn: file.churn,
-            complexity: file.complexity,
-        })
-        .collect()
 }

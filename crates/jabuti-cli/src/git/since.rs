@@ -2,8 +2,10 @@ use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use jabuti_core::model::Span;
+
+use crate::project;
 
 #[derive(Debug)]
 enum Touched {
@@ -33,9 +35,7 @@ pub(crate) struct Changes {
 impl Changes {
     pub(crate) fn since(reference: &str, project: &Path) -> Result<Self> {
         let root = PathBuf::from(super::run(&["rev-parse", "--show-toplevel"])?.trim());
-        let base = super::run(&["merge-base", "HEAD", reference])?
-            .trim()
-            .to_owned();
+        let base = merge_base(reference)?;
         let diff = super::run(&["diff", "--unified=0", &base])?;
         let untracked = super::run_at(&root, &["ls-files", "--others", "--exclude-standard"])?;
 
@@ -52,8 +52,29 @@ impl Changes {
         })
     }
 
-    pub(crate) fn base(&self) -> &str {
-        &self.base
+    pub(crate) fn base_texts(
+        &self,
+        paths: &[PathBuf],
+        project: &Path,
+    ) -> Result<BTreeMap<PathBuf, String>> {
+        let mut requested = BTreeMap::new();
+        for path in paths {
+            let Some(relative) = self.relative(path) else {
+                continue;
+            };
+            if self.touched.contains_key(&relative) {
+                requested.insert(relative, PathBuf::from(project::display(path, project)));
+            }
+        }
+        let inside: Vec<PathBuf> = requested.keys().cloned().collect();
+
+        let blobs = super::blobs(&self.base, &inside)?;
+        let texts = blobs
+            .into_iter()
+            .filter_map(|(relative, text)| Some((requested.remove(&relative)?, text)))
+            .collect();
+
+        Ok(texts)
     }
 
     pub(crate) fn covers(&self, path: &Path) -> bool {
@@ -76,6 +97,21 @@ impl Changes {
     fn entry(&self, path: &Path) -> Option<&Touched> {
         self.touched.get(&self.relative(path)?)
     }
+}
+
+fn merge_base(reference: &str) -> Result<String> {
+    let listed = super::run(&["merge-base", "--all", "HEAD", reference])?;
+    let mut bases = listed.lines();
+    let base = bases
+        .next()
+        .with_context(|| format!("HEAD and {reference} share no history"))?;
+    if bases.next().is_some() {
+        bail!(
+            "HEAD and {reference} have more than one merge base, so there is no single revision to compare against"
+        );
+    }
+
+    Ok(base.to_owned())
 }
 
 fn hunks(diff: &str) -> BTreeMap<PathBuf, Touched> {

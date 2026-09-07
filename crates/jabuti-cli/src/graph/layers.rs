@@ -2,34 +2,28 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use ignore::overrides::{Override, OverrideBuilder};
+use jabuti_core::graph;
 use jabuti_core::graph::index::{Edges, Index};
 use jabuti_core::graph::layers::Layers;
-use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span, Unreadable};
-use jabuti_core::{graph, lang};
+use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity};
 
-use super::sources;
+use super::Scan;
 use crate::config::{Layer, Settings};
-use crate::git::since::Changes;
 use crate::project;
 
-pub(crate) fn findings(
-    paths: &[PathBuf],
-    project: &Path,
-    settings: &Settings,
-    changes: Option<&Changes>,
-) -> Result<(Vec<Finding>, Vec<Unreadable>)> {
-    let Some(severity) = reporting(settings) else {
-        return Ok((Vec::new(), Vec::new()));
+pub(crate) fn findings(scan: &Scan<'_>, index: &Index) -> Result<Vec<Finding>> {
+    let Some(severity) = reporting(scan.settings) else {
+        return Ok(Vec::new());
     };
 
-    let layers = assign(&settings.layers, project, paths)?;
-    let (indexed, unreadable) = sources::known(paths, project);
-    let edges = outgoing(paths, project, &Index::of(&indexed), changes);
+    let layers = assign(&scan.settings.layers, scan.project, scan.paths)?;
+    let edges = outgoing(scan, index);
 
     let found = graph::layers::violations(&edges, &layers)
         .into_iter()
         .filter(|violation| {
-            changes.is_none_or(|changes| changes.touches(&violation.from, violation.at))
+            scan.changes
+                .is_none_or(|changes| changes.touches(&violation.from, violation.at))
         })
         .map(|violation| Finding {
             rule: RuleId::Native(Rule::LayerViolation),
@@ -48,7 +42,7 @@ pub(crate) fn findings(
         })
         .collect();
 
-    Ok((found, unreadable))
+    Ok(found)
 }
 
 fn reporting(settings: &Settings) -> Option<Severity> {
@@ -122,34 +116,18 @@ fn matcher_for(layer: &Layer, project: &Path) -> Result<Override> {
     builder.build().context("building layer matcher")
 }
 
-fn outgoing(paths: &[PathBuf], project: &Path, index: &Index, changes: Option<&Changes>) -> Edges {
+fn outgoing(scan: &Scan<'_>, index: &Index) -> Edges {
     let mut edges = Edges::new();
 
-    for path in paths {
-        if changes.is_some_and(|changes| !changes.covers(path)) {
-            continue;
-        }
-        for (from, target, at) in edges_from(path, project, index) {
-            edges.entry((from, target)).or_insert(at);
+    for source in scan.sources.iter().filter(|source| scan.examines(source)) {
+        for (target, at) in index
+            .targets(source)
+            .into_iter()
+            .filter(|(target, _)| target != &source.path)
+        {
+            edges.entry((source.path.clone(), target)).or_insert(at);
         }
     }
 
     edges
-}
-
-fn edges_from(path: &Path, project: &Path, index: &Index) -> Vec<(PathBuf, PathBuf, Span)> {
-    let Some(spec) = lang::detect(path) else {
-        return Vec::new();
-    };
-    let shown = project::display(path, project);
-    let Some(source) = sources::source_of(&shown, spec, sources::contents(path).as_deref()) else {
-        return Vec::new();
-    };
-
-    index
-        .targets(&source)
-        .into_iter()
-        .filter(|(target, _)| target != &source.path)
-        .map(|(target, at)| (source.path.clone(), target, at))
-        .collect()
 }

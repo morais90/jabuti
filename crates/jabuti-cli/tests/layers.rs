@@ -1,6 +1,7 @@
 mod common;
 
-use common::{commit, jabuti, repository, write};
+use common::{binary, commit, jabuti, repository, write};
+use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 
 const LAYERS: &str = "[layers]\n\
@@ -45,6 +46,45 @@ fn a_dependency_a_layer_may_not_have_is_reported_at_the_line_that_makes_it() {
     jabuti(&directory).assert().success().stdout(contains(
         "src/domain/book.rs:4  warning  layer-violation  domain may not depend on infrastructure (src/infrastructure/db.rs)",
     ));
+}
+
+#[test]
+fn a_crossing_made_by_a_file_outside_the_paths_given_on_the_command_line_is_not_reported() {
+    let directory = layered(LEAKING_BOOK);
+
+    binary(&directory)
+        .arg("check")
+        .arg("src/infrastructure")
+        .assert()
+        .success()
+        .stdout(contains("No findings"));
+    binary(&directory)
+        .arg("check")
+        .arg("src/domain")
+        .assert()
+        .success()
+        .stdout(contains(
+            "src/domain/book.rs:4  warning  layer-violation  domain may not depend on infrastructure (src/infrastructure/db.rs)",
+        ));
+}
+
+#[test]
+fn layers_declared_for_a_rule_that_is_off_do_not_make_the_whole_project_read() {
+    let directory = layered(LEAKING_BOOK);
+    write(
+        &directory,
+        "jabuti.toml",
+        &format!("{LAYERS}\n[rules]\nlayer-violation = {{ severity = \"off\" }}\n"),
+    );
+    write(&directory, "src/infrastructure/broken.rs", "fn broken( {\n");
+
+    binary(&directory)
+        .arg("check")
+        .arg("src/domain")
+        .assert()
+        .success()
+        .stdout(contains("No findings"))
+        .stdout(contains("src/infrastructure/broken.rs").not());
 }
 
 #[test]
@@ -159,7 +199,7 @@ fn layer_paths_are_relative_to_the_project_whatever_root_the_command_names() {
     let directory = layered(LEAKING_BOOK);
     let absolute = directory.path().canonicalize().expect("the project exists");
 
-    common::binary(&directory)
+    binary(&directory)
         .arg("check")
         .arg(&absolute)
         .assert()

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use jabuti_core::code::duplication::{self, FileFragments};
@@ -11,11 +11,10 @@ use jabuti_core::model::{
 };
 use jabuti_core::policy::Policy;
 use jabuti_core::report::Scanned;
-use jabuti_core::{lang, syntax};
-use rayon::prelude::*;
+use jabuti_core::syntax::Parsed;
 
+use crate::corpus::Text;
 use crate::git::since::Changes;
-use crate::project;
 
 #[derive(Debug, Default)]
 pub(crate) struct Outcome {
@@ -34,60 +33,90 @@ pub(crate) struct Measured {
     pub(crate) complexity: u32,
 }
 
-#[derive(Debug, Default)]
-struct Reviewed {
+#[derive(Debug)]
+pub(crate) struct Reviewed {
+    path: PathBuf,
     findings: Vec<Finding>,
     readings: Vec<Reading>,
     fragments: Option<FileFragments>,
     units: usize,
-    unreadable: Option<Unreadable>,
-    measured: Option<Measured>,
+    measured: Measured,
 }
-
-pub(crate) type AliasIndex = BTreeMap<PathBuf, BTreeMap<String, String>>;
 
 #[derive(Debug)]
 pub(crate) struct Scan<'a> {
-    pub(crate) project: &'a Path,
     pub(crate) policy: &'a Policy,
     pub(crate) bindings: &'a ConceptBindings,
-    pub(crate) aliases: &'a AliasIndex,
     pub(crate) changes: Option<&'a Changes>,
     pub(crate) churn: &'a BTreeMap<PathBuf, u32>,
 }
 
-pub(crate) fn scan(paths: &[PathBuf], request: &Scan<'_>) -> Outcome {
-    let minimum_nodes = duplication_limit(request.policy);
-    let mut paths = paths.to_vec();
-    if let (Some(changes), None) = (request.changes, minimum_nodes) {
-        paths.retain(|path| changes.covers(path));
+impl Scan<'_> {
+    pub(crate) fn scope(&self, paths: &[PathBuf]) -> BTreeSet<PathBuf> {
+        let mut scope: BTreeSet<PathBuf> = paths.iter().cloned().collect();
+        if let (Some(changes), None) = (self.changes, duplication_limit(self.policy)) {
+            scope.retain(|path| changes.covers(path));
+        }
+
+        scope
     }
-    let context = Review {
-        policy: request.policy,
-        project: request.project,
-        bindings: request.bindings,
-        aliases: request.aliases,
-        changes: request.changes,
-        churn: request.churn,
-        minimum_nodes,
+}
+
+pub(crate) fn review(
+    text: &Text,
+    parsed: &Parsed<'_>,
+    aliases: &BTreeMap<String, String>,
+    request: &Scan<'_>,
+) -> Reviewed {
+    let lines = LineIndex::new(&text.source, &metrics::comment_ranges(parsed));
+    let decisions = DecisionIndex::new(&metrics::decisions(parsed));
+    let cognitive = CognitiveIndex::new(&metrics::increments(parsed));
+    let units = units::units(parsed);
+    let counted = count_units(&units);
+
+    let file = FileUnderReview {
+        path: text.shown.clone(),
+        language: text.spec.id,
+        units,
+        lines: &lines,
+        decisions: &decisions,
+        cognitive: &cognitive,
+        churn: request.churn.get(&text.path).copied().unwrap_or(0),
     };
 
-    let reviewed: Vec<Reviewed> = paths
-        .par_iter()
-        .map(|path| review(path, &context))
-        .collect();
+    let measured = Measured {
+        path: file.path.clone(),
+        span: file.units.span,
+        churn: file.churn,
+        complexity: cognitive.total(&file.units),
+    };
 
-    let measured: Vec<Measured> = reviewed
-        .iter()
-        .filter_map(|file| file.measured.clone())
-        .collect();
+    let mut findings = review::evaluate(request.policy, &file);
+    findings.extend(masked_errors(text, parsed, aliases, request));
+    let findings = scoped(findings, &text.path, request.changes);
+
+    Reviewed {
+        path: text.path.clone(),
+        readings: review::read(&file),
+        fragments: duplication_limit(request.policy).map(|minimum| FileFragments {
+            path: file.path.clone(),
+            fragments: duplication::fragments(parsed, minimum),
+        }),
+        findings,
+        units: counted,
+        measured,
+    }
+}
+
+pub(crate) fn scan(reviewed: Vec<Reviewed>, request: &Scan<'_>) -> Outcome {
+    let measured: Vec<Measured> = reviewed.iter().map(|file| file.measured.clone()).collect();
 
     let repeated: Vec<FileFragments> = reviewed
         .iter()
         .filter_map(|file| file.fragments.clone())
         .collect();
 
-    let mut outcome = gather(covered(&paths, reviewed, request.changes));
+    let mut outcome = gather(covered(reviewed, request.changes));
     outcome.findings.extend(
         duplication::duplicates(&repeated, request.policy)
             .into_iter()
@@ -102,10 +131,7 @@ fn gather(reviewed: Vec<Reviewed>) -> Outcome {
     let mut outcome = Outcome::default();
 
     for file in reviewed {
-        match file.unreadable {
-            Some(path) => outcome.unreadable.push(path),
-            None => outcome.scanned.files += 1,
-        }
+        outcome.scanned.files += 1;
         outcome.scanned.units += file.units;
         outcome.findings.extend(file.findings);
         outcome.readings.extend(file.readings);
@@ -114,35 +140,14 @@ fn gather(reviewed: Vec<Reviewed>) -> Outcome {
     outcome
 }
 
-fn masked_errors(
-    shown: &str,
-    path: &Path,
-    parsed: &syntax::Parsed<'_>,
-    context: &Review<'_>,
-) -> Vec<Finding> {
-    let Some(spec) = lang::detect(path) else {
-        return Vec::new();
-    };
-    if spec.is_test_path(Path::new(shown)) {
-        return Vec::new();
-    }
-
-    let empty = BTreeMap::new();
-    let aliases = context.aliases.get(path).unwrap_or(&empty);
-    let occurrences = concepts::occurrences(parsed, context.bindings, aliases);
-    masking::findings(shown, spec.id, &occurrences, context.policy)
-}
-
-fn covered(paths: &[PathBuf], reviewed: Vec<Reviewed>, changes: Option<&Changes>) -> Vec<Reviewed> {
+fn covered(reviewed: Vec<Reviewed>, changes: Option<&Changes>) -> Vec<Reviewed> {
     let Some(changes) = changes else {
         return reviewed;
     };
 
-    paths
-        .iter()
-        .zip(reviewed)
-        .filter(|(path, _)| changes.covers(path))
-        .map(|(_, file)| file)
+    reviewed
+        .into_iter()
+        .filter(|file| changes.covers(&file.path))
         .collect()
 }
 
@@ -157,92 +162,27 @@ fn in_diff(finding: &Finding, changes: Option<&Changes>) -> bool {
     changes.is_none_or(|changes| changes.touches(Path::new(&finding.path), finding.span))
 }
 
-struct Review<'a> {
-    policy: &'a Policy,
-    project: &'a Path,
-    bindings: &'a ConceptBindings,
-    aliases: &'a AliasIndex,
-    changes: Option<&'a Changes>,
-    churn: &'a BTreeMap<PathBuf, u32>,
-    minimum_nodes: Option<u32>,
-}
-
-fn review(path: &Path, context: &Review<'_>) -> Reviewed {
-    let shown = project::display(path, context.project);
-    let Ok(source) = std::fs::read_to_string(path) else {
-        return rejected(shown, "the file could not be read");
-    };
-
-    let Some(spec) = lang::detect(path) else {
-        return rejected(shown, "no language claims this extension");
-    };
-    let parsed = match syntax::parse(&source, spec) {
-        Ok(parsed) => parsed,
-        Err(reason) => return rejected(shown, &reason.to_string()),
-    };
-
-    let lines = LineIndex::new(&source, &metrics::comment_ranges(&parsed));
-    let decisions = DecisionIndex::new(&metrics::decisions(&parsed));
-    let cognitive = CognitiveIndex::new(&metrics::increments(&parsed));
-    let units = units::units(&parsed);
-    let counted = count_units(&units);
-
-    let file = FileUnderReview {
-        path: shown,
-        language: spec.id,
-        units,
-        lines: &lines,
-        decisions: &decisions,
-        cognitive: &cognitive,
-        churn: context.churn.get(path).copied().unwrap_or(0),
-    };
-
-    let measured = Measured {
-        path: file.path.clone(),
-        span: file.units.span,
-        churn: file.churn,
-        complexity: cognitive.total(&file.units),
-    };
-
-    let findings = evaluate_findings(path, &parsed, &file, context);
-
-    Reviewed {
-        readings: review::read(&file),
-        fragments: context.minimum_nodes.map(|minimum| FileFragments {
-            path: file.path.clone(),
-            fragments: duplication::fragments(&parsed, minimum),
-        }),
-        findings,
-        units: counted,
-        unreadable: None,
-        measured: Some(measured),
-    }
-}
-
-fn evaluate_findings(
-    path: &Path,
-    parsed: &syntax::Parsed<'_>,
-    file: &FileUnderReview<'_>,
-    context: &Review<'_>,
-) -> Vec<Finding> {
-    let mut findings = review::evaluate(context.policy, file);
-    findings.extend(masked_errors(&file.path, path, parsed, context));
+fn scoped(mut findings: Vec<Finding>, path: &Path, changes: Option<&Changes>) -> Vec<Finding> {
     findings.sort_by_key(|finding| finding.span.start_line);
-    if let Some(changes) = context.changes {
+    if let Some(changes) = changes {
         findings.retain(|finding| changes.touches(path, finding.span));
     }
 
     findings
 }
 
-fn rejected(shown: String, reason: &str) -> Reviewed {
-    Reviewed {
-        unreadable: Some(Unreadable {
-            path: shown,
-            reason: reason.to_owned(),
-        }),
-        ..Reviewed::default()
+fn masked_errors(
+    text: &Text,
+    parsed: &Parsed<'_>,
+    aliases: &BTreeMap<String, String>,
+    request: &Scan<'_>,
+) -> Vec<Finding> {
+    if text.spec.is_test_path(Path::new(&text.shown)) {
+        return Vec::new();
     }
+
+    let occurrences = concepts::occurrences(parsed, request.bindings, aliases);
+    masking::findings(&text.shown, text.spec.id, &occurrences, request.policy)
 }
 
 fn count_units(unit: &Unit) -> usize {

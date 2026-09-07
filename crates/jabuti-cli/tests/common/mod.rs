@@ -99,7 +99,7 @@ pub(crate) fn error_on_long_functions(limit: usize) -> String {
     format!("[rules]\nfunction-lines = {{ limit = {limit}, severity = \"error\" }}\n")
 }
 
-fn git(directory: &TempDir, arguments: &[&str]) {
+pub(crate) fn git(directory: &TempDir, arguments: &[&str]) {
     let status = Process::new("git")
         .args(arguments)
         .current_dir(directory.path())

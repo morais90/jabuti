@@ -1,0 +1,260 @@
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+
+use anyhow::Result;
+use jabuti_core::graph::facts::{self, FileFacts};
+use jabuti_core::graph::index::Source;
+use jabuti_core::history::hotspot::{self, FileSummary};
+use jabuti_core::lang::{self, LanguageId};
+use jabuti_core::model::{Finding, Rule, Unreadable};
+
+use crate::git::since::Changes;
+use crate::{code, config, corpus, graph, history, project, tools};
+
+pub(crate) fn verdict(roots: &[PathBuf], since: Option<&str>) -> Result<code::Outcome> {
+    let (root, settings) = config::discover()?;
+    tools::known(&settings)?;
+    let changes = since
+        .map(|reference| Changes::since(reference, &root))
+        .transpose()?;
+    let history = history::load(&settings);
+    scope_notices(&settings, since.is_some());
+
+    let paths = project::sources(roots, &settings.exclude, &root)?;
+    let churn = history::commits(history.as_ref(), &paths);
+    let scope = Scope {
+        root: &root,
+        settings: &settings,
+        paths: &paths,
+        changes: changes.as_ref(),
+        churn: &churn,
+    };
+
+    let mut outcome = judged(&scope)?;
+    order(&mut outcome);
+
+    Ok(outcome)
+}
+
+struct Scope<'a> {
+    root: &'a Path,
+    settings: &'a config::Settings,
+    paths: &'a [PathBuf],
+    changes: Option<&'a Changes>,
+    churn: &'a BTreeMap<PathBuf, u32>,
+}
+
+impl Scope<'_> {
+    fn compares(&self) -> bool {
+        self.settings.enabled(Rule::NewDependency) || self.settings.enabled(Rule::SpeculativeApi)
+    }
+
+    fn layered(&self) -> bool {
+        !self.settings.layers.is_empty() && self.settings.enabled(Rule::LayerViolation)
+    }
+
+    fn graphed(&self) -> bool {
+        (self.changes.is_some() && self.compares()) || self.layered()
+    }
+
+    fn extent(&self, request: &code::Scan<'_>) -> Result<Vec<PathBuf>> {
+        if !self.graphed() {
+            return Ok(request.scope(self.paths).into_iter().collect());
+        }
+
+        project::extended(self.paths, &self.settings.exclude, self.root)
+    }
+}
+
+fn judged(scope: &Scope<'_>) -> Result<code::Outcome> {
+    let request = code::Scan {
+        policy: &scope.settings.policy,
+        bindings: &scope.settings.concepts,
+        changes: scope.changes,
+        churn: scope.churn,
+    };
+    let extent = scope.extent(&request)?;
+    let examined = examine(scope, &extent, &request);
+
+    let mut outcome = code::scan(examined.reviewed, &request);
+    outcome.unreadable = examined.unreadable;
+    if scope.changes.is_none() {
+        outcome.findings.extend(hotspot::hotspots(
+            &summaries(&outcome.measured),
+            &scope.settings.policy,
+        ));
+    }
+    outcome.findings.extend(tools::findings(&tools::Scan {
+        here: &std::env::current_dir()?,
+        project: scope.root,
+        paths: scope.paths,
+        settings: scope.settings,
+        changes: scope.changes,
+    }));
+    outcome.findings.extend(graphed(
+        scope,
+        &extent,
+        &examined.sources,
+        &examined.opaque,
+    )?);
+
+    Ok(outcome)
+}
+
+struct Derived {
+    review: Option<code::Reviewed>,
+    facts: Option<FileFacts>,
+}
+
+struct Examined {
+    reviewed: Vec<code::Reviewed>,
+    sources: Vec<Source>,
+    unreadable: Vec<Unreadable>,
+    opaque: Vec<String>,
+}
+
+fn examine(scope: &Scope<'_>, extent: &[PathBuf], request: &code::Scan<'_>) -> Examined {
+    let reviewed = request.scope(scope.paths);
+    let graphed = scope.graphed();
+    let corpus = corpus::examine(extent, scope.root, |text, parsed| Derived {
+        review: reviewed.contains(&text.path).then(|| {
+            let aliases = graph::aliases(parsed, text.spec.id, &scope.settings.concepts);
+            code::review(text, parsed, &aliases, request)
+        }),
+        facts: graphed.then(|| facts::facts(parsed)),
+    });
+
+    let mut examined = Examined {
+        reviewed: Vec::new(),
+        sources: Vec::new(),
+        unreadable: Vec::new(),
+        opaque: Vec::new(),
+    };
+    for file in corpus {
+        match file.outcome {
+            Ok(derived) => {
+                examined.reviewed.extend(derived.review);
+                examined.sources.extend(
+                    derived
+                        .facts
+                        .map(|facts| source(&file.shown, file.language, facts)),
+                );
+            }
+            Err(rejected) => {
+                examined.unreadable.push(Unreadable {
+                    path: file.shown.clone(),
+                    reason: rejected.reason,
+                });
+                examined.opaque.extend(rejected.text);
+                if graphed {
+                    examined
+                        .sources
+                        .push(source(&file.shown, file.language, FileFacts::default()));
+                }
+            }
+        }
+    }
+
+    examined
+}
+
+fn source(shown: &str, language: LanguageId, facts: FileFacts) -> Source {
+    Source {
+        path: PathBuf::from(shown),
+        language,
+        facts,
+    }
+}
+
+fn graphed(
+    scope: &Scope<'_>,
+    extent: &[PathBuf],
+    sources: &[Source],
+    opaque: &[String],
+) -> Result<Vec<Finding>> {
+    let base = match (scope.changes, scope.compares()) {
+        (Some(changes), true) => base_sources(changes, scope.paths, scope.root)?,
+        _ => BTreeMap::new(),
+    };
+    let requested: BTreeSet<PathBuf> = scope
+        .paths
+        .iter()
+        .map(|path| PathBuf::from(project::display(path, scope.root)))
+        .collect();
+
+    graph::findings(&graph::Scan {
+        paths: extent,
+        requested: &requested,
+        sources,
+        opaque,
+        base: &base,
+        project: scope.root,
+        settings: scope.settings,
+        changes: scope.changes,
+    })
+}
+
+fn base_sources(
+    changes: &Changes,
+    paths: &[PathBuf],
+    project: &Path,
+) -> Result<BTreeMap<PathBuf, Option<Source>>> {
+    let mut sources = BTreeMap::new();
+
+    for (shown, text) in changes.base_texts(paths, project)? {
+        let Some(spec) = lang::detect(&shown) else {
+            continue;
+        };
+        let source = corpus::parsed(&text, spec, facts::facts)
+            .ok()
+            .map(|facts| Source {
+                path: shown.clone(),
+                language: spec.id,
+                facts,
+            });
+        sources.insert(shown, source);
+    }
+
+    Ok(sources)
+}
+
+fn order(outcome: &mut code::Outcome) {
+    outcome
+        .unreadable
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    outcome.findings.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.span.start_line.cmp(&right.span.start_line))
+    });
+}
+
+fn scope_notices(settings: &config::Settings, scoped: bool) {
+    if scoped && settings.enabled(Rule::Hotspot) {
+        eprintln!("jabuti: hotspot ranks a whole repository, so it is not evaluated with --since");
+    }
+    for rule in [
+        Rule::NewDependency,
+        Rule::SpeculativeApi,
+        Rule::UncoveredNewCode,
+    ] {
+        if !scoped && settings.gates(rule) {
+            eprintln!(
+                "jabuti: {} compares against an earlier revision, so it needs --since",
+                rule.id()
+            );
+        }
+    }
+}
+
+fn summaries(measured: &[code::Measured]) -> Vec<FileSummary> {
+    measured
+        .iter()
+        .map(|file| FileSummary {
+            path: file.path.clone(),
+            span: file.span,
+            churn: file.churn,
+            complexity: file.complexity,
+        })
+        .collect()
+}
