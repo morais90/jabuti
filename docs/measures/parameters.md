@@ -48,24 +48,11 @@ one usually simplifies every function that was passing the pieces around.
 
 The [`parameters`](../rules/parameters.md) rule reports functions that declare more than the limit.
 
-## What real code looks like
+## Calibration
 
-**Rust**, measured across 737,689 functions in 1,645 crates published on crates.io:
-
-| p50 | p75 | p90 | p95 | p98 | p99 |
-|---|---|---|---|---|---|
-| 1 | 1 | 2 | 3 | 5 | 6 |
-
-Roughly 43% of functions take no arguments at all, and the median is one. Anything past three is
-already unusual.
-
-**Kotlin**, across 54,933 functions in ten established projects:
-
-| p50 | p75 | p90 | p95 | p98 | p99 |
-|---|---|---|---|---|---|
-| 0 | 1 | 2 | 3 | 5 | 6 |
-
-Close enough to Rust that both use the same limit.
+All three languages currently use a limit of 4. TypeScript's explicit `this` parameter describes the
+receiver and is not counted. The measured distributions live in
+[`CALIBRATION.md`](../../CALIBRATION.md).
 
 ## Further reading
 

@@ -1,6 +1,6 @@
 # `parameters`
 
-Reports a function or closure that declares more arguments than the limit.
+Reports a function that declares more arguments than the limit.
 
 **Default limit:** 4. **Default severity:** warning.
 
@@ -22,22 +22,11 @@ the signature shrinks and every other place passing those four values around shr
 Both readings point at the same thing from different directions, which is why the count is worth
 knowing even though it says nothing about what the function does.
 
-## Where 4 comes from
+## Calibration
 
-It is close to the 98th percentile of published Rust libraries. Measured across 737,689 functions
-from 1,645 crates published on crates.io:
-
-| p50 | p75 | p90 | p95 | p98 | p99 |
-|---|---|---|---|---|---|
-| 1 | 1 | 2 | 3 | 5 | 6 |
-
-A limit of 4 reports about 2.2% of functions, in the same band as the other rules that are on by
-default.
-
-That percentile is of libraries, and an application tends to carry wider signatures: the same limit
-reports 5.0% of functions in hyperswitch and 5.2% in komga, against 0.9% in okhttp and 0.8% in
-kotlinx.coroutines. A handler assembling a request from many parts is the ordinary reason, and it is
-the case where raising the limit is a reasonable answer rather than an evasion.
+Rust, Kotlin and TypeScript currently use 4. An explicit TypeScript `this` parameter identifies the
+receiver and is excluded. [`CALIBRATION.md`](../../CALIBRATION.md) records the measured distributions
+and report rates.
 
 ## When to change it
 

@@ -13,9 +13,9 @@ which is exactly what this tool goes looking for.
 
 </div>
 
-> **Status: early but usable.** `jabuti check` reads Rust and Kotlin, reports nine rules and holds
-> back four more, one of which reads the test coverage a project produces, and can fold in the
-> linters a project already runs.
+> **Status: early but usable.** `jabuti check` reads Rust, Kotlin and TypeScript, reports nine rules
+> and holds back four more, one of which reads the test coverage a project produces, and can fold in
+> the linters a project already runs.
 
 ## Why this exists
 
@@ -86,30 +86,22 @@ it; under `--since`, a dependency the change introduced is reported the same way
 
 The dependencies are found wherever they are written, not only in the import list. This repository
 is its own example: no file contains `use crate::git`, yet two of them call `crate::git::run` on the
-line that uses it, and in Kotlin a file needs no import at all to use its own package. Reading only
-imports would miss both, and a missing dependency is the expensive kind of mistake here.
-[`docs/concepts.md`](docs/concepts.md) says what the graph can and cannot see.
+line that uses it. Kotlin resolves bare names in the same package, and TypeScript resolves relative
+module specifiers with or without their emitted `.js` extension. Reading only one import shape would
+miss all three. [`docs/concepts.md`](docs/concepts.md) says what the graph can and cannot see.
 
 ## Thresholds are measured, not asserted
 
-A threshold nobody can defend gets disabled the first time it is wrong. Ours are drawn from the
-distribution of real code: 1,645 crates published on crates.io, 45,361 files, 737,689 functions.
+A threshold nobody can defend gets disabled the first time it is wrong. Defaults are selected by
+language instead of borrowing a number from a different grammar. Rust and Kotlin use different
+function-length limits; TypeScript differs for both function length and cognitive complexity.
 
-`function-lines` is capped at 60 and `cognitive-complexity` at 7, both at the 98th percentile. The
-claim each makes is that the code it points at is unusual by the standard of published Rust, and
-that is a claim we can show.
+[`CALIBRATION.md`](CALIBRATION.md) records the benchmark populations, revisions, distributions and
+report rates behind those choices.
 
-The same measurement is why two rules ship switched off. Cyclomatic complexity scores 1 for three
-quarters of all Rust functions, and what lands above any threshold that fires is dominated by flat
-exhaustive matches, which are lookup tables that read at a glance. File length is too dispersed for
-a single number to separate healthy from unhealthy. Both are still computed, because their signal
-survives inside composites even though it does not survive alone.
-
-We checked rather than assumed. On one real project cyclomatic complexity flagged six functions and
-four were lookup tables. At the same percentile, cognitive complexity flagged one function, and that
-function genuinely was the hardest to follow in the repository.
-
-Each rule and its calibration is written up under [`docs/`](docs).
+Cyclomatic complexity and file length remain available but off by default because neither is a
+reliable verdict alone. Their technical behavior is documented under [`docs/`](docs); their measured
+validation is kept separately in [`CALIBRATION.md`](CALIBRATION.md).
 
 ## Installing
 

@@ -64,6 +64,13 @@ In Kotlin:
 | `catch (e: Exception) { }` | Catches the failure and does nothing |
 | `runCatching { }.getOrNull()` | Same effect as `.ok()` |
 
+In TypeScript:
+
+| Construction | What it removes |
+|---|---|
+| `catch { }` | Catches a thrown value and does nothing |
+| `promise.catch(() => { })` | Converts a rejected promise into a successful one with no value |
+
 Detection is syntactic. jabuti reads the shape of the code, not its types, so it does not know
 whether `.ok()` was called on a `Result` or on something else that happens to have that method. This
 is what keeps the rule fast enough to run on every change.
@@ -73,15 +80,10 @@ is what keeps the rule fast enough to run on every change.
 An `unwrap()` in a test is not a masked error. It is the assertion. Writing the handled version
 would make the test worse, because a test that quietly returns on failure is a test that cannot fail.
 
-This is not a detail. Across five codebases in two languages, between 73% and 87% of all masking
-constructs were in test code. Reporting them would bury the ones that matter under noise that is
-correct by design.
-
-jabuti recognises test code two ways, and needs both. Files under `tests/`, `benches/` and
-`examples/` in Rust, or under a test source set in Kotlin, are skipped by path. Functions and modules
-marked as tests are skipped wherever they live, because in the codebases measured about a quarter of
-the occurrences were in `#[test]` functions and `#[cfg(test)]` modules sitting inside ordinary source
-files, where a path rule cannot reach them.
+jabuti recognises test code by path and by language markers. Rust skips `tests/`, `benches/` and
+`examples/`; Kotlin skips test source sets; TypeScript skips `test`, `tests`, `__tests__`, `*.test.ts`
+and `*.spec.ts`. Rust and Kotlin declarations marked as tests are also skipped wherever they live,
+because a path rule cannot reach a test function inside an ordinary production file.
 
 Production code beside a test module is still read. Only the test parts are quiet.
 
@@ -123,15 +125,27 @@ worth asking. Four hundred in a codebase you inherited is a fact you cannot act 
 
 ## Requirements and limits
 
-The rule reports roughly 2 to 4 findings per thousand lines of production code, measured across the
-Rust crate registry, two large Kotlin projects and two smaller Rust projects. That rate was
-consistent enough across both languages to be worth trusting.
-
-There is no threshold to tune. Setting a `limit` has no effect, because a masked error is not a
-quantity that accumulates until it becomes a problem.
+There is no threshold to tune. Every matched occurrence is reported when the rule is enabled. The
+measured production rate and the test-code exclusion study live in
+[`CALIBRATION.md`](../../CALIBRATION.md).
 
 Detection is per file, so unlike [`duplicate-block`](duplicate-block.md) this rule can be configured
 per language.
+
+## Extending the concept vocabulary
+
+`error-masking` is concept-bound. Each language query tags the syntax above with one of three
+effects: panic, discard or swallow. The rule consumes those tags and contains no language names.
+
+A project API that intentionally drops an error can be added by canonical path:
+
+```toml
+[languages.typescript.concepts]
+error-discard = ["@mycorp/errors.discard"]
+```
+
+Direct and aliased imports resolve to that path. The configured binding extends the built-ins; it
+does not replace the empty-handler checks.
 
 ## Changing it
 

@@ -1,6 +1,8 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
+
+use crate::lang::LanguageId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct Span {
@@ -33,6 +35,63 @@ impl Severity {
             Self::Warning => "warning",
             Self::Error => "error",
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Portability {
+    Universal,
+    ConceptBound,
+    LanguageSpecific,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Concept {
+    ErrorDiscard,
+    ErrorPanic,
+    ErrorSwallow,
+}
+
+impl Concept {
+    pub const ALL: [Self; 3] = [Self::ErrorDiscard, Self::ErrorPanic, Self::ErrorSwallow];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::ErrorDiscard => "error-discard",
+            Self::ErrorPanic => "error-panic",
+            Self::ErrorSwallow => "error-swallow",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|concept| concept.id() == id)
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConceptBindings {
+    paths: BTreeMap<(LanguageId, Concept), BTreeSet<String>>,
+}
+
+impl ConceptBindings {
+    pub fn set(&mut self, language: LanguageId, concept: Concept, paths: Vec<String>) {
+        self.paths
+            .entry((language, concept))
+            .or_default()
+            .extend(paths);
+    }
+
+    pub fn paths(&self, language: LanguageId, concept: Concept) -> Option<&BTreeSet<String>> {
+        self.paths.get(&(language, concept))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.paths.is_empty()
+    }
+
+    pub fn is_empty_for(&self, language: LanguageId) -> bool {
+        !self.paths.keys().any(|(bound, _)| *bound == language)
     }
 }
 
@@ -90,6 +149,24 @@ impl Rule {
 
     pub fn from_id(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|rule| rule.id() == id)
+    }
+
+    pub fn portability(self) -> Portability {
+        match self {
+            Self::ErrorMasking => Portability::ConceptBound,
+            Self::Churn
+            | Self::DuplicateBlock
+            | Self::Hotspot
+            | Self::LayerViolation
+            | Self::NewDependency
+            | Self::SpeculativeApi
+            | Self::UncoveredNewCode
+            | Self::CognitiveComplexity
+            | Self::CyclomaticComplexity
+            | Self::FileLines
+            | Self::FunctionLines
+            | Self::Parameters => Portability::Universal,
+        }
     }
 
     pub fn repository_wide(self) -> bool {

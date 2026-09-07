@@ -1,6 +1,9 @@
+use std::collections::BTreeMap;
+
 use jabuti_core::code::lang::{declared_fields, declared_node_kinds};
-use jabuti_core::code::{duplication, masking, metrics, units};
+use jabuti_core::code::{concepts, duplication, metrics, support, units};
 use jabuti_core::lang::{self, LanguageId};
+use jabuti_core::model::{ConceptBindings, Portability, Rule};
 use jabuti_core::syntax;
 
 #[test]
@@ -11,7 +14,7 @@ fn every_language_compiles_every_query_the_context_declares() {
         units::units(&parsed);
         metrics::comment_ranges(&parsed);
         metrics::decisions(&parsed);
-        masking::maskings(&parsed);
+        concepts::occurrences(&parsed, &ConceptBindings::default(), &BTreeMap::new());
         duplication::fragments(&parsed, 0);
     }
 }
@@ -37,6 +40,33 @@ fn every_node_kind_a_language_names_exists_in_its_grammar() {
             assert!(spec.knows_field(field), "{:?} names field {field}", spec.id);
         }
     }
+}
+
+#[test]
+fn every_language_reports_available_rules_from_its_tables() {
+    for spec in lang::ALL {
+        assert_eq!(
+            support::available_rules(spec.id),
+            Rule::ALL,
+            "{:?}",
+            spec.id
+        );
+    }
+}
+
+#[test]
+fn each_portability_class_uses_its_own_availability_signal() {
+    assert_eq!(
+        [
+            support::portability_available(Portability::Universal, false, false),
+            support::portability_available(Portability::Universal, true, true),
+            support::portability_available(Portability::ConceptBound, false, true),
+            support::portability_available(Portability::ConceptBound, true, false),
+            support::portability_available(Portability::LanguageSpecific, true, false),
+            support::portability_available(Portability::LanguageSpecific, false, true),
+        ],
+        [true, true, false, true, false, true]
+    );
 }
 
 #[test]

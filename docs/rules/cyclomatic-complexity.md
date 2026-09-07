@@ -2,41 +2,19 @@
 
 Reports a function with more independent execution paths than the limit.
 
-**Default limit:** 10. **Default severity:** off.
+**Default limit:** 10 in Rust and Kotlin, 13 in TypeScript. **Default severity:** off.
 
 See [the measure](../measures/cyclomatic-complexity.md) for how the number is calculated.
 
 ## Why it is off
 
-Not because the number is wrong. Because in Rust it points at the wrong things.
+Cyclomatic complexity counts independent paths but does not charge for nesting. A flat dispatch table
+and deeply tangled control flow can therefore receive the same value. That makes the number useful as
+an input and unreliable as a default verdict.
 
-Across 737,499 functions from 1,645 crates published on crates.io:
-
-| p50 | p75 | p90 | p95 | p99 |
-|---|---|---|---|---|
-| 1 | 1 | 2 | 4 | 10 |
-
-Three quarters of Rust functions score 1. They do not branch. A distribution that flat means the
-threshold has to sit far out to fire at all, and when you look at what does land out there, most of
-it is this:
-
-```rust
-fn normalized(method: &Method) -> &'static str {
-    match method.as_str() {
-        "GET" => "GET",
-        "POST" => "POST",
-        // eight more arms
-    }
-}
-```
-
-That scores 10. It is a lookup table, and it reads at a glance. Rust reaches for exhaustive matching
-where other languages reach for a hash map, so the arms pile up as paths without piling up as
-difficulty.
-
-We checked this on a real codebase rather than assuming it. Of the functions this rule reported,
-most were flat tables of exactly this shape. A rule that is mostly false alarms teaches people to
-skim past everything jabuti prints, and that is a worse outcome than not having the rule.
+Rust and Kotlin carry a default limit of 10; TypeScript carries 13. The rule remains available when a
+project wants a path-count backstop. [`CALIBRATION.md`](../../CALIBRATION.md) records the distributions
+and the inspection that led to the default severity.
 
 ## What to use instead
 

@@ -57,10 +57,30 @@ fn shared_defaults() -> BTreeMap<RuleId, RuleConfig> {
 }
 
 fn language_defaults() -> BTreeMap<(LanguageId, RuleId), RuleConfig> {
-    BTreeMap::from([(
-        (LanguageId::Kotlin, RuleId::Native(Rule::FunctionLines)),
-        reporting(47),
-    )])
+    BTreeMap::from([
+        (
+            (LanguageId::Kotlin, RuleId::Native(Rule::FunctionLines)),
+            reporting(47),
+        ),
+        (
+            (
+                LanguageId::TypeScript,
+                RuleId::Native(Rule::CognitiveComplexity),
+            ),
+            reporting(18),
+        ),
+        (
+            (
+                LanguageId::TypeScript,
+                RuleId::Native(Rule::CyclomaticComplexity),
+            ),
+            silent(13),
+        ),
+        (
+            (LanguageId::TypeScript, RuleId::Native(Rule::FunctionLines)),
+            reporting(71),
+        ),
+    ])
 }
 
 impl Policy {

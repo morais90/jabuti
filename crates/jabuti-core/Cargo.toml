@@ -21,6 +21,7 @@ thiserror = "2.0.20"
 tree-sitter = "0.26.13"
 tree-sitter-kotlin-ng = "1.1.0"
 tree-sitter-rust = "0.24.2"
+tree-sitter-typescript = "0.23.2"
 
 [dev-dependencies]
 insta = "1.48.0"

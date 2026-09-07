@@ -1,0 +1,14 @@
+---
+source: crates/jabuti-core/tests/graph/main.rs
+expression: rendered(&facts)
+---
+module 
+declares Shelf at 3 public
+declares label at 4 public on Shelf
+path ./Book at 1
+mention Book at 1,4
+mention book at 4,5
+mention label at 4
+mention shown at 6
+mention title at 5
+mention trim at 5

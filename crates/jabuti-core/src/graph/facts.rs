@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use tree_sitter::Node;
+use tree_sitter::{Node, Query, QueryMatch};
 
 use super::lang::{self, Table};
 use crate::model::Span;
@@ -17,6 +17,7 @@ pub struct Declared {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FileFacts {
     pub module: String,
+    pub aliases: BTreeMap<String, String>,
     pub declares: BTreeMap<String, Vec<Declared>>,
     pub exports: BTreeSet<String>,
     pub glob_exports: BTreeSet<String>,
@@ -34,13 +35,70 @@ pub fn facts(parsed: &Parsed<'_>) -> FileFacts {
     };
 
     parsed.for_each_match(table.references(), |matched, query| {
-        for capture in matched.captures {
-            let name = query.capture_names()[capture.index as usize];
-            recorder.record(name, capture.node);
-        }
+        recorder.record_match(matched, query);
     });
 
     recorder.facts
+}
+
+pub fn aliases(parsed: &Parsed<'_>) -> BTreeMap<String, String> {
+    let table = lang::table(parsed.language());
+    let mut found = BTreeMap::new();
+
+    parsed.for_each_match(table.references(), |matched, query| {
+        if let Some((local, canonical)) =
+            captured_alias(matched, query, parsed.source(), table.path_separator)
+        {
+            found.entry(local).or_insert(canonical);
+        }
+    });
+
+    found
+}
+
+fn captured_alias(
+    matched: &QueryMatch<'_, '_>,
+    query: &Query,
+    source: &str,
+    separator: &str,
+) -> Option<(String, String)> {
+    let mut path = None;
+    let mut module = None;
+    let mut name = None;
+    let mut alias = None;
+
+    for capture in matched.captures {
+        let label = query.capture_names()[capture.index as usize];
+        let text = || {
+            syntax::text_of(capture.node, source)
+                .trim_matches(['\'', '"'])
+                .to_owned()
+        };
+        match label {
+            "import.path" => path = Some(text()),
+            "import.module" => module = Some(text()),
+            "import.name" => name = Some(text()),
+            "import.alias" => alias = Some(text()),
+            _ => {}
+        }
+    }
+
+    let canonical = path.or_else(|| {
+        module.map(|module| {
+            name.as_ref().map_or_else(
+                || module.clone(),
+                |name| format!("{module}{separator}{name}"),
+            )
+        })
+    })?;
+    let local = alias.or(name).unwrap_or_else(|| {
+        canonical
+            .rsplit_once(separator)
+            .map_or(canonical.as_str(), |(_, name)| name)
+            .to_owned()
+    });
+
+    Some((local, canonical))
 }
 
 struct Recorder<'a> {
@@ -50,6 +108,21 @@ struct Recorder<'a> {
 }
 
 impl Recorder<'_> {
+    fn record_match(&mut self, matched: &QueryMatch<'_, '_>, query: &Query) {
+        if let Some((local, canonical)) =
+            captured_alias(matched, query, self.source, self.table.path_separator)
+        {
+            self.facts.aliases.entry(local).or_insert(canonical);
+        }
+
+        for capture in matched.captures {
+            let label = query.capture_names()[capture.index as usize];
+            if !label.starts_with("import.") {
+                self.record(label, capture.node);
+            }
+        }
+    }
+
     fn record(&mut self, capture: &str, node: Node<'_>) {
         match capture {
             "package" => self.facts.module = syntax::text_of(node, self.source),
@@ -58,6 +131,7 @@ impl Recorder<'_> {
             "reference.name" => self.name(node),
             "reference.mention" => self.mention(node),
             "reference.path" | "reference.token" | "reference.list" => self.path(capture, node),
+            "reference.module" => self.module(node),
             _ => {}
         }
     }
@@ -70,7 +144,7 @@ impl Recorder<'_> {
             span: syntax::span_of(item),
             public: is_public(item, self.source, self.table),
             marked: is_marked(item, self.source, self.table),
-            owner: owner_of(item, self.source),
+            owner: owner_of(item, self.source, self.table),
         };
 
         self.facts
@@ -129,20 +203,55 @@ impl Recorder<'_> {
             self.facts.paths.entry(path).or_insert(at);
         }
     }
+
+    fn module(&mut self, node: Node<'_>) {
+        let text = syntax::text_of(node, self.source);
+        let path = text.trim_matches(['\'', '"']).to_owned();
+        self.facts
+            .paths
+            .entry(path)
+            .or_insert_with(|| syntax::span_of(node));
+    }
 }
 
 fn is_public(item: Node<'_>, source: &str, table: &Table) -> bool {
+    if wrapped_publicly(item, table) {
+        return true;
+    }
+
+    let public_by_position = table.public_by_default
+        || item
+            .parent()
+            .is_some_and(|parent| table.public_inside.contains(&parent.kind()));
     let visibility = modifiers_of(item, table)
         .into_iter()
-        .find(|node| node.kind() == "visibility_modifier");
+        .find(|node| table.visibility_modifiers.contains(&node.kind()));
 
     match visibility {
-        None => table.public_by_default,
-        Some(node) if table.public_by_default => !table
+        None => public_by_position,
+        Some(node) if public_by_position => !table
             .restricting_modifiers
             .contains(&syntax::text_of(node, source).as_str()),
-        Some(node) => node.named_child_count() == 0,
+        Some(node) => table
+            .public_modifiers
+            .contains(&syntax::text_of(node, source).as_str()),
     }
+}
+
+fn wrapped_publicly(item: Node<'_>, table: &Table) -> bool {
+    let mut current = item.parent();
+
+    while let Some(parent) = current {
+        if table.public_wrappers.contains(&parent.kind()) {
+            return true;
+        }
+        if !table.public_transparents.contains(&parent.kind()) {
+            return false;
+        }
+        current = parent.parent();
+    }
+
+    false
 }
 
 fn modifiers_of<'tree>(item: Node<'tree>, table: &Table) -> Vec<Node<'tree>> {
@@ -150,7 +259,7 @@ fn modifiers_of<'tree>(item: Node<'tree>, table: &Table) -> Vec<Node<'tree>> {
     let mut found = Vec::new();
 
     for child in item.children(&mut cursor) {
-        if child.kind() == "visibility_modifier" {
+        if table.visibility_modifiers.contains(&child.kind()) {
             found.push(child);
         }
         if table.decorators_within.contains(&child.kind()) {
@@ -204,6 +313,11 @@ fn decorators_of<'tree>(item: Node<'tree>, table: &Table) -> Vec<Node<'tree>> {
         sibling = current.prev_sibling();
     }
 
+    let mut cursor = item.walk();
+    decorators.extend(
+        item.children(&mut cursor)
+            .filter(|node| table.decorators_direct.contains(&node.kind())),
+    );
     decorators.extend(
         modifiers_of(item, table)
             .into_iter()
@@ -223,21 +337,21 @@ fn decorator_name(text: &str) -> String {
         .to_owned()
 }
 
-fn owner_of(item: Node<'_>, source: &str) -> Option<String> {
-    let block = item.parent()?;
-    if block.kind() != "declaration_list" {
+fn owner_of(item: Node<'_>, source: &str, table: &Table) -> Option<String> {
+    let body = item.parent()?;
+    if !table.owner_bodies.contains(&body.kind()) {
         return None;
     }
-    let owner = block.parent()?;
-    if owner.kind() != "impl_item" {
+    let owner = body.parent()?;
+    if !table.owner_declarations.contains(&owner.kind()) {
         return None;
     }
-    let mut typed = owner.child_by_field_name("type")?;
-    if typed.kind() == "generic_type" {
-        typed = typed.child_by_field_name("type")?;
+    let mut name = owner.child_by_field_name(table.owner_field)?;
+    while table.owner_name_wrappers.contains(&name.kind()) {
+        name = name.child_by_field_name(table.owner_field)?;
     }
 
-    Some(syntax::text_of(typed, source))
+    Some(syntax::text_of(name, source))
 }
 
 fn plainly_public(name: Node<'_>) -> bool {
@@ -293,7 +407,7 @@ fn declares_here(node: Node<'_>) -> bool {
     })
 }
 
-const DECLARING: [&str; 13] = [
+const DECLARING: [&str; 15] = [
     "struct_item",
     "enum_item",
     "union_item",
@@ -307,6 +421,8 @@ const DECLARING: [&str; 13] = [
     "object_declaration",
     "function_declaration",
     "type_alias",
+    "variable_declarator",
+    "public_field_definition",
 ];
 
 fn widest_path(node: Node<'_>, source: &str) -> Option<String> {

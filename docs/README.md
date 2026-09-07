@@ -3,8 +3,8 @@
 If this is your first time here, start with [concepts](concepts.md). It explains the few terms these
 pages use and how to read what `jabuti check` prints.
 
-jabuti reads Rust and Kotlin. [Languages](languages.md) covers what each one contributes and why
-their limits differ.
+jabuti reads Rust, Kotlin and TypeScript. [Languages](languages.md) covers what each one contributes,
+which rules are available and why their limits differ.
 
 ## Output formats
 

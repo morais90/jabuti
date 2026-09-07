@@ -167,6 +167,17 @@ fn a_kotlin_file_is_measured_against_kotlins_own_limit() {
 }
 
 #[test]
+fn a_typescript_file_is_measured_against_typescripts_own_limit() {
+    let body = "    consume(value);\n".repeat(71);
+    let source = format!("export function wide(value: number): void {{\n{body}}}\n");
+    let directory = project(&[("src/live.ts", &source)]);
+
+    jabuti(&directory).assert().success().stdout(contains(
+        "src/live.ts:1  warning  function-lines  wide  measured 73, limit 71",
+    ));
+}
+
+#[test]
 fn a_language_limit_written_in_the_configuration_wins() {
     let body = "    val value = 1\n".repeat(50);
     let directory = project(&[

@@ -61,7 +61,7 @@ copies come to differ, and it changes nothing about the code, so a copy carrying
 does not have is still reported as a copy.
 
 Attributes and annotations do not take part either. In Rust that means `#[derive(...)]` and friends;
-in Kotlin, annotations and modifier lists.
+in Kotlin, annotations and modifier lists; in TypeScript, decorators.
 
 The reason is a consequence of comparing shape. Because names and literals are ignored,
 `#[case("a", 1)]` and `#[case("b", 2)]` produce the same fingerprint, so any two functions carrying

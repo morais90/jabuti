@@ -1,3 +1,7 @@
+(import
+  (qualified_identifier) @import.path
+  (identifier)? @import.alias)
+
 (package_header (qualified_identifier) @package)
 
 (import (qualified_identifier) @reference.path)

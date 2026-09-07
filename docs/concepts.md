@@ -1,7 +1,33 @@
 # Concepts
 
-Four words carry most of the meaning in jabuti: unit, measure, rule and finding. Once those are
-clear, the output of `jabuti check` reads on its own.
+Five words carry most of the meaning in jabuti: concept, unit, measure, rule and finding. Once those
+are clear, the output of `jabuti check` reads on its own.
+
+## Concept
+
+A concept is a language-independent fact attached to a piece of syntax. Rust's `.unwrap()`, Kotlin's
+`!!` and an empty TypeScript `catch` look unrelated in their syntax trees. Each removes an error path,
+so their language tables bind them to the vocabulary consumed by `error-masking`.
+
+```mermaid
+flowchart LR
+    ast["syntax tree"] --> binding["language bindings"]
+    binding --> concept["tagged concepts"]
+    concept --> rule["language-independent rule"]
+    rule --> finding["finding"]
+```
+
+Real projects wrap library APIs. A local binding extends the built-in vocabulary without replacing
+it:
+
+```toml
+[languages.typescript.concepts]
+error-discard = ["@mycorp/errors.discard"]
+```
+
+If that symbol is imported under another name, jabuti resolves the import alias before comparing the
+path. This is reference resolution, not type inference; a method selected only by the receiver's type
+remains outside what a syntax-level check can prove.
 
 ## Unit
 
@@ -140,15 +166,14 @@ So the whole path is read, wherever it is written:
 
 | Written as | Example |
 |---|---|
-| An import | `use crate::config::Settings`, `import org.example.catalog.Book` |
+| An import | `use crate::config::Settings`, `import org.example.catalog.Book`, `import { Book } from "./Book"` |
 | A path spelled out where it is used | `crate::git::run(...)` |
 | A path relative to a module in scope | `since::latest()` after `mod since;` |
 | A path inside a macro | `format!("{}", crate::git::run(...))` |
 | In Kotlin, a bare name from the same package | `Book`, with no import, because Kotlin does not need one |
-
-That last row is the one that matters most in Kotlin and is invisible to any import-based graph.
-Measured on three Kotlin projects, between one edge in eight and one in five is a same-package
-reference with no import to find it by.
+| A relative TypeScript module | `./Book`, `../catalog/Book.js`, or an extensionless `../catalog/Book` |
+Kotlin same-package names are invisible to an import-only graph, which is why the reference query
+captures them directly. The measured edge shares live in [`CALIBRATION.md`](../CALIBRATION.md).
 
 ### What it cannot see
 
@@ -163,6 +188,10 @@ A Rust file's module is read from its place under the nearest `src` directory, w
 Cargo produces. Code kept elsewhere, under `lib/` say, does not resolve. Across crates in a workspace
 a reference is matched by crate name, and the crate is assumed to live in a directory called after
 it, so a crate whose directory name differs from the name in its `Cargo.toml` is not found.
+
+TypeScript resolution follows relative module specifiers to `.ts` files and `index.ts`. Package
+imports and aliases declared only in `tsconfig.json` remain external because resolving them requires
+the project's module-resolution configuration.
 
 Name resolution can also point at the wrong file when two declarations share a name, which adds an
 edge to the graph rather than removing one. That is the safer of the two mistakes: a dependency

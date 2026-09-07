@@ -182,6 +182,13 @@ fn a_kotlin_file_reports_its_package_its_declarations_and_every_bare_name() {
     insta::assert_snapshot!(rendered(&facts));
 }
 
+#[test]
+fn a_typescript_file_reports_exports_declarations_and_relative_modules() {
+    let facts = facts_of("typescript/catalog/Shelf.ts", &lang::TYPESCRIPT);
+
+    insta::assert_snapshot!(rendered(&facts));
+}
+
 fn drawn(edges: &Edges) -> String {
     edges
         .keys()
@@ -217,6 +224,19 @@ fn a_kotlin_file_depends_on_a_sibling_it_never_imported() {
         drawn(&edges),
         "catalog/Shelf.kt -> catalog/Book.kt\n\
          storage/Repository.kt -> catalog/Shelf.kt"
+    );
+}
+
+#[test]
+fn a_typescript_file_resolves_extensionless_javascript_and_declaration_modules() {
+    let edges = index::edges(&sources_under("typescript", &lang::TYPESCRIPT));
+
+    assert_eq!(
+        drawn(&edges),
+        "catalog/Shelf.ts -> catalog/Book.ts\n\
+         storage/DetailsConsumer.ts -> catalog/details/index.ts\n\
+         storage/Repository.ts -> catalog/Shelf.ts\n\
+         storage/TypesConsumer.ts -> catalog/Types.d.ts"
     );
 }
 

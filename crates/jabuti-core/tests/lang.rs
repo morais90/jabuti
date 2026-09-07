@@ -24,6 +24,7 @@ fn a_file_without_an_extension_is_not_detected() {
 #[rstest]
 #[case(LanguageId::Kotlin, "kotlin")]
 #[case(LanguageId::Rust, "rust")]
+#[case(LanguageId::TypeScript, "typescript")]
 fn a_language_answers_to_its_own_name(#[case] id: LanguageId, #[case] name: &str) {
     assert_eq!(id.name(), name);
     assert_eq!(LanguageId::from_name(name), Some(id));
@@ -56,6 +57,7 @@ fn the_grammar_version_a_language_reports_is_the_one_we_depend_on() {
         let crate_name = match spec.id {
             LanguageId::Kotlin => "tree-sitter-kotlin-ng",
             LanguageId::Rust => "tree-sitter-rust",
+            LanguageId::TypeScript => "tree-sitter-typescript",
         };
         let Some(declared) = manifest
             .lines()
@@ -87,6 +89,7 @@ fn a_grammar_answers_whether_it_has_a_node_kind(
 fn an_empty_name_is_never_a_node_kind_the_grammar_has() {
     assert!(!lang::RUST.knows_node_kind("", true));
     assert!(!lang::KOTLIN.knows_node_kind("", true));
+    assert!(!lang::TYPESCRIPT.knows_node_kind("", true));
 }
 
 #[rstest]
@@ -106,4 +109,8 @@ fn a_file_under_a_test_directory_is_recognised_by_its_path() {
     assert!(lang::KOTLIN.is_test_path(Path::new("app/src/test/kotlin/T.kt")));
     assert!(lang::KOTLIN.is_test_path(Path::new("app/src/androidTest/kotlin/T.kt")));
     assert!(!lang::KOTLIN.is_test_path(Path::new("app/src/main/kotlin/T.kt")));
+
+    assert!(lang::TYPESCRIPT.is_test_path(Path::new("src/catalog.test.ts")));
+    assert!(lang::TYPESCRIPT.is_test_path(Path::new("src/__tests__/catalog.ts")));
+    assert!(!lang::TYPESCRIPT.is_test_path(Path::new("src/catalog.ts")));
 }

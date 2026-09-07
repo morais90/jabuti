@@ -32,6 +32,10 @@ left to the compiler, which already reports them when nothing uses them.
 **Kotlin.** A top-level class, object, function or type alias with no `private`, `internal` or
 `protected` modifier, which is to say the default.
 
+**TypeScript.** A top-level function, class, interface, enum, type alias or value under `export`, and
+public members of classes and interfaces. `private` and `protected` members are excluded. Decorators
+mark a declaration as framework-reachable, so the rule stays quiet about it.
+
 **A reference** is the item's name written anywhere in the project other than inside its own
 declaration: a call, a type position, a method call through a receiver, a path segment, a use list,
 a value passed or assigned, a name inside a macro. Every identifier counts, whatever position it
@@ -69,32 +73,22 @@ same file at the base revision, so editing a file full of public functions repor
 them. Renaming is the one case that reads as new, and a renamed item nobody references is worth the
 line. When the base revision of a file cannot be parsed, the file is skipped rather than read as new.
 
-## Kotlin libraries
+## Kotlin and TypeScript libraries
 
-Kotlin has no `lib.rs`, and public is the default, so the rule assumes a Kotlin project is an
-application whose code is called from inside the repository or through an annotation. In a Kotlin
-library, new public API is the point, and the rule will report it. Switch it off there:
+Neither language has a `lib.rs` root that distinguishes an application from a library. Kotlin is
+public by default; TypeScript marks exports explicitly, but an exported item may still be internal to
+a monorepo. In a library, new public API is the point and the rule may report it. Switch it off for
+that language:
 
 ```toml
-[languages.kotlin.rules]
+[languages.typescript.rules]
 speculative-api = { severity = "off" }
 ```
 
-## How often it fires
+## Calibration
 
-Measured commit by commit, each against its parent, counting declarations added at the top level of a
-file (`pub` items in Rust, any class, object, function or alias in Kotlin):
-
-| Project | Commits | New public items | Findings |
-|---|---|---|---|
-| meilisearch (Rust, library crates) | 60 | 90 | 0 |
-| komga (Kotlin, Spring) | 25 | 746 | 0 |
-| jabuti (Rust, library and binary) | 40 | 162 | 0 |
-
-Ninety public items were added to meilisearch in those commits and every one was either called or
-exported. That is the expected shape: a person adds a function because a call site needs it. The
-rule exists for the other author, and a probe confirms it is awake: appending an unreferenced public
-declaration to a file in either meilisearch or komga produces exactly one finding at that line.
+The rule has no numerical threshold. The commit-history probes and synthetic-orphan check used to
+validate its precision live in [`CALIBRATION.md`](../../CALIBRATION.md).
 
 ## What it cannot see
 
@@ -112,8 +106,8 @@ off.
 speculative-api = { severity = "off" }
 ```
 
-Turning it off makes sense for a Kotlin library, or during a phase where a module is being built ahead
-of its callers on purpose.
+Turning it off makes sense for a Kotlin or TypeScript library, or during a phase where a module is
+being built ahead of its callers on purpose.
 
 Promoting it to `error` fits an agent harness where the agent is expected to wire what it declares in
 the same change. A human team will usually want the warning, since scaffolding ahead of use is a

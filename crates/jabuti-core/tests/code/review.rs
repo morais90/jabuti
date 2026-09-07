@@ -230,6 +230,28 @@ fn a_language_can_carry_a_limit_of_its_own() {
             .map(|config| config.limit),
         Some(47)
     );
+    assert_eq!(
+        policy
+            .config_for(LanguageId::TypeScript, Rule::FunctionLines)
+            .map(|config| config.limit),
+        Some(71)
+    );
+    assert_eq!(
+        policy
+            .config_for(LanguageId::TypeScript, Rule::CognitiveComplexity)
+            .map(|config| config.limit),
+        Some(18)
+    );
+    assert_eq!(
+        policy
+            .config_for(LanguageId::TypeScript, Rule::CyclomaticComplexity)
+            .map(|config| config.limit),
+        Some(13)
+    );
+    assert_eq!(
+        policy.config_for(LanguageId::TypeScript, Rule::Parameters),
+        policy.config(Rule::Parameters)
+    );
 }
 
 #[test]

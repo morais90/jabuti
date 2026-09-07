@@ -48,7 +48,7 @@ pub(crate) fn known(paths: &[PathBuf], project: &Path) -> (Vec<Source>, Vec<Unre
         let shown = crate::project::display(path, project);
 
         match spec.id {
-            lang::LanguageId::Rust => sources.push(Source {
+            lang::LanguageId::Rust | lang::LanguageId::TypeScript => sources.push(Source {
                 path: PathBuf::from(shown),
                 language: spec.id,
                 facts: FileFacts::default(),

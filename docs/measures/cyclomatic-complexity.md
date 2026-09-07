@@ -120,20 +120,10 @@ fn normalized(method: &Method) -> &'static str {
 That function scores 10. Nothing about it is hard to follow. This is the main reason the
 [`cyclomatic-complexity` rule](../rules/cyclomatic-complexity.md) is switched off by default.
 
-## What real code looks like
+## Calibration
 
-**Rust**, measured across 737,499 functions in 1,645 crates published on crates.io:
-
-| p50 | p75 | p90 | p95 | p99 |
-|---|---|---|---|---|
-| 1 | 1 | 2 | 4 | 10 |
-
-Three quarters of all Rust functions score 1, meaning they do not branch at all. Distributions this
-skewed are hard to threshold usefully, which the rule page goes into.
-
-**Kotlin**, across 54,933 functions in ten established projects, scores a little higher: p50 1,
-p90 3, p95 4, p98 6. Kotlin's `when` and its null-handling operators put more decisions into
-ordinary code than Rust's `match` does.
+The rule is off by default and carries a language-specific limit for TypeScript. The measured
+distributions and inspection results live in [`CALIBRATION.md`](../../CALIBRATION.md).
 
 ## Further reading
 

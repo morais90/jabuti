@@ -1,6 +1,6 @@
 use tree_sitter::Node;
 
-use super::lang::CognitiveSpec;
+use super::lang::{CognitiveSpec, ConditionalSpec};
 use super::metrics::Increment;
 
 pub(crate) fn increments(root: Node<'_>, spec: &CognitiveSpec) -> Vec<Increment> {
@@ -9,7 +9,7 @@ pub(crate) fn increments(root: Node<'_>, spec: &CognitiveSpec) -> Vec<Increment>
         found: Vec::new(),
     };
 
-    walk.visit(root, 0);
+    walk.run(root);
     walk.found.sort_by_key(|increment| increment.position);
     walk.found
 }
@@ -19,28 +19,53 @@ struct Walk<'spec> {
     found: Vec<Increment>,
 }
 
+#[derive(Clone, Copy)]
+struct Pending<'tree> {
+    node: Node<'tree>,
+    nesting: u32,
+    conditional_amount: Option<u32>,
+}
+
 impl Walk<'_> {
-    fn visit(&mut self, node: Node<'_>, nesting: u32) {
+    fn run(&mut self, root: Node<'_>) {
+        let mut pending = vec![Pending {
+            node: root,
+            nesting: 0,
+            conditional_amount: None,
+        }];
+
+        while let Some(next) = pending.pop() {
+            self.visit(next, &mut pending);
+        }
+    }
+
+    fn visit<'tree>(&mut self, next: Pending<'tree>, pending: &mut Vec<Pending<'tree>>) {
+        let node = next.node;
         let kind = node.kind();
 
-        if self.spec.boundaries.contains(&kind) {
-            self.visit_children(node, 0);
+        if self.is_boundary(node) {
+            push_children(pending, node, 0, None);
             return;
         }
 
-        if kind == self.spec.conditional {
-            self.visit_conditional(node, nesting, 1 + nesting);
+        if let Some(conditional) = self
+            .spec
+            .conditionals
+            .iter()
+            .find(|conditional| conditional.kind == kind)
+        {
+            self.visit_conditional(next, conditional, pending);
             return;
         }
 
         if self.spec.nesting_increments.contains(&kind) {
-            self.record(node, 1 + nesting);
-            self.visit_children(node, nesting + 1);
+            self.record(node, 1 + next.nesting);
+            push_children(pending, node, next.nesting + 1, None);
             return;
         }
 
         if self.spec.nesting_only.contains(&kind) {
-            self.visit_children(node, nesting + 1);
+            push_children(pending, node, next.nesting + 1, None);
             return;
         }
 
@@ -48,28 +73,71 @@ impl Walk<'_> {
             self.record(node, 1);
         }
 
-        self.visit_children(node, nesting);
+        push_children(pending, node, next.nesting, None);
     }
 
-    fn visit_conditional(&mut self, node: Node<'_>, nesting: u32, amount: u32) {
+    fn is_boundary(&self, node: Node<'_>) -> bool {
+        if self.spec.boundaries.contains(&node.kind()) {
+            return true;
+        }
+
+        let Some(parent) = node.parent() else {
+            return false;
+        };
+
+        self.spec.contextual_boundaries.iter().any(|boundary| {
+            boundary.kind == node.kind() && boundary.parents.contains(&parent.kind())
+        })
+    }
+
+    fn visit_conditional<'tree>(
+        &mut self,
+        next: Pending<'tree>,
+        conditional: &ConditionalSpec,
+        pending: &mut Vec<Pending<'tree>>,
+    ) {
+        let node = next.node;
+        let nesting = next.nesting;
+        let amount = next.conditional_amount.unwrap_or(1 + nesting);
         self.record(node, amount);
 
         let alternative = self.alternative(node);
-        let mut cursor = node.walk();
-        for child in node.named_children(&mut cursor) {
-            if Some(child.id()) != alternative.map(|node| node.id()) {
-                self.visit(child, nesting + 1);
-            }
+        push_children(
+            pending,
+            node,
+            nesting + 1,
+            alternative.map(|branch| branch.id()),
+        );
+
+        if let Some(branch) = Self::otherwise(alternative, conditional) {
+            self.schedule_alternative(branch, nesting, conditional, pending);
+        }
+    }
+
+    fn schedule_alternative<'tree>(
+        &mut self,
+        branch: Node<'tree>,
+        nesting: u32,
+        conditional: &ConditionalSpec,
+        pending: &mut Vec<Pending<'tree>>,
+    ) {
+        if conditional.chains_alternative && branch.kind() == conditional.kind {
+            pending.push(Pending {
+                node: branch,
+                nesting,
+                conditional_amount: Some(1),
+            });
+            return;
         }
 
-        if let Some(branch) = self.otherwise(alternative) {
-            if branch.kind() == self.spec.conditional {
-                self.visit_conditional(branch, nesting, 1);
-            } else {
-                self.record(branch, 1);
-                self.visit(branch, nesting + 1);
-            }
+        if conditional.charge_alternative {
+            self.record(branch, 1);
         }
+        pending.push(Pending {
+            node: branch,
+            nesting: nesting + 1,
+            conditional_amount: None,
+        });
     }
 
     fn alternative<'tree>(&self, node: Node<'tree>) -> Option<Node<'tree>> {
@@ -81,10 +149,13 @@ impl Walk<'_> {
             .nth(1)
     }
 
-    fn otherwise<'tree>(&self, alternative: Option<Node<'tree>>) -> Option<Node<'tree>> {
+    fn otherwise<'tree>(
+        alternative: Option<Node<'tree>>,
+        conditional: &ConditionalSpec,
+    ) -> Option<Node<'tree>> {
         let alternative = alternative?;
 
-        if alternative.kind() == self.spec.alternative_wrapper {
+        if alternative.kind() == conditional.alternative_wrapper {
             alternative.named_child(0)
         } else {
             Some(alternative)
@@ -114,17 +185,28 @@ impl Walk<'_> {
             .then_some(operator)
     }
 
-    fn visit_children(&mut self, node: Node<'_>, nesting: u32) {
-        let mut cursor = node.walk();
-        for child in node.named_children(&mut cursor) {
-            self.visit(child, nesting);
-        }
-    }
-
     fn record(&mut self, node: Node<'_>, amount: u32) {
         self.found.push(Increment {
             position: node.start_byte(),
             amount,
         });
+    }
+}
+
+fn push_children<'tree>(
+    pending: &mut Vec<Pending<'tree>>,
+    node: Node<'tree>,
+    nesting: u32,
+    skipped: Option<usize>,
+) {
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        if Some(child.id()) != skipped {
+            pending.push(Pending {
+                node: child,
+                nesting,
+                conditional_amount: None,
+            });
+        }
     }
 }

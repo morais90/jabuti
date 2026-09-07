@@ -207,9 +207,11 @@ fn every_language_reports_its_extensions_and_grammar_version() {
         .stdout(
             contains("rust")
                 .and(contains(".rs"))
-                .and(contains("grammar")),
+                .and(contains("grammar"))
+                .and(contains("13/13 native rules")),
         )
-        .stdout(contains("kotlin").and(contains(".kt")));
+        .stdout(contains("kotlin").and(contains(".kt")))
+        .stdout(contains("typescript").and(contains(".ts")));
 }
 
 #[test]

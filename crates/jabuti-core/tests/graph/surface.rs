@@ -115,6 +115,58 @@ fn a_kotlin_declaration_is_public_unless_a_modifier_restricts_it_and_marked_by_a
 }
 
 #[test]
+fn typescript_exports_members_visibility_owners_and_decorators_are_recorded() {
+    let sources = sources_under("surface/typescript", &lang::TYPESCRIPT);
+    let catalog = &source(&sources, "Catalog.ts").facts;
+
+    assert_eq!(
+        catalog.declares["factory"],
+        [Declared {
+            span: Span {
+                start_line: 27,
+                end_line: 31,
+            },
+            public: true,
+            marked: false,
+            owner: None,
+        }]
+    );
+    assert_eq!(
+        catalog.declares["label"],
+        [Declared {
+            span: Span {
+                start_line: 7,
+                end_line: 7,
+            },
+            public: true,
+            marked: false,
+            owner: Some("Catalog".to_owned()),
+        }]
+    );
+    assert_eq!(
+        catalog.declares["secret"],
+        [Declared {
+            span: Span {
+                start_line: 8,
+                end_line: 8,
+            },
+            public: false,
+            marked: false,
+            owner: Some("Catalog".to_owned()),
+        }]
+    );
+    assert!(!catalog.declares["internal"][0].public);
+    assert!(catalog.declares["Catalog"][0].public);
+    assert_eq!(
+        catalog.declares["listed"][0].owner.as_deref(),
+        Some("Catalog")
+    );
+    assert!(catalog.declares["listed"][0].public);
+    assert!(!catalog.declares["hidden"][0].public);
+    assert!(catalog.declares["endpoint"][0].marked);
+}
+
+#[test]
 fn the_crate_root_exports_its_public_modules_re_exports_by_name_and_follows_globs_to_a_file() {
     let sources = sources_under("surface/lib", &lang::RUST);
     let roots = surface::roots(&sources, &Index::of(&sources));

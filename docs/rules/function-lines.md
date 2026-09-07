@@ -2,10 +2,10 @@
 
 Reports a function that spans more lines than the limit.
 
-**Default limit:** 60 in Rust, 47 in Kotlin. **Default severity:** warning.
+**Default limit:** 60 in Rust, 47 in Kotlin, 71 in TypeScript. **Default severity:** warning.
 
-Both numbers are the same claim measured in each language; [Languages](../languages.md) explains why
-they differ.
+All three numbers are the same claim measured in each language; [Languages](../languages.md) explains
+why they differ.
 
 ## What it means when it fires
 
@@ -25,47 +25,10 @@ That is usually the moment to ask whether the function is doing more than one th
 Sometimes it is a long but genuinely linear sequence, such as building a large configuration
 structure, and then the right answer is to leave it alone.
 
-## Where 60 comes from
+## Calibration
 
-It is the 98th percentile of published Rust libraries. Measured across 737,689 functions from 1,645
-crates published on crates.io, the distribution looks like this:
-
-| p50 | p75 | p90 | p95 | p99 |
-|---|---|---|---|---|
-| 6 | 10 | 21 | 34 | 86 |
-
-So the claim behind the default is narrow and checkable: this function is longer than roughly 98% of
-the Rust published as libraries. It is not a claim that 60 lines is intrinsically wrong.
-
-Setting it near 25, which is a common limit in other ecosystems, would land around the 92nd
-percentile here and report one function in twelve. At that volume people stop reading the output,
-which costs more than the rule is worth.
-
-## Which population that percentile is of
-
-crates.io is a registry of libraries, and a library has a shape of its own. Its median function is
-six lines, because a library is largely small composed pieces, trait implementations and code written
-by macros. Application code is not shaped that way, and the difference is large:
-
-| Corpus | p50 | p90 | p98 |
-|---|---|---|---|
-| 1,645 crates published on crates.io | 6 | 21 | 59 |
-| hyperswitch, a payments orchestrator | 12 | 45 | 122 |
-| meilisearch, a search engine | 11 | 66 | 173 |
-
-The whole distribution moves, not only the tail, so the same limit sits at a different place in each.
-What that costs in practice, as the share of functions this rule reports:
-
-| Corpus | Reported |
-|---|---|
-| 1,645 crates published on crates.io | 1.9% |
-| hyperswitch | 6.8% |
-| meilisearch | 11.4% |
-
-We kept 60 rather than raising it. A limit placed where meilisearch's 98th percentile falls would let
-a 173 line function through, and noticing that function is the entire point of the rule. What changes
-is the claim rather than the number: 60 is the 98th percentile of published libraries, and an
-application should expect this rule to fire two to six times more often than that.
+The default is selected separately for each language. [`CALIBRATION.md`](../../CALIBRATION.md)
+records the benchmark populations, distributions, application comparison and resulting limits.
 
 Part of the gap is not quality. A function dispatching over thirty payment connectors is long for a
 reason that a six line accessor never has to answer for. The rule tells you where to look; it does
@@ -79,8 +42,7 @@ function-lines = { limit = 80, severity = "error" }
 ```
 
 Raising it is reasonable if your project has a house style that produces longer functions, or if you
-want to start further out and tighten later. Lowering it below about 35 will start reporting
-ordinary code.
+want to start further out and tighten later. Lowering it increases the finding volume.
 
 Turning it into an `error` is safe once you are running with `--since`, because a function that was
 already long stays quiet until someone edits it.

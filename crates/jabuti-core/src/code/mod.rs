@@ -1,7 +1,9 @@
 mod cognitive;
+pub mod concepts;
 pub mod duplication;
 pub mod lang;
 pub mod masking;
 pub mod metrics;
 pub mod review;
+pub mod support;
 pub mod units;

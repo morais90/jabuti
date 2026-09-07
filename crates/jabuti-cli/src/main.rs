@@ -96,12 +96,14 @@ fn list_languages() -> ExitCode {
             .iter()
             .map(|extension| format!(".{extension}"))
             .collect();
+        let available = jabuti_core::code::support::available_rules(spec.id).len();
 
         println!(
-            "{:<10} {:<12} grammar {}",
+            "{:<10} {:<12} grammar {:<8} {available}/{} native rules",
             spec.id.name(),
             extensions.join(" "),
-            spec.grammar_version
+            spec.grammar_version,
+            Rule::ALL.len(),
         );
     }
 
@@ -156,8 +158,17 @@ fn check(roots: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
     scope_notices(&settings, since.is_some());
 
     let paths = project::sources(roots, &settings.exclude, &root)?;
+    let aliases = graph::aliases(&paths, &settings.concepts);
     let churn = history::commits(history.as_ref(), &paths);
-    let mut outcome = code::scan(&paths, &root, &settings.policy, changes.as_ref(), &churn);
+    let request = code::Scan {
+        project: &root,
+        policy: &settings.policy,
+        bindings: &settings.concepts,
+        aliases: &aliases,
+        changes: changes.as_ref(),
+        churn: &churn,
+    };
+    let mut outcome = code::scan(&paths, &request);
     if changes.is_none() {
         outcome.findings.extend(hotspot::hotspots(
             &summaries(&outcome.measured),
@@ -177,26 +188,27 @@ fn check(roots: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
     outcome.unreadable.extend(skipped);
     order(&mut outcome);
 
-    print!(
-        "{}",
-        match format {
-            Format::Agent => report::agent(
-                &outcome.findings,
-                &outcome.unreadable,
-                outcome.scanned,
-                limit
-            ),
-            Format::Json => report::json(&outcome.findings, &outcome.unreadable, outcome.scanned),
-            Format::Measures => report::measures(&outcome.readings, &outcome.unreadable),
-            Format::Sarif => report::sarif(&outcome.findings, &outcome.unreadable),
-        }
-    );
+    print!("{}", rendered(format, &outcome, limit));
 
     if report::has_errors(&outcome.findings) {
         return Ok(ExitCode::from(1));
     }
 
     Ok(ExitCode::SUCCESS)
+}
+
+fn rendered(format: Format, outcome: &code::Outcome, limit: usize) -> String {
+    match format {
+        Format::Agent => report::agent(
+            &outcome.findings,
+            &outcome.unreadable,
+            outcome.scanned,
+            limit,
+        ),
+        Format::Json => report::json(&outcome.findings, &outcome.unreadable, outcome.scanned),
+        Format::Measures => report::measures(&outcome.readings, &outcome.unreadable),
+        Format::Sarif => report::sarif(&outcome.findings, &outcome.unreadable),
+    }
 }
 
 fn order(outcome: &mut code::Outcome) {

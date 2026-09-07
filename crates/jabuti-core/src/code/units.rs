@@ -91,13 +91,24 @@ fn captured_unit(
 }
 
 fn declared_parameters(node: Node<'_>, table: &Table) -> u32 {
+    if !table.parameter_containers.contains(&node.kind()) {
+        return u32::from(!implicit_parameter(node, table));
+    }
+
     let mut cursor = node.walk();
     let declared = node
         .named_children(&mut cursor)
-        .filter(|child| !table.implicit_parameters.contains(&child.kind()))
+        .filter(|child| !implicit_parameter(*child, table))
         .count();
 
     u32::try_from(declared).unwrap_or(u32::MAX)
+}
+
+fn implicit_parameter(node: Node<'_>, table: &Table) -> bool {
+    table.implicit_parameters.contains(&node.kind())
+        || node
+            .child_by_field_name("pattern")
+            .is_some_and(|pattern| table.implicit_parameter_patterns.contains(&pattern.kind()))
 }
 
 fn kind_of_label(label: &str) -> Option<UnitKind> {
@@ -119,10 +130,20 @@ fn nest(mut captured: Vec<Unit>, mut file: Unit) -> Unit {
             .cmp(&right.bytes.start)
             .then(right.bytes.end.cmp(&left.bytes.end))
     });
+    let mut unique = Vec::with_capacity(captured.len());
+    for unit in captured {
+        if unique
+            .last()
+            .is_some_and(|previous: &Unit| previous.bytes == unit.bytes)
+        {
+            continue;
+        }
+        unique.push(unit);
+    }
 
     let mut open: Vec<Unit> = Vec::new();
 
-    for unit in captured {
+    for unit in unique {
         while let Some(closed) = close_enclosing(&mut open, &unit.bytes) {
             attach(&mut open, &mut file, closed);
         }

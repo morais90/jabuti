@@ -68,13 +68,9 @@ is a reasonable thing to put in front of a person, and not a reasonable thing to
 
 ## Where the default comes from
 
-At 120 nodes the rule reports around two findings per thousand lines on the codebases used to
-calibrate it, and everything it reported there was a real copy.
-
-Lowering it gets noisy quickly, and the noise is a specific and predictable kind. Below roughly 60
-nodes you start catching the ordinary grammar of the language, the small arrangements that any two
-pieces of code written in the same style will share, and those are not copies in any sense you can
-act on.
+The default stays above the small grammar shapes that unrelated code routinely shares. Lower values
+trade substantial-copy detection for more structural coincidences. The measured finding rate and
+manual inspection record live in [`CALIBRATION.md`](../../CALIBRATION.md).
 
 ## Changing it
 
@@ -103,10 +99,9 @@ about one file in one language. It therefore belongs to the run rather than to a
 setting it under `[languages.<name>.rules]` is rejected with an error rather than quietly ignored.
 The same is true of [`hotspot`](hotspot.md).
 
-Copies are found across files but not across languages. The fingerprint is built from the names the
-grammar gives its nodes, and those names differ between languages, so a Rust function and the Kotlin
-function it was translated from will never match. A file jabuti cannot parse contributes nothing to
-the comparison at all.
+Copies are found across files but not across languages. The fingerprint is built from the names each
+grammar gives its nodes, so a function translated between Rust, Kotlin and TypeScript will not match
+across those language boundaries. A file jabuti cannot parse contributes nothing to the comparison.
 
 Type-3 clones, where a line was added or removed alongside the renaming, are not detected. Neither
 are two implementations of the same behaviour written differently. Both are on the roadmap and both

@@ -48,30 +48,10 @@ Two rules read this measure:
 Both include blanks and comments inside the span, because the question they ask is how much there is
 to scroll past, not how many statements there are.
 
-## What real code looks like
+## Calibration
 
-Limits are calibrated per language, because the same number means different things in different
-places. A twenty line function is unremarkable in one language and unusual in another.
-
-**Rust**, measured across 1,645 crates published on crates.io, covering 45,361 files and 737,689
-functions:
-
-| | p50 | p75 | p90 | p95 | p99 |
-|---|---|---|---|---|---|
-| Lines per function | 6 | 10 | 21 | 34 | 86 |
-| Lines per file | 129 | 350 | 918 | 1677 | 4578 |
-
-Half of all Rust functions are six lines or shorter. Borrowing a limit from a language where
-functions are typically three times longer would report one function in twelve here, which is enough
-noise that people stop reading the output.
-
-**Kotlin**, measured across 54,933 functions in ten established projects:
-
-| | p50 | p75 | p90 | p95 | p98 |
-|---|---|---|---|---|---|
-| Lines per function | 7 | 14 | 23 | 32 | 47 |
-
-The medians are close, but Rust has the longer tail, which is why the two limits differ.
+Function-line defaults are language-specific. [`CALIBRATION.md`](../../CALIBRATION.md) records the
+populations, percentile tables and resulting limits.
 
 ## Further reading
 

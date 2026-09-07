@@ -100,25 +100,11 @@ label. Neither is implemented. Recursion needs call resolution rather than synta
 jumps are rare enough in Rust that the omission has not cost anything so far. Both are noted here
 rather than left for you to discover.
 
-## What real code looks like
+## Calibration
 
-**Rust**, measured across 737,689 functions in 1,645 crates published on crates.io:
-
-| p50 | p75 | p90 | p95 | p98 | p99 |
-|---|---|---|---|---|---|
-| 0 | 0 | 1 | 3 | 7 | 12 |
-
-Four functions in five score zero, meaning they contain no branching at all. That shape is worth
-knowing: when a function does score, it is already unusual.
-
-**Kotlin**, across 54,933 functions in ten established projects:
-
-| p50 | p75 | p90 | p95 | p98 | p99 |
-|---|---|---|---|---|---|
-| 0 | 0 | 2 | 4 | 7 | 11 |
-
-Those two distributions are almost identical, in languages that share very little syntax. It is some
-evidence that the measure tracks something about programs rather than about a grammar.
+Cognitive-complexity defaults are language-specific. Named TypeScript arrow functions are scored as
+functions; anonymous callbacks remain part of the function containing them. The measured
+distributions and selected limits live in [`CALIBRATION.md`](../../CALIBRATION.md).
 
 ## Further reading
 

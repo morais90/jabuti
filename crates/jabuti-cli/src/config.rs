@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use jabuti_core::lang::{self, LanguageId};
-use jabuti_core::model::{Rule, RuleId, Severity};
+use jabuti_core::model::{Concept, ConceptBindings, Rule, RuleId, Severity};
 use jabuti_core::policy::{Policy, RuleConfig};
 use serde::Deserialize;
 
@@ -12,6 +12,7 @@ pub(crate) const FILE_NAME: &str = "jabuti.toml";
 #[derive(Debug, Default)]
 pub(crate) struct Settings {
     pub(crate) policy: Policy,
+    pub(crate) concepts: ConceptBindings,
     pub(crate) exclude: Vec<String>,
     pub(crate) tools: BTreeMap<String, bool>,
     pub(crate) layers: Vec<Layer>,
@@ -74,6 +75,8 @@ struct LayerEntry {
 struct LanguageEntry {
     #[serde(default)]
     rules: BTreeMap<String, Entry>,
+    #[serde(default)]
+    concepts: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -125,7 +128,12 @@ pub(crate) fn load(directory: &Path) -> Result<Settings> {
     settings(document)
 }
 
-fn language_rules(policy: &mut Policy, name: &str, entry: LanguageEntry) -> Result<()> {
+fn language_settings(
+    policy: &mut Policy,
+    bindings: &mut ConceptBindings,
+    name: &str,
+    entry: LanguageEntry,
+) -> Result<()> {
     let language =
         LanguageId::from_name(name).with_context(|| format!("unknown language {name}"))?;
 
@@ -145,11 +153,20 @@ fn language_rules(policy: &mut Policy, name: &str, entry: LanguageEntry) -> Resu
         policy.set_for(language, target, adjusted(current, rule)?);
     }
 
+    for (id, paths) in entry.concepts {
+        let concept = Concept::from_id(&id).with_context(|| format!("unknown concept {id}"))?;
+        if paths.is_empty() || paths.iter().any(String::is_empty) {
+            bail!("concept {id} must name at least one non-empty API path");
+        }
+        bindings.set(language, concept, paths);
+    }
+
     Ok(())
 }
 
 fn settings(document: Document) -> Result<Settings> {
     let mut policy = Policy::default();
+    let mut concepts = ConceptBindings::default();
 
     for (id, entry) in document.rules {
         let rule = RuleId::parse(&id).with_context(|| format!("unknown rule {id}"))?;
@@ -162,11 +179,12 @@ fn settings(document: Document) -> Result<Settings> {
     }
 
     for (name, entry) in document.languages {
-        language_rules(&mut policy, &name, entry)?;
+        language_settings(&mut policy, &mut concepts, &name, entry)?;
     }
 
     Ok(Settings {
         policy,
+        concepts,
         exclude: document.exclude,
         tools: document
             .tools

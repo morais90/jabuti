@@ -2,11 +2,13 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use jabuti_core::code::duplication::{self, FileFragments};
-use jabuti_core::code::masking;
 use jabuti_core::code::metrics::{self, CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::code::review::{self, FileUnderReview};
 use jabuti_core::code::units::{self, Unit};
-use jabuti_core::model::{Finding, Reading, Rule, Severity, Span, UnitKind, Unreadable};
+use jabuti_core::code::{concepts, masking};
+use jabuti_core::model::{
+    ConceptBindings, Finding, Reading, Rule, Severity, Span, UnitKind, Unreadable,
+};
 use jabuti_core::policy::Policy;
 use jabuti_core::report::Scanned;
 use jabuti_core::{lang, syntax};
@@ -42,33 +44,37 @@ struct Reviewed {
     measured: Option<Measured>,
 }
 
-pub(crate) fn scan(
-    paths: &[PathBuf],
-    project: &Path,
-    policy: &Policy,
-    changes: Option<&Changes>,
-    churn: &BTreeMap<PathBuf, u32>,
-) -> Outcome {
-    let minimum_nodes = duplication_limit(policy);
+pub(crate) type AliasIndex = BTreeMap<PathBuf, BTreeMap<String, String>>;
+
+#[derive(Debug)]
+pub(crate) struct Scan<'a> {
+    pub(crate) project: &'a Path,
+    pub(crate) policy: &'a Policy,
+    pub(crate) bindings: &'a ConceptBindings,
+    pub(crate) aliases: &'a AliasIndex,
+    pub(crate) changes: Option<&'a Changes>,
+    pub(crate) churn: &'a BTreeMap<PathBuf, u32>,
+}
+
+pub(crate) fn scan(paths: &[PathBuf], request: &Scan<'_>) -> Outcome {
+    let minimum_nodes = duplication_limit(request.policy);
     let mut paths = paths.to_vec();
-    if let (Some(changes), None) = (changes, minimum_nodes) {
+    if let (Some(changes), None) = (request.changes, minimum_nodes) {
         paths.retain(|path| changes.covers(path));
     }
+    let context = Review {
+        policy: request.policy,
+        project: request.project,
+        bindings: request.bindings,
+        aliases: request.aliases,
+        changes: request.changes,
+        churn: request.churn,
+        minimum_nodes,
+    };
 
     let reviewed: Vec<Reviewed> = paths
         .par_iter()
-        .map(|path| {
-            review(
-                path,
-                &Review {
-                    policy,
-                    project,
-                    changes,
-                    churn,
-                    minimum_nodes,
-                },
-            )
-        })
+        .map(|path| review(path, &context))
         .collect();
 
     let measured: Vec<Measured> = reviewed
@@ -81,11 +87,11 @@ pub(crate) fn scan(
         .filter_map(|file| file.fragments.clone())
         .collect();
 
-    let mut outcome = gather(covered(&paths, reviewed, changes));
+    let mut outcome = gather(covered(&paths, reviewed, request.changes));
     outcome.findings.extend(
-        duplication::duplicates(&repeated, policy)
+        duplication::duplicates(&repeated, request.policy)
             .into_iter()
-            .filter(|finding| in_diff(finding, changes)),
+            .filter(|finding| in_diff(finding, request.changes)),
     );
     outcome.measured = measured;
 
@@ -112,7 +118,7 @@ fn masked_errors(
     shown: &str,
     path: &Path,
     parsed: &syntax::Parsed<'_>,
-    policy: &Policy,
+    context: &Review<'_>,
 ) -> Vec<Finding> {
     let Some(spec) = lang::detect(path) else {
         return Vec::new();
@@ -121,7 +127,10 @@ fn masked_errors(
         return Vec::new();
     }
 
-    masking::findings(shown, spec.id, &masking::maskings(parsed), policy)
+    let empty = BTreeMap::new();
+    let aliases = context.aliases.get(path).unwrap_or(&empty);
+    let occurrences = concepts::occurrences(parsed, context.bindings, aliases);
+    masking::findings(shown, spec.id, &occurrences, context.policy)
 }
 
 fn covered(paths: &[PathBuf], reviewed: Vec<Reviewed>, changes: Option<&Changes>) -> Vec<Reviewed> {
@@ -151,6 +160,8 @@ fn in_diff(finding: &Finding, changes: Option<&Changes>) -> bool {
 struct Review<'a> {
     policy: &'a Policy,
     project: &'a Path,
+    bindings: &'a ConceptBindings,
+    aliases: &'a AliasIndex,
     changes: Option<&'a Changes>,
     churn: &'a BTreeMap<PathBuf, u32>,
     minimum_nodes: Option<u32>,
@@ -193,12 +204,7 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
         complexity: cognitive.total(&file.units),
     };
 
-    let mut findings = review::evaluate(context.policy, &file);
-    findings.extend(masked_errors(&file.path, path, &parsed, context.policy));
-    findings.sort_by_key(|finding| finding.span.start_line);
-    if let Some(changes) = context.changes {
-        findings.retain(|finding| changes.touches(path, finding.span));
-    }
+    let findings = evaluate_findings(path, &parsed, &file, context);
 
     Reviewed {
         readings: review::read(&file),
@@ -211,6 +217,22 @@ fn review(path: &Path, context: &Review<'_>) -> Reviewed {
         unreadable: None,
         measured: Some(measured),
     }
+}
+
+fn evaluate_findings(
+    path: &Path,
+    parsed: &syntax::Parsed<'_>,
+    file: &FileUnderReview<'_>,
+    context: &Review<'_>,
+) -> Vec<Finding> {
+    let mut findings = review::evaluate(context.policy, file);
+    findings.extend(masked_errors(&file.path, path, parsed, context));
+    findings.sort_by_key(|finding| finding.span.start_line);
+    if let Some(changes) = context.changes {
+        findings.retain(|finding| changes.touches(path, finding.span));
+    }
+
+    findings
 }
 
 fn rejected(shown: String, reason: &str) -> Reviewed {

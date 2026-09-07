@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 
 use tree_sitter::{Language, Query};
 
@@ -7,6 +7,7 @@ use tree_sitter::{Language, Query};
 pub enum LanguageId {
     Kotlin,
     Rust,
+    TypeScript,
 }
 
 impl LanguageId {
@@ -14,6 +15,7 @@ impl LanguageId {
         match self {
             Self::Kotlin => "kotlin",
             Self::Rust => "rust",
+            Self::TypeScript => "typescript",
         }
     }
 
@@ -25,6 +27,7 @@ impl LanguageId {
         match self {
             Self::Kotlin => &KOTLIN,
             Self::Rust => &RUST,
+            Self::TypeScript => &TYPESCRIPT,
         }
     }
 }
@@ -36,13 +39,12 @@ pub struct LangSpec {
     pub extensions: &'static [&'static str],
     pub test_markers: &'static [&'static str],
     test_paths: &'static [&'static str],
-    grammar: fn() -> Language,
-    loaded: OnceLock<Language>,
+    loaded: LazyLock<Language>,
 }
 
 impl LangSpec {
     pub fn language(&self) -> &Language {
-        self.loaded.get_or_init(self.grammar)
+        &self.loaded
     }
 
     pub fn knows_node_kind(&self, kind: &str, named: bool) -> bool {
@@ -86,8 +88,7 @@ pub static KOTLIN: LangSpec = LangSpec {
     extensions: &["kt", "kts"],
     test_markers: &["@Test", "@ParameterizedTest", "@RepeatedTest"],
     test_paths: &["test", "tests", "*Test"],
-    grammar: kotlin_grammar,
-    loaded: OnceLock::new(),
+    loaded: LazyLock::new(kotlin_grammar),
 };
 
 fn rust_grammar() -> Language {
@@ -110,11 +111,23 @@ pub static RUST: LangSpec = LangSpec {
         "cfg(test)",
     ],
     test_paths: &["tests", "benches", "examples"],
-    grammar: rust_grammar,
-    loaded: OnceLock::new(),
+    loaded: LazyLock::new(rust_grammar),
 };
 
-pub static ALL: &[&LangSpec] = &[&KOTLIN, &RUST];
+fn typescript_grammar() -> Language {
+    tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
+}
+
+pub static TYPESCRIPT: LangSpec = LangSpec {
+    id: LanguageId::TypeScript,
+    grammar_version: "0.23.2",
+    extensions: &["ts"],
+    test_markers: &[],
+    test_paths: &["test", "tests", "__tests__", "*.test.ts", "*.spec.ts"],
+    loaded: LazyLock::new(typescript_grammar),
+};
+
+pub static ALL: &[&LangSpec] = &[&KOTLIN, &RUST, &TYPESCRIPT];
 
 pub fn detect(path: &Path) -> Option<&'static LangSpec> {
     let extension = path.extension()?.to_str()?;

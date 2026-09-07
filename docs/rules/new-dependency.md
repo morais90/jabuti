@@ -34,11 +34,11 @@ in as an argument requires knowing that the boundary exists and is worth keeping
 
 ## What counts as a dependency
 
-Whatever names something the other file declares, wherever it is written. That is more than the
-import list: a path spelled out where it is used, a path relative to a module in scope, a path inside
-a macro, and in Kotlin a bare name from the same package, which needs no import at all.
-[`docs/concepts.md`](../concepts.md) describes the graph this reads and, just as importantly, what it
-cannot see.
+Whatever names something the other file declares, wherever it is written. That is more than one
+import shape: a Rust path may be written at its use site or inside a macro, Kotlin may use a bare name
+from the same package, and TypeScript may spell a relative module without an extension or with the
+`.js` extension it will have after compilation. [`docs/concepts.md`](../concepts.md) describes the
+graph this reads and, just as importantly, what it cannot see.
 
 ## What is deliberately not reported
 
@@ -48,20 +48,11 @@ would bury the signal under the noise of ordinary new code.
 **A dependency that only moved.** The rule compares the set of files a file reaches, so rewriting the
 same dependency in another form is not a finding.
 
-## How often it fires
+## Calibration
 
-Measured over the last 62 commits of meilisearch that touched Rust, counting dependencies added to
-files that already existed:
-
-| | new dependencies |
-|---|---|
-| median | 0 |
-| mean | 1.5 |
-| 90th percentile | 3 |
-| most in one commit | 30 |
-
-Forty-five of those 62 commits introduced none at all. It is a rule that stays quiet, which is why it
-ships on: when it does say something, it is worth the line it costs.
+The rule has no numerical threshold: any dependency added to an existing file is one finding. The
+commit-history probe used to validate its noise level lives in
+[`CALIBRATION.md`](../../CALIBRATION.md).
 
 ## Changing it
 

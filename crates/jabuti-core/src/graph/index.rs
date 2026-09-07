@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use super::facts::FileFacts;
 use crate::lang::LanguageId;
@@ -34,6 +34,7 @@ pub struct Index {
     modules: BTreeMap<(PathBuf, Vec<String>), PathBuf>,
     crates: BTreeMap<(String, Vec<String>), PathBuf>,
     declarations: BTreeMap<(String, String), PathBuf>,
+    typescript_modules: BTreeMap<PathBuf, PathBuf>,
 }
 
 impl Index {
@@ -44,6 +45,7 @@ impl Index {
             match source.language {
                 LanguageId::Rust => index.add_module(source),
                 LanguageId::Kotlin => index.add_declarations(source),
+                LanguageId::TypeScript => index.add_typescript_module(source),
             }
         }
 
@@ -68,10 +70,34 @@ impl Index {
         }
     }
 
+    fn add_typescript_module(&mut self, source: &Source) {
+        let mut module = source.path.clone();
+        module.set_extension("");
+        self.add_typescript_key(&module, &source.path);
+
+        if module.extension().is_some_and(|extension| extension == "d") {
+            module.set_extension("");
+            self.add_typescript_key(&module, &source.path);
+        }
+    }
+
+    fn add_typescript_key(&mut self, module: &Path, source: &Path) {
+        self.typescript_modules
+            .insert(module.to_path_buf(), source.to_path_buf());
+
+        if module.file_name().is_some_and(|name| name == "index")
+            && let Some(directory) = module.parent()
+        {
+            self.typescript_modules
+                .insert(directory.to_path_buf(), source.to_path_buf());
+        }
+    }
+
     pub fn targets(&self, source: &Source) -> BTreeMap<PathBuf, Span> {
         let mut reached = match source.language {
             LanguageId::Rust => rust_targets(source, &self.modules, &self.crates),
             LanguageId::Kotlin => kotlin_targets(source, &self.declarations),
+            LanguageId::TypeScript => typescript_targets(source, &self.typescript_modules),
         };
         reached.sort_by_key(|(target, at)| (target.clone(), at.start_line));
 
@@ -233,4 +259,44 @@ fn kotlin_targets(
     }
 
     found
+}
+
+fn typescript_targets(
+    source: &Source,
+    modules: &BTreeMap<PathBuf, PathBuf>,
+) -> Vec<(PathBuf, Span)> {
+    source
+        .facts
+        .paths
+        .iter()
+        .filter_map(|(reference, at)| {
+            let relative = reference.strip_prefix('.')?;
+            let parent = source.path.parent().unwrap_or(Path::new(""));
+            let mut module = normalised(&parent.join(format!(".{relative}")));
+            if matches!(
+                module.extension().and_then(|extension| extension.to_str()),
+                Some("ts" | "tsx" | "js" | "jsx" | "mts" | "cts" | "mjs" | "cjs")
+            ) {
+                module.set_extension("");
+            }
+            modules.get(&module).cloned().map(|target| (target, *at))
+        })
+        .collect()
+}
+
+fn normalised(path: &Path) -> PathBuf {
+    let mut normal = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normal.pop();
+            }
+            Component::Normal(part) => normal.push(part),
+            Component::RootDir | Component::Prefix(_) => normal.push(component.as_os_str()),
+        }
+    }
+
+    normal
 }
