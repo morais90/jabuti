@@ -74,7 +74,7 @@ toolchain. These commands change tool availability only; runtime analyzer settin
 the project. Tools that are already available or do not apply are left alone. If an installer cannot
 start, exits unsuccessfully or leaves the tool unavailable, `jabuti tools install` stops and exits 2.
 
-## Your configuration is the configuration
+## What your configuration governs
 
 jabuti runs the tool in your project directory, so it reads your `clippy.toml`, your `[lints]`
 section and your `#![allow]` attributes exactly as it would if you ran it yourself. A lint your
@@ -83,6 +83,12 @@ project has deliberately allowed stays allowed.
 Severity comes from the tool. If clippy calls something an error in your project, jabuti reports an
 error. jabuti never passes `-D warnings`, because doing so would replace your project's judgement
 with ours.
+
+Not configuring something and configuring it weakly are different acts, and only the second is a
+decision. What your project never decided is jabuti's to ask, and where it asks, the answer arrives at
+warning under its own rule id rather than at whatever severity the tool would have given it. Today
+that distinction costs you nothing, because clippy runs with your configuration and nothing added.
+[Principles](principles.md#tools-are-curated-not-piped) says what the distinction is for.
 
 You can still override any individual lint through `[rules]`, which is the same mechanism that
 adjusts jabuti's own rules.
@@ -120,6 +126,18 @@ tool, so a nested producer builds and tests the project it was pointed at, and n
 
 Either way the tool is off by default, for the reason above, and turning it on is the same line in
 `jabuti.toml`.
+
+## Where the network and the state live
+
+A tool jabuti runs may reach the network and may keep a cache on disk. jabuti itself does neither. A
+check whose answer depends on data that changes without your code changing, an advisory database being
+the clearest case, gets that data through the tool that owns it, and jabuti reads whatever is there at
+the time of the run.
+
+So the same commit can produce a different verdict on a different day without jabuti being
+nondeterministic. The input changed, and that input is a file a tool fetched rather than state jabuti
+keeps. Byte identical output is a promise about the same input at the same version, and a fetched
+advisory database is part of the input.
 
 ## Adding a tool
 
