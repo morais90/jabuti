@@ -6,6 +6,12 @@ pages use and how to read what `jabuti check` prints.
 jabuti reads Rust, Kotlin and TypeScript. [Languages](languages.md) covers what each one contributes,
 which rules are available and why their limits differ.
 
+[Principles](principles.md) answers the other kind of question: why a default sits where it does, why
+a check you expected is missing, and why the output has the shape it has.
+
+[The calibration record](../CALIBRATION.md) holds the populations, distributions and dates that every
+default limit was drawn from, and says what a percentile in it does and does not claim.
+
 ## Output formats
 
 `jabuti check` defaults to compact agent output. [Other output shapes](concepts.md#other-shapes-of-output)
@@ -34,21 +40,25 @@ Most rules read one measure. [`hotspot`](rules/hotspot.md) reads two, which is w
 paying for themselves: neither change frequency nor complexity says much alone, and together they
 say a lot.
 
-| Rule | Limit | Severity |
-|---|---|---|
-| [`cognitive-complexity`](rules/cognitive-complexity.md) | 7 | warning |
-| [`duplicate-block`](rules/duplicate-block.md) | 120 nodes | warning |
-| [`error-masking`](rules/error-masking.md) | none | warning |
-| [`hotspot`](rules/hotspot.md) | 90 | warning |
-| [`function-lines`](rules/function-lines.md) | 60 | warning |
-| [`parameters`](rules/parameters.md) | 4 | warning |
-| [`new-dependency`](rules/new-dependency.md) | none | warning |
-| [`layer-violation`](rules/layer-violation.md) | none | warning |
-| [`speculative-api`](rules/speculative-api.md) | none | warning |
-| [`file-lines`](rules/file-lines.md) | 1000 | off |
-| [`cyclomatic-complexity`](rules/cyclomatic-complexity.md) | 10 | off |
-| [`churn`](rules/churn.md) | none | off |
-| [`uncovered-new-code`](rules/uncovered-new-code.md) | none | off |
+Every rule belongs to a [family](principles.md#families), which names the way a change fails rather
+than the area of software it touches. Reading the catalog by family is usually faster than reading it
+by name.
+
+| Rule | Family | Limit | Severity |
+|---|---|---|---|
+| [`cognitive-complexity`](rules/cognitive-complexity.md) | `shape` | 7 | warning |
+| [`duplicate-block`](rules/duplicate-block.md) | `shape` | 120 nodes | warning |
+| [`error-masking`](rules/error-masking.md) | `silent-failure` | none | warning |
+| [`hotspot`](rules/hotspot.md) | `cost` | 90 | warning |
+| [`function-lines`](rules/function-lines.md) | `shape` | 60 | warning |
+| [`parameters`](rules/parameters.md) | `shape` | 4 | warning |
+| [`new-dependency`](rules/new-dependency.md) | `structure` | none | warning |
+| [`layer-violation`](rules/layer-violation.md) | `structure` | none | warning |
+| [`speculative-api`](rules/speculative-api.md) | `shape` | none | warning |
+| [`file-lines`](rules/file-lines.md) | `shape` | 1000 | off |
+| [`cyclomatic-complexity`](rules/cyclomatic-complexity.md) | `shape` | 10 | off |
+| [`churn`](rules/churn.md) | `cost` | none | off |
+| [`uncovered-new-code`](rules/uncovered-new-code.md) | `completeness` | none | off |
 
 The last four are switched off by default. Their pages explain why, and what you gain by turning
 them on if your project wants them. `uncovered-new-code` is off for a different reason from the other
