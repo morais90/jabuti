@@ -49,8 +49,9 @@ No findings across 42 files and 378 units.
 ```
 
 Every finding names its severity, the rule, where it is, what was measured and what the limit was,
-which is enough to act on without asking a follow-up question. There is no advice in the output:
-the rule name carries the meaning, and deciding what to do about it is the caller's job.
+which is enough to act on without asking a follow-up question. Nothing in the output is advice about
+your situation: jabuti will not read your function and tell you how to restructure it, because that
+answer is not reproducible and deciding it is the caller's job.
 
 For CI and code-scanning consumers, `jabuti check --format sarif` emits deterministic SARIF 2.1.0
 without changing the exit codes. [The output documentation](docs/concepts.md#other-shapes-of-output)
