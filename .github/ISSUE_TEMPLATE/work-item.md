@@ -6,14 +6,8 @@ labels: ''
 assignees: ''
 ---
 
-## Family
+## Who this is for
 
-## Problem
-
-## Reader and scope
-
-## Mechanism
-
-## Evidence
+## How we would answer it
 
 ## Done when

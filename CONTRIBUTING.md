@@ -10,31 +10,35 @@ Work is tracked as issues, one per problem. A problem is answered by one rule, s
 on a problem already answered is a refinement of that rule rather than a second rule beside it, and an
 idea that names no family is not yet a rule.
 
-An issue is complete when the problem is stated, not when the solution is decided. Six fields, and the
-template carries them:
+An issue is complete when the problem is stated, not when the solution is decided.
 
-**Family.** One of the nine in [the principles](docs/principles.md#families). The family names the way
-a change fails, and picking it is what tells you whether the idea is a rule at all.
+Open with the problem and a short piece of code that shows it. Someone who has never seen this project
+should understand what goes wrong before meeting any vocabulary from it. Say why nothing already
+reports it, because if an existing linter does, the work is curating that linter rather than writing a
+rule.
 
-**Problem.** What goes wrong, and why nothing already reports it. If an existing linter reports it, the
-work is curating that linter rather than writing a rule.
+Then say who learns something they did not already have, and whether the finding is about a change,
+about the repository, or about both. The author of a change and the person who inherited a codebase do
+not know the same things, and a finding that restates what its own reader wrote on purpose changes
+nothing however cheap it is to detect.
 
-**Reader and scope.** Who learns something they did not already have, and whether the finding is about
-a change, about the repository, or about both. The author of a change and the person who inherited a
-codebase do not know the same things, and a finding that restates what its own reader wrote on purpose
-changes nothing however cheap it is to detect.
+Then say how we would answer it: the rule or tool, which class of input it reads, whether the detection
+is ours or delegated to a curated tool, and what is still open. Cite primary literature where a source
+is needed, and do not cite another tool as the source of a threshold, a counting rule or a definition.
+Where the justification is structural rather than published, say so and name the measurement that will
+settle it.
 
-**Mechanism.** The rule or tool that answers it, which class of input it reads (a language, a document,
-git history), and whether the detection is ours or delegated to a curated tool.
+Close with a `Done when` checklist, and write one only where the answer is already decided. An item
+waiting on a measurement gets the experiment as its `Done when`, with the number and the recorded
+decision as the deliverable, and the rule becomes a second issue if the number says yes. Inventing a
+solution before the work starts is the planning nobody asked for.
 
-**Evidence.** What justifies the rule. Cite primary literature where a source is needed. Do not cite
-another tool as the source of a threshold, a counting rule or a definition. Where the justification is
-structural rather than published, say so plainly and name the measurement that will settle it.
+Where the issue is a reasonable place for someone new to start, say so at the end, say why, and point
+at a rule already in the tree that shows the mechanism working. Add the `good first issue` label.
+Leave both off where it is not true.
 
-**Done when.** Only where the answer is already decided. An item that waits on a measurement gets the
-experiment as its `Done when`, with the number and the recorded decision as the deliverable, and the
-rule becomes a second issue if the number says yes. Inventing a solution before the work starts is the
-planning nobody asked for.
+The family is a label rather than a heading, and so is the kind of work: `rule`, `tool`, `capability`,
+`experiment` or `infra`. An issue blocked by another opens with a `Blocked by #N` line.
 
 ## Definition of done
 
