@@ -3,6 +3,23 @@
 jabuti reads Rust, Kotlin and TypeScript. A file is matched by its extension: `.rs` for Rust, `.kt`
 and `.kts` for Kotlin, and `.ts` for TypeScript.
 
+## What a language is, and what it is not
+
+A language here is four things at once: a grammar, a tree of units, measures over those units, and a
+limit calibrated on a population of real code. All four have to be present, which is why the list is
+three names long and grows slowly.
+
+Plenty of what a repository holds has none of that. A workflow file, a container definition, a
+deployment manifest and a lockfile carry no units and no measure, and there is no distribution to place
+a limit on. They are still worth reading, and a rule that reads one belongs to a second class rather
+than to this list: documents jabuti reads and does not measure, where the rule reads structure instead
+of counting anything.
+
+Nothing in this release reads a document. `Cargo.toml` is looked at only to decide whether a Cargo tool
+applies to your project. What matters meanwhile is what the numbers mean. Language coverage counts
+languages, and a document is never folded into it, because a figure mixing the two would claim more is
+checked than is.
+
 ## Per-language defaults
 
 The same number means different things in different languages, so the built-in limits are selected
