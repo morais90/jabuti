@@ -13,3 +13,6 @@ class LiveTest {
         val hidden = read()!!
     }
 }
+
+@Suppress("UNCHECKED_CAST")
+fun unused() {}

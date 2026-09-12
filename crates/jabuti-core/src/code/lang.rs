@@ -179,7 +179,7 @@ static TYPESCRIPT: Table = Table {
     metadata_nodes: &["decorator"],
     decorators_before: &[],
     decorators_within: &["decorator"],
-    concepts: &[Concept::ErrorSwallow],
+    concepts: &[Concept::ErrorSwallow, Concept::Suppression],
     language_specific_rules: &[],
     path_separator: ".",
     cognitive: CognitiveSpec {

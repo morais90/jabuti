@@ -1,4 +1,5 @@
 use super::concepts::Occurrence;
+use super::support;
 use crate::lang::LanguageId;
 use crate::model::{Concept, Detail, Finding, Rule, RuleId, Severity};
 use crate::policy::Policy;
@@ -16,8 +17,11 @@ pub fn findings(
         return Vec::new();
     }
 
+    let concepts = support::required_concepts(Rule::ErrorMasking);
+
     occurrences
         .iter()
+        .filter(|occurrence| !occurrence.in_test && concepts.contains(&occurrence.concept))
         .map(|occurrence| Finding {
             rule: RuleId::Native(Rule::ErrorMasking),
             severity: config.severity,
@@ -36,5 +40,8 @@ fn consequence(concept: Concept) -> &'static str {
         Concept::ErrorDiscard => "the failure is dropped without being read",
         Concept::ErrorPanic => "the failure becomes a panic",
         Concept::ErrorSwallow => "the failure is caught and nothing happens",
+        Concept::Suppression => {
+            unreachable!("suppression concepts are handled by the suppression rule")
+        }
     }
 }

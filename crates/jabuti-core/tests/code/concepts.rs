@@ -17,38 +17,48 @@ fn rendered(relative: &str, spec: &'static LangSpec) -> Vec<String> {
         .into_iter()
         .map(|occurrence| {
             format!(
-                "{} {} {}..{}",
+                "{} {} {}..{} {}",
                 occurrence.concept.id(),
                 occurrence.subject,
                 occurrence.span.start_line,
-                occurrence.span.end_line
+                occurrence.span.end_line,
+                if occurrence.in_test {
+                    "test"
+                } else {
+                    "production"
+                },
             )
         })
         .collect()
 }
 
 #[test]
-fn rust_bindings_map_each_error_masking_shape_and_leave_tests_out() {
+fn rust_bindings_map_each_shape_and_tag_test_declarations() {
     assert_eq!(
         rendered("concepts/rust.rs", &lang::RUST),
         [
-            "error-panic unwrap 2..2",
-            "error-panic expect 3..3",
-            "error-discard _ 4..4",
-            "error-discard ok 5..5",
-            "error-swallow Err 6..6",
+            "suppression (clippy::all) 1..1 production",
+            "error-panic unwrap 4..4 production",
+            "error-panic expect 5..5 production",
+            "error-discard _ 6..6 production",
+            "error-discard ok 7..7 production",
+            "error-swallow Err 8..8 production",
+            "error-panic unwrap 14..14 test",
+            "suppression (dead_code) 17..17 production",
         ]
     );
 }
 
 #[test]
-fn kotlin_bindings_map_each_error_masking_shape_and_leave_tests_out() {
+fn kotlin_bindings_map_each_shape_and_tag_test_declarations() {
     assert_eq!(
         rendered("concepts/kotlin.kt", &lang::KOTLIN),
         [
-            "error-panic !! 2..2",
-            "error-discard getOrNull 3..3",
-            "error-swallow catch 6..6",
+            "error-panic !! 2..2 production",
+            "error-discard getOrNull 3..3 production",
+            "error-swallow catch 6..6 production",
+            "error-panic !! 13..13 test",
+            "suppression (\"UNCHECKED_CAST\") 17..17 production",
         ]
     );
 }
@@ -57,7 +67,13 @@ fn kotlin_bindings_map_each_error_masking_shape_and_leave_tests_out() {
 fn typescript_bindings_map_empty_handlers_but_not_recovery() {
     assert_eq!(
         rendered("concepts/typescript.ts", &lang::TYPESCRIPT),
-        ["error-swallow catch 4..4", "error-swallow catch 7..7"]
+        [
+            "error-swallow catch 4..4 production",
+            "error-swallow catch 7..7 production",
+            "suppression // @ts-ignore 11..11 production",
+            "suppression // eslint-disable-next-line no-console 14..14 production",
+            "suppression any 18..18 production",
+        ]
     );
 }
 
@@ -86,18 +102,38 @@ fn a_user_binding_adds_a_project_api_without_replacing_built_ins() {
     );
 }
 
+#[test]
+fn typescript_ts_nocheck_and_the_bracket_any_cast_are_tagged_as_suppression() {
+    let source =
+        "// @ts-nocheck\nfunction live(value: unknown): unknown {\n    return <any>value;\n}\n";
+    let parsed = syntax::parse(source, &lang::TYPESCRIPT).expect("source parses cleanly");
+
+    let found = concepts::occurrences(&parsed, &ConceptBindings::default(), &BTreeMap::new());
+
+    assert_eq!(
+        found
+            .iter()
+            .map(|occurrence| (occurrence.concept, occurrence.subject.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            (Concept::Suppression, "// @ts-nocheck"),
+            (Concept::Suppression, "any"),
+        ]
+    );
+}
+
 #[rstest]
 #[case("#[tokio::test(flavor = \"multi_thread\")]")]
 #[case("#[test_log::test(tokio::test)]")]
 #[case("#[rstest(value, case(1))]")]
-fn a_rust_test_attribute_with_arguments_suppresses_its_concepts(#[case] attribute: &str) {
+fn a_rust_test_attribute_with_arguments_tags_its_concepts_as_test_code(#[case] attribute: &str) {
     let source = format!("{attribute}\nasync fn checks() {{\n    read().unwrap();\n}}\n");
     let parsed = syntax::parse(&source, &lang::RUST).expect("source parses cleanly");
 
-    assert_eq!(
-        concepts::occurrences(&parsed, &ConceptBindings::default(), &BTreeMap::new()),
-        []
-    );
+    let found = concepts::occurrences(&parsed, &ConceptBindings::default(), &BTreeMap::new());
+
+    assert_eq!(found.len(), 1);
+    assert!(found[0].in_test);
 }
 
 #[test]
@@ -156,6 +192,7 @@ fn imported_aliases_retain_their_concept_binding(
                 start_line: 2,
                 end_line: 2,
             },
+            in_test: false,
         }]
     );
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+
 fn live() {
     let first = read().unwrap();
     let second = read().expect("available");
@@ -11,3 +13,6 @@ fn live() {
 fn checks() {
     let hidden = read().unwrap();
 }
+
+#[allow(dead_code)]
+fn unused() {}

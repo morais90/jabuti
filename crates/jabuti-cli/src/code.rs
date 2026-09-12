@@ -5,7 +5,7 @@ use jabuti_core::code::duplication::{self, FileFragments};
 use jabuti_core::code::metrics::{self, CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::code::review::{self, FileUnderReview};
 use jabuti_core::code::units::{self, Unit};
-use jabuti_core::code::{concepts, masking};
+use jabuti_core::code::{concepts, masking, suppression};
 use jabuti_core::model::{
     ConceptBindings, Finding, Reading, Rule, Severity, Span, UnitKind, Unreadable,
 };
@@ -92,7 +92,7 @@ pub(crate) fn review(
     };
 
     let mut findings = review::evaluate(request.policy, &file);
-    findings.extend(masked_errors(text, parsed, aliases, request));
+    findings.extend(concept_findings(text, parsed, aliases, request));
     let findings = scoped(findings, &text.path, request.changes);
 
     Reviewed {
@@ -171,18 +171,27 @@ fn scoped(mut findings: Vec<Finding>, path: &Path, changes: Option<&Changes>) ->
     findings
 }
 
-fn masked_errors(
+fn concept_findings(
     text: &Text,
     parsed: &Parsed<'_>,
     aliases: &BTreeMap<String, String>,
     request: &Scan<'_>,
 ) -> Vec<Finding> {
-    if text.spec.is_test_path(Path::new(&text.shown)) {
-        return Vec::new();
+    let occurrences = concepts::occurrences(parsed, request.bindings, aliases);
+
+    let mut findings =
+        suppression::findings(&text.shown, text.spec.id, &occurrences, request.policy);
+
+    if !text.spec.is_test_path(Path::new(&text.shown)) {
+        findings.extend(masking::findings(
+            &text.shown,
+            text.spec.id,
+            &occurrences,
+            request.policy,
+        ));
     }
 
-    let occurrences = concepts::occurrences(parsed, request.bindings, aliases);
-    masking::findings(&text.shown, text.spec.id, &occurrences, request.policy)
+    findings
 }
 
 fn count_units(unit: &Unit) -> usize {

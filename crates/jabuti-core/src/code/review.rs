@@ -126,6 +126,7 @@ impl FileUnderReview<'_> {
             | Rule::LayerViolation
             | Rule::NewDependency
             | Rule::SpeculativeApi
+            | Rule::Suppression
             | Rule::UncoveredNewCode => NOT_MEASURED_PER_UNIT,
             Rule::CognitiveComplexity => self.cognitive.cognitive(unit),
             Rule::Parameters => unit.parameters,

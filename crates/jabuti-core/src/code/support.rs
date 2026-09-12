@@ -14,11 +14,15 @@ pub fn portability_available(
     }
 }
 
-fn required_concepts(rule: Rule) -> &'static [Concept] {
-    if rule == Rule::ErrorMasking {
-        &Concept::ALL
-    } else {
-        &[]
+pub(crate) fn required_concepts(rule: Rule) -> &'static [Concept] {
+    match rule {
+        Rule::ErrorMasking => &[
+            Concept::ErrorDiscard,
+            Concept::ErrorPanic,
+            Concept::ErrorSwallow,
+        ],
+        Rule::Suppression => &[Concept::Suppression],
+        _ => &[],
     }
 }
 

@@ -35,7 +35,7 @@ fn every_native_rule_declares_its_portability_class() {
         .filter(|rule| rule.portability() == Portability::LanguageSpecific)
         .collect();
 
-    assert_eq!(concept_bound, [Rule::ErrorMasking]);
+    assert_eq!(concept_bound, [Rule::ErrorMasking, Rule::Suppression]);
     assert_eq!(language_specific, []);
 }
 

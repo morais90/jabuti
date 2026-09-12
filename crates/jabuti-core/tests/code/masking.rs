@@ -12,6 +12,7 @@ fn panic_occurrence() -> Occurrence {
             start_line: 5,
             end_line: 5,
         },
+        in_test: false,
     }
 }
 
@@ -39,6 +40,24 @@ fn a_masking_concept_becomes_a_complete_finding() {
                 message: "the failure becomes a panic".to_owned(),
             },
         }]
+    );
+}
+
+#[test]
+fn an_occurrence_tagged_as_test_code_produces_no_finding() {
+    let occurrence = Occurrence {
+        in_test: true,
+        ..panic_occurrence()
+    };
+
+    assert_eq!(
+        masking::findings(
+            "tests/behaviour.rs",
+            LanguageId::Rust,
+            &[occurrence],
+            &Policy::default(),
+        ),
+        []
     );
 }
 

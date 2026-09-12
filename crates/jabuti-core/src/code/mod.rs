@@ -6,4 +6,5 @@ pub mod masking;
 pub mod metrics;
 pub mod review;
 pub mod support;
+pub mod suppression;
 pub mod units;

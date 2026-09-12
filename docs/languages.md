@@ -112,9 +112,9 @@ What that leaves us owing you is different, and checkable:
 
 ```console
 $ jabuti languages
-kotlin     .kt .kts     grammar 1.1.0    13/13 native rules
-rust       .rs          grammar 0.24.2   13/13 native rules
-typescript .ts          grammar 0.23.2   13/13 native rules
+kotlin     .kt .kts     grammar 1.1.0    14/14 native rules
+rust       .rs          grammar 0.24.2   14/14 native rules
+typescript .ts          grammar 0.23.2   14/14 native rules
 ```
 
 The grammar version is what actually determines whether your syntax parses, so it is the number to

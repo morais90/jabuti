@@ -7,5 +7,11 @@
   (navigation_expression (identifier) @subject)
   (#eq? @subject "getOrNull")) @concept.error_discard
 
+(annotation
+  (constructor_invocation
+    (user_type (identifier) @_name)
+    (value_arguments) @subject)
+  (#eq? @_name "Suppress")) @concept.suppression
+
 (call_expression (identifier) @call)
 (call_expression (navigation_expression) @call)

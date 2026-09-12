@@ -14,4 +14,12 @@
   (#eq? @subject "Err")
   (#match? @_body "^\\{\\s*\\}$")) @concept.error_swallow
 
+(attribute_item
+  (attribute (identifier) @_name arguments: (token_tree) @subject)
+  (#eq? @_name "allow")) @concept.suppression
+
+(inner_attribute_item
+  (attribute (identifier) @_name arguments: (token_tree) @subject)
+  (#eq? @_name "allow")) @concept.suppression
+
 (call_expression function: (_) @call)

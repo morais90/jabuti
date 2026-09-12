@@ -12,6 +12,7 @@ pub struct Occurrence {
     pub concept: Concept,
     pub subject: String,
     pub span: Span,
+    pub in_test: bool,
 }
 
 struct Configured<'a> {
@@ -36,17 +37,19 @@ pub fn occurrences(
     let mut found = Vec::new();
 
     parsed.for_each_match(&table.queries().concepts, |matched, query| {
-        if let Some((occurrence, node)) = captured_occurrence(matched, query, parsed.source())
-            && !inside_test(node, parsed.source(), table)
-        {
-            found.push(occurrence);
+        if let Some((occurrence, node)) = captured_occurrence(matched, query, parsed.source()) {
+            let in_test = inside_test(node, parsed.source(), table);
+            found.push(Occurrence {
+                in_test,
+                ..occurrence
+            });
         }
 
         if let Some(configured) = configured.as_ref()
             && let Some(call) = captured_call(matched, query)
-            && !inside_test(call, parsed.source(), table)
         {
-            found.extend(configured.occurrences(call, parsed.source()));
+            let in_test = inside_test(call, parsed.source(), table);
+            found.extend(configured.occurrences(call, parsed.source(), in_test));
         }
     });
 
@@ -85,6 +88,7 @@ fn captured_occurrence<'tree>(
             concept: concept?,
             subject: syntax::text_of(subject, source),
             span: syntax::span_of(subject),
+            in_test: false,
         },
         node?,
     ))
@@ -97,7 +101,7 @@ fn captured_call<'tree>(matched: &QueryMatch<'_, 'tree>, query: &Query) -> Optio
 }
 
 impl Configured<'_> {
-    fn occurrences(&self, call: Node<'_>, source: &str) -> Vec<Occurrence> {
+    fn occurrences(&self, call: Node<'_>, source: &str, in_test: bool) -> Vec<Occurrence> {
         let written = syntax::text_of(call, source);
         let resolved = resolve(&written, self.separator, self.aliases);
         let subject = written
@@ -119,6 +123,7 @@ impl Configured<'_> {
                 concept,
                 subject: subject.clone(),
                 span: syntax::span_of(call),
+                in_test,
             })
             .collect()
     }
@@ -142,6 +147,7 @@ fn concept_of(label: &str) -> Option<Concept> {
         "error_discard" => Some(Concept::ErrorDiscard),
         "error_panic" => Some(Concept::ErrorPanic),
         "error_swallow" => Some(Concept::ErrorSwallow),
+        "suppression" => Some(Concept::Suppression),
         unknown => panic!("query captures @concept.{unknown}, which maps to no concept"),
     }
 }

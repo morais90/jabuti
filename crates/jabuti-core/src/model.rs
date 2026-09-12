@@ -51,16 +51,23 @@ pub enum Concept {
     ErrorDiscard,
     ErrorPanic,
     ErrorSwallow,
+    Suppression,
 }
 
 impl Concept {
-    pub const ALL: [Self; 3] = [Self::ErrorDiscard, Self::ErrorPanic, Self::ErrorSwallow];
+    pub const ALL: [Self; 4] = [
+        Self::ErrorDiscard,
+        Self::ErrorPanic,
+        Self::ErrorSwallow,
+        Self::Suppression,
+    ];
 
     pub fn id(self) -> &'static str {
         match self {
             Self::ErrorDiscard => "error-discard",
             Self::ErrorPanic => "error-panic",
             Self::ErrorSwallow => "error-swallow",
+            Self::Suppression => "suppression",
         }
     }
 
@@ -104,6 +111,7 @@ pub enum Rule {
     LayerViolation,
     NewDependency,
     SpeculativeApi,
+    Suppression,
     UncoveredNewCode,
     CognitiveComplexity,
     CyclomaticComplexity,
@@ -113,7 +121,7 @@ pub enum Rule {
 }
 
 impl Rule {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::Churn,
         Self::DuplicateBlock,
         Self::ErrorMasking,
@@ -121,6 +129,7 @@ impl Rule {
         Self::LayerViolation,
         Self::NewDependency,
         Self::SpeculativeApi,
+        Self::Suppression,
         Self::UncoveredNewCode,
         Self::CognitiveComplexity,
         Self::CyclomaticComplexity,
@@ -138,6 +147,7 @@ impl Rule {
             Self::LayerViolation => "layer-violation",
             Self::NewDependency => "new-dependency",
             Self::SpeculativeApi => "speculative-api",
+            Self::Suppression => "suppression",
             Self::UncoveredNewCode => "uncovered-new-code",
             Self::CognitiveComplexity => "cognitive-complexity",
             Self::CyclomaticComplexity => "cyclomatic-complexity",
@@ -153,7 +163,7 @@ impl Rule {
 
     pub fn portability(self) -> Portability {
         match self {
-            Self::ErrorMasking => Portability::ConceptBound,
+            Self::ErrorMasking | Self::Suppression => Portability::ConceptBound,
             Self::Churn
             | Self::DuplicateBlock
             | Self::Hotspot
