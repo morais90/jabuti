@@ -12,6 +12,35 @@ rule's production path rather than a synthetic model.
 The method follows Alves, Ypma and Visser, *Deriving metric thresholds from benchmark data* (ICSM
 2010). A distribution describes a population, not an intrinsic boundary between good and bad code.
 
+## Where a per-language limit comes from
+
+Two sources contribute, and they contribute different things.
+
+**Published guidance contributes the catalog, not the numbers.** Language style guides and API
+guidelines almost never state a numeric threshold for size or complexity. What they do state is what
+the community treats as idiomatic, which is where the language-specific half of the rule catalog
+should come from. Linter defaults shipped by a language project look like an exception and are not.
+They are somebody's choice rather than a measured fact, and citing one would mean borrowing a number
+nobody can defend.
+
+**Community projects contribute a discriminant test, which is worth more than a second corpus.** The
+obvious use of well-regarded projects is to calibrate against them instead of against everything
+published. The better use is to measure both and compare. If code the community holds up as good has
+systematically lower values than the published average, that difference is evidence the measure
+separates good code from ordinary code. If the two distributions sit on top of each other, the measure
+does not discriminate quality at all, which is a finding worth having before a rule is allowed to gate
+anything.
+
+No limit recorded in this file has been through that test. Every threshold here was drawn from a
+published population without checking whether it distinguishes good from average, and a cheap way to
+run the check exists: take the crates with the highest reverse-dependency counts as the curated set,
+which is objective and already available, and compare against the full registry population that is
+recorded below.
+
+Until that runs, a percentile in this file names the population it was measured on and nothing more.
+Calibrating on good code makes a threshold stricter and adoption harder, so "the 98th percentile" stops
+meaning anything without saying the 98th percentile of what.
+
 ## Corpus summary
 
 | Language | Population | Files measured | Functions | Measured |
