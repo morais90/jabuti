@@ -148,6 +148,7 @@ fn concept_of(label: &str) -> Option<Concept> {
         "error_panic" => Some(Concept::ErrorPanic),
         "error_swallow" => Some(Concept::ErrorSwallow),
         "suppression" => Some(Concept::Suppression),
+        "assertion" => Some(Concept::Assertion),
         unknown => panic!("query captures @concept.{unknown}, which maps to no concept"),
     }
 }
@@ -166,27 +167,34 @@ fn inside_test(node: Node<'_>, source: &str, table: &Table) -> bool {
 }
 
 fn markers_around(node: Node<'_>, source: &str, table: &Table) -> bool {
-    let mut attached = Vec::new();
+    lang::markers(node, source, table, table.id.spec().test_markers)
+}
 
-    let mut sibling = node.prev_sibling();
-    while let Some(current) = sibling {
-        if !table.decorators_before.contains(&current.kind()) {
-            break;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallSite {
+    pub name: String,
+    pub span: Span,
+}
+
+pub fn call_sites(parsed: &Parsed<'_>) -> Vec<CallSite> {
+    let table = lang::table(parsed.language());
+    let mut found = Vec::new();
+
+    parsed.for_each_match(&table.queries().concepts, |matched, query| {
+        if let Some(call) = captured_call(matched, query) {
+            let name = syntax::text_of(call, parsed.source());
+            if is_bare_identifier(&name) {
+                found.push(CallSite {
+                    name,
+                    span: syntax::span_of(call),
+                });
+            }
         }
-        attached.push(current);
-        sibling = current.prev_sibling();
-    }
+    });
 
-    let mut cursor = node.walk();
-    attached.extend(
-        node.children(&mut cursor)
-            .filter(|child| table.decorators_within.contains(&child.kind())),
-    );
+    found
+}
 
-    let markers = table.id.spec().test_markers;
-
-    attached.iter().any(|node| {
-        node.utf8_text(source.as_bytes())
-            .is_ok_and(|text| markers.iter().any(|mark| text.contains(mark)))
-    })
+fn is_bare_identifier(text: &str) -> bool {
+    !text.is_empty() && text.chars().all(|c| c.is_alphanumeric() || c == '_')
 }

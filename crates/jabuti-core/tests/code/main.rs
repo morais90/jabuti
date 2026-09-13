@@ -1,3 +1,4 @@
+mod assertion;
 mod common;
 mod concepts;
 mod duplication;

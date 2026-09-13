@@ -40,6 +40,7 @@ fn silent(limit: u32) -> RuleConfig {
 
 fn shared_defaults() -> BTreeMap<RuleId, RuleConfig> {
     BTreeMap::from([
+        (RuleId::Native(Rule::Assertion), reporting(0)),
         (RuleId::Native(Rule::Churn), silent(0)),
         (RuleId::Native(Rule::DuplicateBlock), reporting(120)),
         (RuleId::Native(Rule::ErrorMasking), reporting(0)),

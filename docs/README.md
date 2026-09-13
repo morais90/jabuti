@@ -56,6 +56,7 @@ by name.
 | [`layer-violation`](rules/layer-violation.md) | `structure` | none | warning |
 | [`speculative-api`](rules/speculative-api.md) | `shape` | none | warning |
 | [`suppression`](rules/suppression.md) | `silenced` | none | warning |
+| [`assertion`](rules/assertion.md) | `completeness` | none | warning |
 | [`file-lines`](rules/file-lines.md) | `shape` | 1000 | off |
 | [`cyclomatic-complexity`](rules/cyclomatic-complexity.md) | `shape` | 10 | off |
 | [`churn`](rules/churn.md) | `cost` | none | off |

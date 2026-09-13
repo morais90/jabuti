@@ -14,5 +14,9 @@ class LiveTest {
     }
 }
 
+fun asserted() {
+    assertTrue(true)
+}
+
 @Suppress("UNCHECKED_CAST")
 fun unused() {}

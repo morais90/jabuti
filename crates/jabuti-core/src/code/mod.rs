@@ -1,3 +1,4 @@
+pub mod assertion;
 mod cognitive;
 pub mod concepts;
 pub mod duplication;

@@ -110,7 +110,7 @@ fn length_is_measured_on_functions_and_not_on_the_types_that_hold_them() {
 }
 
 #[test]
-fn the_default_policy_reports_ten_of_the_fourteen_rules() {
+fn the_default_policy_reports_eleven_of_the_fifteen_rules() {
     let reported: Vec<Rule> = Rule::ALL
         .into_iter()
         .filter(|rule| {
@@ -123,6 +123,7 @@ fn the_default_policy_reports_ten_of_the_fourteen_rules() {
     assert_eq!(
         reported,
         [
+            Rule::Assertion,
             Rule::DuplicateBlock,
             Rule::ErrorMasking,
             Rule::Hotspot,

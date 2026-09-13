@@ -22,6 +22,7 @@ pub(crate) fn required_concepts(rule: Rule) -> &'static [Concept] {
             Concept::ErrorSwallow,
         ],
         Rule::Suppression => &[Concept::Suppression],
+        Rule::Assertion => &[Concept::Assertion],
         _ => &[],
     }
 }

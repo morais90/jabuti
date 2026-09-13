@@ -3,6 +3,7 @@ use std::ops::Range;
 use tree_sitter::{Node, Query, QueryMatch};
 
 use super::lang::{self, Table};
+use crate::lang::LanguageId;
 use crate::model::{Span, UnitKind};
 use crate::syntax::{self, Parsed};
 
@@ -13,6 +14,8 @@ pub struct Unit {
     pub span: Span,
     pub bytes: Range<usize>,
     pub parameters: u32,
+    pub is_test: bool,
+    pub should_panic: bool,
     pub children: Vec<Unit>,
 }
 
@@ -48,6 +51,8 @@ fn file_unit(source: &str) -> Unit {
         },
         bytes: 0..source.len(),
         parameters: 0,
+        is_test: false,
+        should_panic: false,
         children: Vec::new(),
     }
 }
@@ -86,8 +91,70 @@ fn captured_unit(
         span: syntax::span_of(node),
         bytes: node.byte_range(),
         parameters,
+        is_test: is_test_unit(node, source, table),
+        should_panic: table.id == LanguageId::Rust
+            && rust_attribute_names(node, source, table).any(|name| name == "should_panic"),
         children: Vec::new(),
     })
+}
+
+fn is_test_unit(node: Node<'_>, source: &str, table: &Table) -> bool {
+    match table.id {
+        LanguageId::TypeScript => is_test_callback(node, source),
+        LanguageId::Rust => rust_attribute_names(node, source, table)
+            .any(|name| table.test_entry_markers.contains(&name)),
+        LanguageId::Kotlin => lang::markers(node, source, table, table.test_entry_markers),
+    }
+}
+
+fn rust_attribute_names<'a>(
+    node: Node<'_>,
+    source: &'a str,
+    table: &Table,
+) -> impl Iterator<Item = &'a str> {
+    lang::decorators(node, table)
+        .into_iter()
+        .filter_map(move |decorator| {
+            let attribute = decorator.named_child(0)?;
+            let path = attribute.named_child(0)?;
+            let text = path.utf8_text(source.as_bytes()).ok()?;
+            Some(text.rsplit("::").next().unwrap_or(text))
+        })
+}
+
+fn is_test_callback(node: Node<'_>, source: &str) -> bool {
+    let Some(arguments) = node.parent().filter(|parent| parent.kind() == "arguments") else {
+        return false;
+    };
+    let Some(call) = arguments
+        .parent()
+        .filter(|parent| parent.kind() == "call_expression")
+    else {
+        return false;
+    };
+    let Some(function) = call.child_by_field_name("function") else {
+        return false;
+    };
+
+    match function.kind() {
+        "identifier" => is_test_runner(function, source),
+        "member_expression" => {
+            let object = function.child_by_field_name("object");
+            let property = function.child_by_field_name("property");
+
+            object.is_some_and(|node| is_test_runner(node, source))
+                && property.is_some_and(|node| matches!(text_of(node, source), "only" | "skip"))
+        }
+        _ => false,
+    }
+}
+
+fn is_test_runner(node: Node<'_>, source: &str) -> bool {
+    matches!(text_of(node, source), "it" | "test")
+}
+
+fn text_of<'a>(node: Node<'_>, source: &'a str) -> &'a str {
+    node.utf8_text(source.as_bytes()).unwrap_or_default()
 }
 
 fn declared_parameters(node: Node<'_>, table: &Table) -> u32 {

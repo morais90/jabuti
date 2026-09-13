@@ -16,3 +16,7 @@ fn checks() {
 
 #[allow(dead_code)]
 fn unused() {}
+
+fn asserted() {
+    assert!(true);
+}

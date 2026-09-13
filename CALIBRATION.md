@@ -154,6 +154,22 @@ was uniformly better.
 
 ## Rule validation probes
 
+### `assertion`
+
+The same four corpora as `suppression`, counting test-marked units against the rule's own reading of
+them.
+
+| Corpus | Language | Tests | Findings | Share |
+|---|---|---:|---:|---:|
+| meilisearch | Rust | 1,430 | 293 | 20.5% |
+| komga (backend) | Kotlin | 766 | 135 | 17.6% |
+| okhttp | Kotlin | 2,937 | 456 | 15.5% |
+| komga (frontend) | TypeScript | 81 | 0 | 0% |
+| oclif | TypeScript | 47 | 0 | 0% |
+
+The Rust figure required binding meilisearch's own snapshot macro through
+`[languages.rust.concepts]` first; the raw count against the built-in vocabulary alone was 52%.
+
 ### `duplicate-block`
 
 At 120 syntax nodes the calibration projects produced about two findings per thousand lines. Manual

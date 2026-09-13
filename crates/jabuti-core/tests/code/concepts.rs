@@ -9,6 +9,16 @@ use rstest::rstest;
 
 use super::common::read_fixture;
 
+fn concept_pairs(
+    parsed: &syntax::Parsed<'_>,
+    bindings: &ConceptBindings,
+) -> Vec<(Concept, String)> {
+    concepts::occurrences(parsed, bindings, &BTreeMap::new())
+        .into_iter()
+        .map(|occurrence| (occurrence.concept, occurrence.subject))
+        .collect()
+}
+
 fn rendered(relative: &str, spec: &'static LangSpec) -> Vec<String> {
     let source = read_fixture(relative);
     let parsed = syntax::parse(&source, spec).expect("the fixture parses cleanly");
@@ -45,6 +55,7 @@ fn rust_bindings_map_each_shape_and_tag_test_declarations() {
             "error-swallow Err 8..8 production",
             "error-panic unwrap 14..14 test",
             "suppression (dead_code) 17..17 production",
+            "assertion assert 21..21 production",
         ]
     );
 }
@@ -58,7 +69,8 @@ fn kotlin_bindings_map_each_shape_and_tag_test_declarations() {
             "error-discard getOrNull 3..3 production",
             "error-swallow catch 6..6 production",
             "error-panic !! 13..13 test",
-            "suppression (\"UNCHECKED_CAST\") 17..17 production",
+            "assertion assertTrue 18..18 production",
+            "suppression (\"UNCHECKED_CAST\") 21..21 production",
         ]
     );
 }
@@ -73,6 +85,7 @@ fn typescript_bindings_map_empty_handlers_but_not_recovery() {
             "suppression // @ts-ignore 11..11 production",
             "suppression // eslint-disable-next-line no-console 14..14 production",
             "suppression any 18..18 production",
+            "assertion expect 22..22 production",
         ]
     );
 }
@@ -88,16 +101,38 @@ fn a_user_binding_adds_a_project_api_without_replacing_built_ins() {
         vec!["mycorp::discard".to_owned()],
     );
 
-    let found = concepts::occurrences(&parsed, &bindings, &BTreeMap::new());
+    assert_eq!(
+        concept_pairs(&parsed, &bindings),
+        [
+            (Concept::ErrorDiscard, "discard".to_owned()),
+            (Concept::ErrorPanic, "unwrap".to_owned()),
+        ]
+    );
+}
+
+#[test]
+fn call_sites_keep_only_bare_names_and_leave_method_and_qualified_calls_out() {
+    let source = "fn live() {\n    helper();\n    self.helper();\n    Type::helper();\n    obj.helper();\n}\n";
+    let parsed = syntax::parse(source, &lang::RUST).expect("source parses cleanly");
+
+    let names: Vec<String> = concepts::call_sites(&parsed)
+        .into_iter()
+        .map(|call| call.name)
+        .collect();
+
+    assert_eq!(names, ["helper"]);
+}
+
+#[test]
+fn rust_recognises_assert_cmds_fluent_assert_and_qualified_insta_macros() {
+    let source = "fn checks() {\n    command().assert().success();\n    insta::assert_snapshot!(value);\n}\n";
+    let parsed = syntax::parse(source, &lang::RUST).expect("source parses cleanly");
 
     assert_eq!(
-        found
-            .iter()
-            .map(|occurrence| (occurrence.concept, occurrence.subject.as_str()))
-            .collect::<Vec<_>>(),
+        concept_pairs(&parsed, &ConceptBindings::default()),
         [
-            (Concept::ErrorDiscard, "discard"),
-            (Concept::ErrorPanic, "unwrap"),
+            (Concept::Assertion, "assert".to_owned()),
+            (Concept::Assertion, "assert_snapshot".to_owned()),
         ]
     );
 }
@@ -108,16 +143,11 @@ fn typescript_ts_nocheck_and_the_bracket_any_cast_are_tagged_as_suppression() {
         "// @ts-nocheck\nfunction live(value: unknown): unknown {\n    return <any>value;\n}\n";
     let parsed = syntax::parse(source, &lang::TYPESCRIPT).expect("source parses cleanly");
 
-    let found = concepts::occurrences(&parsed, &ConceptBindings::default(), &BTreeMap::new());
-
     assert_eq!(
-        found
-            .iter()
-            .map(|occurrence| (occurrence.concept, occurrence.subject.as_str()))
-            .collect::<Vec<_>>(),
+        concept_pairs(&parsed, &ConceptBindings::default()),
         [
-            (Concept::Suppression, "// @ts-nocheck"),
-            (Concept::Suppression, "any"),
+            (Concept::Suppression, "// @ts-nocheck".to_owned()),
+            (Concept::Suppression, "any".to_owned()),
         ]
     );
 }

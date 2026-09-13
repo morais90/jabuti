@@ -43,5 +43,8 @@ fn consequence(concept: Concept) -> &'static str {
         Concept::Suppression => {
             unreachable!("suppression concepts are handled by the suppression rule")
         }
+        Concept::Assertion => {
+            unreachable!("assertion concepts are handled by the assertion rule")
+        }
     }
 }

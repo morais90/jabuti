@@ -52,14 +52,16 @@ pub enum Concept {
     ErrorPanic,
     ErrorSwallow,
     Suppression,
+    Assertion,
 }
 
 impl Concept {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::ErrorDiscard,
         Self::ErrorPanic,
         Self::ErrorSwallow,
         Self::Suppression,
+        Self::Assertion,
     ];
 
     pub fn id(self) -> &'static str {
@@ -68,6 +70,7 @@ impl Concept {
             Self::ErrorPanic => "error-panic",
             Self::ErrorSwallow => "error-swallow",
             Self::Suppression => "suppression",
+            Self::Assertion => "assertion",
         }
     }
 
@@ -104,6 +107,7 @@ impl ConceptBindings {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum Rule {
+    Assertion,
     Churn,
     DuplicateBlock,
     ErrorMasking,
@@ -121,7 +125,8 @@ pub enum Rule {
 }
 
 impl Rule {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
+        Self::Assertion,
         Self::Churn,
         Self::DuplicateBlock,
         Self::ErrorMasking,
@@ -140,6 +145,7 @@ impl Rule {
 
     pub fn id(self) -> &'static str {
         match self {
+            Self::Assertion => "assertion",
             Self::Churn => "churn",
             Self::DuplicateBlock => "duplicate-block",
             Self::ErrorMasking => "error-masking",
@@ -163,7 +169,7 @@ impl Rule {
 
     pub fn portability(self) -> Portability {
         match self {
-            Self::ErrorMasking | Self::Suppression => Portability::ConceptBound,
+            Self::ErrorMasking | Self::Suppression | Self::Assertion => Portability::ConceptBound,
             Self::Churn
             | Self::DuplicateBlock
             | Self::Hotspot

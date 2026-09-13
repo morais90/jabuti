@@ -56,6 +56,7 @@ pub(crate) struct Table {
     pub(crate) metadata_nodes: &'static [&'static str],
     pub(crate) decorators_before: &'static [&'static str],
     pub(crate) decorators_within: &'static [&'static str],
+    pub(crate) test_entry_markers: &'static [&'static str],
     pub(crate) concepts: &'static [Concept],
     pub(crate) language_specific_rules: &'static [crate::model::Rule],
     pub(crate) path_separator: &'static str,
@@ -88,6 +89,7 @@ static KOTLIN: Table = Table {
     metadata_nodes: &["annotation", "modifiers"],
     decorators_before: &[],
     decorators_within: &["modifiers", "annotation"],
+    test_entry_markers: &["@Test", "@ParameterizedTest", "@RepeatedTest"],
     concepts: &Concept::ALL,
     language_specific_rules: &[],
     path_separator: ".",
@@ -134,6 +136,7 @@ static RUST: Table = Table {
     metadata_nodes: &["attribute_item", "inner_attribute_item"],
     decorators_before: &["attribute_item"],
     decorators_within: &["inner_attribute_item"],
+    test_entry_markers: &["test", "rstest", "test_case"],
     concepts: &Concept::ALL,
     language_specific_rules: &[],
     path_separator: "::",
@@ -179,7 +182,12 @@ static TYPESCRIPT: Table = Table {
     metadata_nodes: &["decorator"],
     decorators_before: &[],
     decorators_within: &["decorator"],
-    concepts: &[Concept::ErrorSwallow, Concept::Suppression],
+    test_entry_markers: &[],
+    concepts: &[
+        Concept::ErrorSwallow,
+        Concept::Suppression,
+        Concept::Assertion,
+    ],
     language_specific_rules: &[],
     path_separator: ".",
     cognitive: CognitiveSpec {
@@ -292,6 +300,42 @@ pub fn declared_fields(language: LanguageId) -> Vec<&'static str> {
     let cognitive = &table(language).cognitive;
 
     vec![cognitive.condition_field, cognitive.operator_field]
+}
+
+pub(crate) fn decorators<'tree>(
+    node: tree_sitter::Node<'tree>,
+    table: &Table,
+) -> Vec<tree_sitter::Node<'tree>> {
+    let mut attached = Vec::new();
+
+    let mut sibling = node.prev_sibling();
+    while let Some(current) = sibling {
+        if !table.decorators_before.contains(&current.kind()) {
+            break;
+        }
+        attached.push(current);
+        sibling = current.prev_sibling();
+    }
+
+    let mut cursor = node.walk();
+    attached.extend(
+        node.children(&mut cursor)
+            .filter(|child| table.decorators_within.contains(&child.kind())),
+    );
+
+    attached
+}
+
+pub(crate) fn markers(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    table: &Table,
+    candidates: &[&str],
+) -> bool {
+    decorators(node, table).iter().any(|node| {
+        node.utf8_text(source.as_bytes())
+            .is_ok_and(|text| candidates.iter().any(|mark| text.contains(mark)))
+    })
 }
 
 fn some(kind: &'static str) -> Option<&'static str> {

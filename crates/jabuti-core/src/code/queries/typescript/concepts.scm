@@ -29,4 +29,12 @@
 (type_assertion (type_arguments (predefined_type) @subject)
   (#eq? @subject "any")) @concept.suppression
 
+(call_expression
+  function: (identifier) @subject
+  (#any-of? @subject "expect" "assert")) @concept.assertion
+
+(call_expression
+  function: (member_expression object: (identifier) @subject)
+  (#eq? @subject "assert")) @concept.assertion
+
 (call_expression function: (_) @call)

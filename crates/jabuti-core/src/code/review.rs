@@ -120,7 +120,8 @@ impl FileUnderReview<'_> {
     fn measure(&self, rule: Rule, unit: &Unit) -> u32 {
         match rule {
             Rule::Churn => self.churn,
-            Rule::DuplicateBlock
+            Rule::Assertion
+            | Rule::DuplicateBlock
             | Rule::ErrorMasking
             | Rule::Hotspot
             | Rule::LayerViolation

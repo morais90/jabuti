@@ -13,5 +13,15 @@
     (value_arguments) @subject)
   (#eq? @_name "Suppress")) @concept.suppression
 
+(call_expression
+  [(identifier) @subject (navigation_expression (identifier) @subject)]
+  (#any-of? @subject
+    "assertEquals" "assertNotEquals" "assertArrayEquals" "assertIterableEquals"
+    "assertLinesMatch" "assertTrue" "assertFalse" "assertNull" "assertNotNull"
+    "assertSame" "assertNotSame" "assertThrows" "assertThrowsExactly"
+    "assertDoesNotThrow" "assertTimeout" "assertTimeoutPreemptively" "assertAll"
+    "assertFails" "assertFailsWith" "assertIs" "assertIsNot" "assertContains"
+    "fail" "assertThat")) @concept.assertion
+
 (call_expression (identifier) @call)
 (call_expression (navigation_expression) @call)

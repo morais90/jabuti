@@ -17,3 +17,7 @@ console.log(legacy);
 function widen(value: unknown): unknown {
     return value as any;
 }
+
+function asserted(): void {
+    expect(1).toBe(1);
+}
