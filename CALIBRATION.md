@@ -182,6 +182,39 @@ dependencies, p90 was 3 and the maximum was 30.
 Appending one synthetic unreferenced public declaration to meilisearch or komga produced exactly one
 finding at that declaration.
 
+### `suppression`
+
+Four corpora, one per language pairing available locally: meilisearch (Rust), komga's Kotlin backend
+and its separate TypeScript frontend, oclif (TypeScript) and okhttp (Kotlin).
+
+| Corpus | Language | Lines measured | Findings | Per 1,000 lines |
+|---|---|---:|---:|---:|
+| meilisearch | Rust | 262,525 | 198 | 0.75 |
+| komga (backend) | Kotlin | 63,208 | 0 | 0 |
+| okhttp | Kotlin | 140,471 | 66 | 0.47 |
+| komga (frontend) | TypeScript | 42,657 | 83 | 1.95 |
+| oclif | TypeScript | 5,761 | 18 | 3.12 |
+
+TypeScript's rate sits well above the other two languages in every corpus measured. Kotlin's is the
+most uneven: komga's backend carried no `@Suppress` at all, which is a genuine zero rather than a
+detection gap, confirmed by grepping the source directly.
+
+**Reasoned occurrences.** A reason was counted only when it sits on the same physical line as the
+construct: trailing text after `//` for Rust and Kotlin, an ESLint `-- reason` or free text after a
+TypeScript directive's marker. A comment on the line above was deliberately not counted, because
+sampling showed it is at least as often documentation for the item the attribute decorates as it is an
+explanation for the suppression itself, which would have inflated the count on a false signal. By that
+narrower definition, 33 of 365 occurrences (9.0%) carried a reason: 26/198 in meilisearch, 0/83 in
+komga, 2/18 in oclif, 5/66 in okhttp.
+
+**Assertions to `any`.** 22 of 101 TypeScript occurrences (21.8%), all from komga's frontend; oclif had
+none. Sampled occurrences read as proactive type-erasure around a loosely shaped value (`{...x} as
+any` building a request payload), not a response to a type-checker diagnostic that had already fired,
+which is the shape every other construct in this rule has.
+
+Both figures, and what the rule does with them, are recorded on the
+[rule page](rules/suppression.md#requirements-and-limits).
+
 ## Reference graph probes
 
 The share of resolved edges that an import-only graph missed was:

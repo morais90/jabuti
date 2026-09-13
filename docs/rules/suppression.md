@@ -75,19 +75,24 @@ convenient one by shape alone. Precision on "was this the right call" is not som
 answer; precision on "was a check switched off here" is exact. That is what the rule promises, and no
 more.
 
-## Two open questions
+## Requirements and limits
 
-Two questions this rule does not yet answer on its own:
+There is no threshold to tune. Every matched occurrence is reported when the rule is enabled. The
+measured standing rate lives in [`CALIBRATION.md`](../../CALIBRATION.md), together with the answer to
+the two questions the idea above leaves open.
 
-Should an occurrence carrying a written reason be reported differently from a silent one? The rule
-currently treats them the same.
+**Should a reasoned suppression be reported differently from a silent one?** Across four corpora, only
+9% of occurrences carried an unambiguous reason on the same line as the construct. The other 91% are
+exactly what this rule exists to surface, so it keeps reporting every occurrence regardless. A written
+reason is the cheaper case for a reader to skip past, not a reason to build a second code path around.
 
-Does an assertion to `any` belong in this rule or in one of its own, given that it silences the type
-checker rather than the linter? It ships here for now, distinguished only by its message.
-
-Both are calibration questions: the standing rate this rule produces over real corpora has not yet
-been measured, and the record of that measurement in [`CALIBRATION.md`](../../CALIBRATION.md) is
-where these two questions get their answer.
+**Does an assertion to `any` belong here or in a rule of its own?** It silences the type checker rather
+than a linter, and the sampled occurrences read as proactive type-erasure rather than a response to a
+diagnostic that already fired, which is the distinction the open question anticipated. At roughly a
+fifth of TypeScript's suppression occurrences, the share is real but not dominant. `any` stays in this
+rule for now, told apart only by its message; splitting it into a rule of its own is worth doing if a
+future measurement finds the two constructs behaving differently in practice, not on the strength of
+this one.
 
 ## Extending the concept vocabulary
 
