@@ -16,15 +16,20 @@ struct Candidate<'a> {
     spec: &'static LangSpec,
 }
 
-pub(crate) fn findings(scan: &Scan<'_>, changes: &Changes, report: Option<&Path>) -> Vec<Finding> {
+pub(crate) fn findings(
+    scan: &Scan<'_>,
+    changes: &Changes,
+    report: Option<&Path>,
+    notices: &mut Vec<String>,
+) -> Vec<Finding> {
     if !scan.settings.enabled(Rule::UncoveredNewCode) {
         return Vec::new();
     }
     let Some(report) = report else {
-        eprintln!(
-            "jabuti: {} needs a coverage report; set [coverage] report or enable a tool that produces one",
+        notices.push(format!(
+            "{} needs a coverage report; set [coverage] report or enable a tool that produces one",
             Rule::UncoveredNewCode.id()
-        );
+        ));
         return Vec::new();
     };
 
@@ -32,7 +37,7 @@ pub(crate) fn findings(scan: &Scan<'_>, changes: &Changes, report: Option<&Path>
     let coverage = match read(report, scan.project, &candidates) {
         Ok(coverage) => coverage,
         Err(reason) => {
-            eprintln!("jabuti: {} skipped: {reason}", Rule::UncoveredNewCode.id());
+            notices.push(format!("{} skipped: {reason}", Rule::UncoveredNewCode.id()));
             return Vec::new();
         }
     };

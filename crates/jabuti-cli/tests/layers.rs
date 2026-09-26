@@ -195,6 +195,25 @@ fn a_file_matched_by_two_layers_is_a_configuration_error_naming_both() {
 }
 
 #[test]
+fn a_notice_raised_before_a_configuration_error_still_reaches_the_reader() {
+    let directory = layered(CLEAN_BOOK);
+    write(
+        &directory,
+        "jabuti.toml",
+        "[layers]\n\
+         attic = { paths = [\"src/attic/**\"], depends_on = [] }\n\
+         domain = { paths = [\"src/domain/**\"], depends_on = [] }\n\
+         everything = { paths = [\"src/**\"], depends_on = [] }\n",
+    );
+
+    jabuti(&directory).assert().code(2).stderr(
+        contains("jabuti: layer attic matches no file, so nothing is checked against it\n").and(
+            contains("src/domain/book.rs is in both the domain and the everything layer"),
+        ),
+    );
+}
+
+#[test]
 fn layer_paths_are_relative_to_the_project_whatever_root_the_command_names() {
     let directory = layered(LEAKING_BOOK);
     let absolute = directory.path().canonicalize().expect("the project exists");

@@ -167,6 +167,25 @@ fn a_report_older_than_a_changed_file_is_skipped_rather_than_read() {
 }
 
 #[test]
+fn notices_come_out_in_one_order_whatever_stage_raised_them() {
+    let layered = format!("{REPORTED}\n[layers]\nghost = {{ paths = [\"src/ghost\"] }}\n");
+    let directory = rust_repository(&layered);
+    write(&directory, "src/lib.rs", AFTER);
+    let report = lcov(&directory, "src/lib.rs", &[(1, 1), (5, 0)]);
+    write(&directory, "coverage.lcov", &report);
+    make_old(&directory, "coverage.lcov");
+
+    since_head(&directory)
+        .assert()
+        .success()
+        .stdout("No findings across 1 file and 2 units.\n")
+        .stderr(concat!(
+            "jabuti: layer ghost matches no file, so nothing is checked against it\n",
+            "jabuti: uncovered-new-code skipped: coverage.lcov is older than src/lib.rs\n",
+        ));
+}
+
+#[test]
 fn a_newer_changed_file_for_a_language_where_the_rule_is_off_does_not_make_the_report_stale() {
     let directory = repository(&[
         (

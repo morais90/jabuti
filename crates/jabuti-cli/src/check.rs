@@ -11,14 +11,18 @@ use jabuti_core::model::{Finding, Rule, Unreadable};
 use crate::git::since::Changes;
 use crate::{code, config, corpus, graph, history, project, tools};
 
-pub(crate) fn verdict(roots: &[PathBuf], since: Option<&str>) -> Result<code::Outcome> {
+pub(crate) fn verdict(
+    roots: &[PathBuf],
+    since: Option<&str>,
+    notices: &mut Vec<String>,
+) -> Result<code::Outcome> {
     let (root, settings) = config::discover()?;
     tools::known(&settings)?;
     let changes = since
         .map(|reference| Changes::since(reference, &root))
         .transpose()?;
-    let history = history::load(&settings);
-    scope_notices(&settings, since.is_some());
+    notices.extend(scope_notices(&settings, since.is_some()));
+    let history = history::load(&settings, notices);
 
     let paths = project::sources(roots, &settings.exclude, &root)?;
     let churn = history::commits(history.as_ref(), &paths);
@@ -30,7 +34,7 @@ pub(crate) fn verdict(roots: &[PathBuf], since: Option<&str>) -> Result<code::Ou
         churn: &churn,
     };
 
-    let mut outcome = judged(&scope)?;
+    let mut outcome = judged(&scope, notices)?;
     order(&mut outcome);
 
     Ok(outcome)
@@ -66,7 +70,7 @@ impl Scope<'_> {
     }
 }
 
-fn judged(scope: &Scope<'_>) -> Result<code::Outcome> {
+fn judged(scope: &Scope<'_>, notices: &mut Vec<String>) -> Result<code::Outcome> {
     let request = code::Scan {
         policy: &scope.settings.policy,
         bindings: &scope.settings.concepts,
@@ -84,18 +88,22 @@ fn judged(scope: &Scope<'_>) -> Result<code::Outcome> {
             &scope.settings.policy,
         ));
     }
-    outcome.findings.extend(tools::findings(&tools::Scan {
-        here: &std::env::current_dir()?,
-        project: scope.root,
-        paths: scope.paths,
-        settings: scope.settings,
-        changes: scope.changes,
-    }));
+    outcome.findings.extend(tools::findings(
+        &tools::Scan {
+            here: &std::env::current_dir()?,
+            project: scope.root,
+            paths: scope.paths,
+            settings: scope.settings,
+            changes: scope.changes,
+        },
+        notices,
+    ));
     outcome.findings.extend(graphed(
         scope,
         &extent,
         &examined.sources,
         &examined.opaque,
+        notices,
     )?);
 
     Ok(outcome)
@@ -171,6 +179,7 @@ fn graphed(
     extent: &[PathBuf],
     sources: &[Source],
     opaque: &[String],
+    notices: &mut Vec<String>,
 ) -> Result<Vec<Finding>> {
     let base = match (scope.changes, scope.compares()) {
         (Some(changes), true) => base_sources(changes, scope.paths, scope.root)?,
@@ -182,16 +191,19 @@ fn graphed(
         .map(|path| PathBuf::from(project::display(path, scope.root)))
         .collect();
 
-    graph::findings(&graph::Scan {
-        paths: extent,
-        requested: &requested,
-        sources,
-        opaque,
-        base: &base,
-        project: scope.root,
-        settings: scope.settings,
-        changes: scope.changes,
-    })
+    graph::findings(
+        &graph::Scan {
+            paths: extent,
+            requested: &requested,
+            sources,
+            opaque,
+            base: &base,
+            project: scope.root,
+            settings: scope.settings,
+            changes: scope.changes,
+        },
+        notices,
+    )
 }
 
 fn base_sources(
@@ -222,16 +234,16 @@ fn order(outcome: &mut code::Outcome) {
     outcome
         .unreadable
         .sort_by(|left, right| left.path.cmp(&right.path));
-    outcome.findings.sort_by(|left, right| {
-        left.path
-            .cmp(&right.path)
-            .then(left.span.start_line.cmp(&right.span.start_line))
-    });
+    outcome.findings.sort();
 }
 
-fn scope_notices(settings: &config::Settings, scoped: bool) {
+fn scope_notices(settings: &config::Settings, scoped: bool) -> Vec<String> {
+    let mut notices = Vec::new();
+
     if scoped && settings.enabled(Rule::Hotspot) {
-        eprintln!("jabuti: hotspot ranks a whole repository, so it is not evaluated with --since");
+        notices.push(
+            "hotspot ranks a whole repository, so it is not evaluated with --since".to_owned(),
+        );
     }
     for rule in [
         Rule::NewDependency,
@@ -239,12 +251,14 @@ fn scope_notices(settings: &config::Settings, scoped: bool) {
         Rule::UncoveredNewCode,
     ] {
         if !scoped && settings.gates(rule) {
-            eprintln!(
-                "jabuti: {} compares against an earlier revision, so it needs --since",
+            notices.push(format!(
+                "{} compares against an earlier revision, so it needs --since",
                 rule.id()
-            );
+            ));
         }
     }
+
+    notices
 }
 
 fn summaries(measured: &[code::Measured]) -> Vec<FileSummary> {

@@ -36,7 +36,7 @@ impl Scan<'_> {
     }
 }
 
-pub(crate) fn findings(scan: &Scan<'_>) -> Result<Vec<Finding>> {
+pub(crate) fn findings(scan: &Scan<'_>, notices: &mut Vec<String>) -> Result<Vec<Finding>> {
     let index = Index::of(scan.sources);
     let mut found = Vec::new();
 
@@ -44,7 +44,7 @@ pub(crate) fn findings(scan: &Scan<'_>) -> Result<Vec<Finding>> {
         found.extend(drift::findings(scan, &index));
         found.extend(surface::findings(scan, &index));
     }
-    found.extend(layers::findings(scan, &index)?);
+    found.extend(layers::findings(scan, &index, notices)?);
 
     Ok(found)
 }

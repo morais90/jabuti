@@ -125,6 +125,23 @@ fn only_the_corpus_parses_a_source_file_and_no_analysing_context_reads_one() {
 }
 
 #[test]
+fn only_main_writes_to_the_terminal_and_every_other_module_hands_it_data() {
+    for file in rust_files(&source_root()) {
+        if file == source_root().join("main.rs") {
+            continue;
+        }
+        let source = std::fs::read_to_string(&file).expect("source readable");
+        for writer in ["eprintln!(", "eprint!(", "println!(", "print!("] {
+            assert!(
+                !source.contains(writer),
+                "{} calls {writer} instead of returning what it has to say",
+                file.display()
+            );
+        }
+    }
+}
+
+#[test]
 fn every_module_the_boundary_names_exists() {
     for module in KERNEL.into_iter().chain(CONTEXTS) {
         assert!(!files_of(module).is_empty(), "{module}");

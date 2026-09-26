@@ -283,7 +283,7 @@ pub(crate) struct Scan<'a> {
     pub(crate) changes: Option<&'a Changes>,
 }
 
-pub(crate) fn findings(scan: &Scan<'_>) -> Vec<Finding> {
+pub(crate) fn findings(scan: &Scan<'_>, notices: &mut Vec<String>) -> Vec<Finding> {
     let mut findings = Vec::new();
     let mut produced = None;
 
@@ -297,7 +297,7 @@ pub(crate) fn findings(scan: &Scan<'_>) -> Vec<Finding> {
 
         match tool.run(scan.here, scan.project) {
             Ok(reported) => findings.extend(admitted(reported, scan)),
-            Err(reason) => eprintln!("jabuti: {reason}"),
+            Err(reason) => notices.push(reason),
         }
         produced = produced.or_else(|| tool.produces(scan.project));
     }
@@ -309,7 +309,12 @@ pub(crate) fn findings(scan: &Scan<'_>) -> Vec<Finding> {
             .as_ref()
             .map(|report| scan.project.join(report));
         let report = configured.or(produced);
-        findings.extend(coverage::findings(scan, changes, report.as_deref()));
+        findings.extend(coverage::findings(
+            scan,
+            changes,
+            report.as_deref(),
+            notices,
+        ));
     }
 
     findings

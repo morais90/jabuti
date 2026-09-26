@@ -11,12 +11,16 @@ use super::Scan;
 use crate::config::{Layer, Settings};
 use crate::project;
 
-pub(crate) fn findings(scan: &Scan<'_>, index: &Index) -> Result<Vec<Finding>> {
+pub(crate) fn findings(
+    scan: &Scan<'_>,
+    index: &Index,
+    notices: &mut Vec<String>,
+) -> Result<Vec<Finding>> {
     let Some(severity) = reporting(scan.settings) else {
         return Ok(Vec::new());
     };
 
-    let layers = assign(&scan.settings.layers, scan.project, scan.paths)?;
+    let layers = assign(&scan.settings.layers, scan.project, scan.paths, notices)?;
     let edges = outgoing(scan, index);
 
     let found = graph::layers::violations(&edges, &layers)
@@ -57,16 +61,21 @@ fn reporting(settings: &Settings) -> Option<Severity> {
         .filter(|severity| *severity != Severity::Off)
 }
 
-fn assign(declared: &[Layer], project: &Path, paths: &[PathBuf]) -> Result<Layers> {
+fn assign(
+    declared: &[Layer],
+    project: &Path,
+    paths: &[PathBuf],
+    notices: &mut Vec<String>,
+) -> Result<Layers> {
     let mut layers = Layers::default();
 
     for layer in declared {
         let members = members_of(layer, project, paths)?;
         if members.is_empty() {
-            eprintln!(
-                "jabuti: layer {} matches no file, so nothing is checked against it",
+            notices.push(format!(
+                "layer {} matches no file, so nothing is checked against it",
                 layer.name
-            );
+            ));
         }
         claim(&mut layers, layer, members)?;
     }

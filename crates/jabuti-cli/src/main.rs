@@ -150,8 +150,11 @@ fn install_tools() -> Result<ExitCode> {
 }
 
 fn check(roots: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -> Result<ExitCode> {
-    let outcome = check::verdict(roots, since)?;
+    let mut notices = Vec::new();
+    let verdict = check::verdict(roots, since, &mut notices);
+    announce(notices);
 
+    let outcome = verdict?;
     print!("{}", rendered(format, &outcome, limit));
 
     if report::has_errors(&outcome.findings) {
@@ -159,6 +162,15 @@ fn check(roots: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -
     }
 
     Ok(ExitCode::SUCCESS)
+}
+
+fn announce(mut notices: Vec<String>) {
+    notices.sort();
+    notices.dedup();
+
+    for notice in notices {
+        eprintln!("jabuti: {notice}");
+    }
 }
 
 fn rendered(format: Format, outcome: &code::Outcome, limit: usize) -> String {

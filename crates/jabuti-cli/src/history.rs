@@ -40,7 +40,7 @@ impl Churn {
     }
 }
 
-pub(crate) fn load(settings: &Settings) -> Option<Churn> {
+pub(crate) fn load(settings: &Settings, notices: &mut Vec<String>) -> Option<Churn> {
     if !settings.enabled(Rule::Churn) && !settings.enabled(Rule::Hotspot) {
         return None;
     }
@@ -48,9 +48,9 @@ pub(crate) fn load(settings: &Settings) -> Option<Churn> {
     match Churn::of_repository() {
         Ok(history) => Some(history),
         Err(reason) => {
-            eprintln!(
-                "jabuti: churn and hotspot need a git repository, so they were not evaluated ({reason})"
-            );
+            notices.push(format!(
+                "churn and hotspot need a git repository, so they were not evaluated ({reason})"
+            ));
             None
         }
     }

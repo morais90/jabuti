@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
@@ -232,7 +233,7 @@ impl From<Rule> for RuleId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(untagged)]
 pub enum Detail {
     Threshold { measured: u32, limit: u32 },
@@ -247,6 +248,24 @@ pub struct Finding {
     pub span: Span,
     pub subject: Option<String>,
     pub detail: Detail,
+}
+
+impl Ord for Finding {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.path
+            .cmp(&other.path)
+            .then(self.span.cmp(&other.span))
+            .then(self.rule.cmp(&other.rule))
+            .then(self.subject.cmp(&other.subject))
+            .then(self.detail.cmp(&other.detail))
+            .then(self.severity.cmp(&other.severity))
+    }
+}
+
+impl PartialOrd for Finding {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
