@@ -1,7 +1,7 @@
 use std::fmt::Write as _;
 
 use jabuti_core::lang::{self, LanguageId};
-use jabuti_core::model::{Rule, RuleId, Severity};
+use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span};
 use jabuti_core::policy::{Policy, RuleConfig};
 
 #[test]
@@ -48,6 +48,57 @@ fn only_a_rule_that_reports_is_active() {
             active(71, Severity::Warning),
             None,
             None,
+        ]
+    );
+}
+
+fn lint_at(path: &str) -> Finding {
+    Finding {
+        rule: RuleId::parse("clippy/unwrap_used").expect("a tool lint"),
+        severity: Severity::Warning,
+        path: path.to_owned(),
+        span: Span {
+            start_line: 3,
+            end_line: 3,
+        },
+        subject: None,
+        detail: Detail::Message {
+            message: "used `unwrap()` on a `Result` value".to_owned(),
+        },
+    }
+}
+
+#[test]
+fn a_tool_lint_follows_the_setting_for_the_language_of_its_file() {
+    let lint = RuleId::parse("clippy/unwrap_used").expect("a tool lint");
+    let mut policy = Policy::default();
+    policy.set(
+        lint.clone(),
+        RuleConfig {
+            limit: 0,
+            severity: Severity::Error,
+        },
+    );
+    policy.set_for(
+        LanguageId::Rust,
+        lint,
+        RuleConfig {
+            limit: 0,
+            severity: Severity::Off,
+        },
+    );
+
+    assert_eq!(
+        [
+            policy.admit(lint_at("src/lib.rs")),
+            policy.admit(lint_at("build/Cargo.toml")),
+        ],
+        [
+            None,
+            Some(Finding {
+                severity: Severity::Error,
+                ..lint_at("build/Cargo.toml")
+            }),
         ]
     );
 }

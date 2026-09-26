@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
-use crate::lang::LanguageId;
+use crate::lang::{self, LanguageId};
 use crate::model::{Finding, Rule, RuleId, RuleSpec, Severity};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,7 +96,12 @@ impl Policy {
     }
 
     pub fn admit(&self, finding: Finding) -> Option<Finding> {
-        match self.config(finding.rule.clone()) {
+        let configured = match lang::detect(Path::new(&finding.path)) {
+            Some(spec) => self.config_for(spec.id, finding.rule.clone()),
+            None => self.config(finding.rule.clone()),
+        };
+
+        match configured {
             Some(config) if !config.reports() => None,
             Some(config) => Some(Finding {
                 severity: config.severity,

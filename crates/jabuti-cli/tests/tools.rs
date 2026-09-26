@@ -135,6 +135,19 @@ fn a_lint_the_configuration_switches_off_is_not_reported() {
 }
 
 #[test]
+fn a_lint_switched_off_for_its_language_is_not_reported() {
+    let directory = rust_project(&[(
+        "jabuti.toml",
+        "[tools.clippy]\nenabled = true\n\n[languages.rust.rules]\n\"clippy/needless_range_loop\" = { severity = \"off\" }\n",
+    )]);
+
+    jabuti(&directory)
+        .assert()
+        .success()
+        .stdout(contains("No findings"));
+}
+
+#[test]
 fn a_tool_that_cannot_be_found_says_how_to_install_it() {
     let directory = rust_project(&[("jabuti.toml", CLIPPY_ON)]);
 
