@@ -56,9 +56,8 @@ fn reporting(settings: &Settings) -> Option<Severity> {
 
     settings
         .policy
-        .config(Rule::LayerViolation)
+        .active(Rule::LayerViolation)
         .map(|config| config.severity)
-        .filter(|severity| *severity != Severity::Off)
 }
 
 fn assign(

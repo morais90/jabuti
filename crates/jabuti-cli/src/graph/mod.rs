@@ -64,7 +64,6 @@ pub(crate) fn aliases(
 fn reporting(settings: &Settings, language: LanguageId, rule: Rule) -> Option<Severity> {
     settings
         .policy
-        .config_for(language, rule)
+        .active_for(language, rule)
         .map(|config| config.severity)
-        .filter(|severity| *severity != Severity::Off)
 }

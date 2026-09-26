@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use super::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use super::units::Unit;
 use crate::lang::LanguageId;
-use crate::model::{Detail, Finding, Measure, Reading, Rule, RuleId, Severity, UnitKind};
+use crate::model::{Detail, Finding, Measure, Reading, Rule, RuleId, UnitKind};
 use crate::policy::Policy;
 
 #[derive(Debug)]
@@ -56,12 +56,9 @@ impl Judged<'_> {
     }
 
     fn check(&self, rule: Rule, measure: Measure, unit: &Unit, findings: &mut Vec<Finding>) {
-        let Some(config) = self.policy.config_for(self.file.language, rule) else {
+        let Some(config) = self.policy.active_for(self.file.language, rule) else {
             return;
         };
-        if config.severity == Severity::Off {
-            return;
-        }
 
         let measured = self.file.measure(measure, unit);
         if measured <= config.limit {

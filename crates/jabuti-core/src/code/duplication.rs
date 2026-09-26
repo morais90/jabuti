@@ -78,12 +78,9 @@ pub struct FileFragments {
 }
 
 pub fn duplicates(files: &[FileFragments], policy: &Policy) -> Vec<Finding> {
-    let Some(config) = policy.config(Rule::DuplicateBlock) else {
+    let Some(config) = policy.active(Rule::DuplicateBlock) else {
         return Vec::new();
     };
-    if config.severity == Severity::Off {
-        return Vec::new();
-    }
 
     let mut classes: BTreeMap<u64, Vec<Occurrence>> = BTreeMap::new();
     for file in files {

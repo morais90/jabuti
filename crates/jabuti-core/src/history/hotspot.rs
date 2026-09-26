@@ -1,4 +1,4 @@
-use crate::model::{Detail, Finding, Rule, RuleId, Severity, Span};
+use crate::model::{Detail, Finding, Rule, RuleId, Span};
 use crate::policy::Policy;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -10,12 +10,9 @@ pub struct FileSummary {
 }
 
 pub fn hotspots(files: &[FileSummary], policy: &Policy) -> Vec<Finding> {
-    let Some(config) = policy.config(Rule::Hotspot) else {
+    let Some(config) = policy.active(Rule::Hotspot) else {
         return Vec::new();
     };
-    if config.severity == Severity::Off {
-        return Vec::new();
-    }
 
     let churn = ranking(files.iter().map(|file| file.churn));
     let complexity = ranking(files.iter().map(|file| file.complexity));

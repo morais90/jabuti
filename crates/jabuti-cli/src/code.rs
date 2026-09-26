@@ -6,9 +6,7 @@ use jabuti_core::code::metrics::{self, CognitiveIndex, DecisionIndex, LineIndex}
 use jabuti_core::code::review::{self, FileUnderReview};
 use jabuti_core::code::units::{self, Unit};
 use jabuti_core::code::{assertion, concepts, masking, suppression};
-use jabuti_core::model::{
-    ConceptBindings, Finding, Reading, Rule, Severity, Span, UnitKind, Unreadable,
-};
+use jabuti_core::model::{ConceptBindings, Finding, Reading, Rule, Span, UnitKind, Unreadable};
 use jabuti_core::policy::Policy;
 use jabuti_core::report::Scanned;
 use jabuti_core::syntax::Parsed;
@@ -159,8 +157,7 @@ fn covered(reviewed: Vec<Reviewed>, changes: Option<&Changes>) -> Vec<Reviewed> 
 
 fn duplication_limit(policy: &Policy) -> Option<u32> {
     policy
-        .config(Rule::DuplicateBlock)
-        .filter(|config| config.severity != Severity::Off)
+        .active(Rule::DuplicateBlock)
         .map(|config| config.limit)
 }
 

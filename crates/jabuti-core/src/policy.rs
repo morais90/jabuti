@@ -9,6 +9,12 @@ pub struct RuleConfig {
     pub severity: Severity,
 }
 
+impl RuleConfig {
+    fn reports(self) -> bool {
+        self.severity != Severity::Off
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Policy {
     rules: BTreeMap<RuleId, RuleConfig>,
@@ -79,9 +85,18 @@ impl Policy {
             .copied()
     }
 
+    pub fn active(&self, rule: impl Into<RuleId>) -> Option<RuleConfig> {
+        self.config(rule).filter(|config| config.reports())
+    }
+
+    pub fn active_for(&self, language: LanguageId, rule: impl Into<RuleId>) -> Option<RuleConfig> {
+        self.config_for(language, rule)
+            .filter(|config| config.reports())
+    }
+
     pub fn admit(&self, finding: Finding) -> Option<Finding> {
-        match self.rules.get(&finding.rule) {
-            Some(config) if config.severity == Severity::Off => None,
+        match self.config(finding.rule.clone()) {
+            Some(config) if !config.reports() => None,
             Some(config) => Some(Finding {
                 severity: config.severity,
                 ..finding

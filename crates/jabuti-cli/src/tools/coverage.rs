@@ -3,7 +3,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use jabuti_core::lang::{self, LangSpec};
-use jabuti_core::model::{Finding, Rule, Severity, Span};
+use jabuti_core::model::{Finding, Rule, Span};
 use jabuti_core::tools::coverage::{self, Coverage, FileUnderCoverage, Format};
 
 use super::Scan;
@@ -85,8 +85,8 @@ fn candidates<'a>(scan: &Scan<'a>, changes: &Changes) -> Vec<Candidate<'a>> {
         let reporting = scan
             .settings
             .policy
-            .config_for(spec.id, Rule::UncoveredNewCode)
-            .is_some_and(|config| config.severity != Severity::Off);
+            .active_for(spec.id, Rule::UncoveredNewCode)
+            .is_some();
         if !reporting {
             continue;
         }

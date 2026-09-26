@@ -5,7 +5,7 @@ use roxmltree::Node;
 use thiserror::Error;
 
 use crate::lang::LanguageId;
-use crate::model::{Detail, Finding, Rule, RuleId, Severity, Span};
+use crate::model::{Detail, Finding, Rule, RuleId, Span};
 use crate::policy::Policy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -222,12 +222,9 @@ pub fn findings(
     added: impl Fn(u32) -> bool,
     policy: &Policy,
 ) -> Vec<Finding> {
-    let Some(config) = policy.config_for(file.language, Rule::UncoveredNewCode) else {
+    let Some(config) = policy.active_for(file.language, Rule::UncoveredNewCode) else {
         return Vec::new();
     };
-    if config.severity == Severity::Off {
-        return Vec::new();
-    }
 
     stretches(coverage, added)
         .into_iter()

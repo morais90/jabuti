@@ -13,12 +13,9 @@ pub struct Input<'a> {
 }
 
 pub fn findings(input: &Input<'_>, policy: &Policy) -> Vec<Finding> {
-    let Some(config) = policy.config_for(input.parsed.language(), Rule::Assertion) else {
+    let Some(config) = policy.active_for(input.parsed.language(), Rule::Assertion) else {
         return Vec::new();
     };
-    if config.severity == Severity::Off {
-        return Vec::new();
-    }
 
     let concepts = Rule::Assertion.spec().concepts;
     let assertions: Vec<&Occurrence> = input

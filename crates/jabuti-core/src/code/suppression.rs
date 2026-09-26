@@ -1,6 +1,6 @@
 use super::concepts::Occurrence;
 use crate::lang::LanguageId;
-use crate::model::{Detail, Finding, Rule, RuleId, Severity};
+use crate::model::{Detail, Finding, Rule, RuleId};
 use crate::policy::Policy;
 
 pub fn findings(
@@ -9,12 +9,9 @@ pub fn findings(
     occurrences: &[Occurrence],
     policy: &Policy,
 ) -> Vec<Finding> {
-    let Some(config) = policy.config_for(language, Rule::Suppression) else {
+    let Some(config) = policy.active_for(language, Rule::Suppression) else {
         return Vec::new();
     };
-    if config.severity == Severity::Off {
-        return Vec::new();
-    }
 
     let concepts = Rule::Suppression.spec().concepts;
 
