@@ -114,7 +114,7 @@ Keep the three extension axes distinct: a new rule on an existing sensor, a new 
 
 Keep each context in its own module tree, shaped like a crate of its own: `code`, `graph`, `history` and
 `tools` in both crates. A context owns its rules, its measures, its language tables, its queries and its
-tests, and reaches only the kernel (`model`, `policy`, `report`, `lang`, `syntax`), never another
+tests, and reaches only the kernel (`model`, `policy`, `report`, `lang`, `syntax`, `diff`), never another
 context. A test in each crate holds that boundary. Composition happens in the kernel of the binary, so a
 context can grow, be replaced or become a subcommand without touching the others.
 

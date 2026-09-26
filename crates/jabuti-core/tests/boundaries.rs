@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-const KERNEL: [&str; 5] = ["lang", "model", "policy", "report", "syntax"];
+const KERNEL: [&str; 6] = ["diff", "lang", "model", "policy", "report", "syntax"];
 const CONTEXTS: [&str; 4] = ["code", "graph", "history", "tools"];
 
 fn source_root() -> PathBuf {

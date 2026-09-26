@@ -1,54 +1,37 @@
 use std::collections::BTreeMap;
-use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use jabuti_core::diff::Diff;
 use jabuti_core::model::Span;
 
 use crate::project;
-
-#[derive(Debug)]
-enum Touched {
-    Whole,
-    Lines(Vec<RangeInclusive<u32>>),
-}
-
-impl Touched {
-    fn covers(&self, span: Span) -> bool {
-        match self {
-            Self::Whole => true,
-            Self::Lines(ranges) => ranges
-                .iter()
-                .any(|range| *range.start() <= span.end_line && span.start_line <= *range.end()),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub(crate) struct Changes {
     base: String,
     root: PathBuf,
     project: PathBuf,
-    touched: BTreeMap<PathBuf, Touched>,
+    diff: Diff,
 }
 
 impl Changes {
     pub(crate) fn since(reference: &str, project: &Path) -> Result<Self> {
         let root = PathBuf::from(super::run(&["rev-parse", "--show-toplevel"])?.trim());
         let base = merge_base(reference)?;
-        let diff = super::run(&["diff", "--unified=0", &base])?;
+        let unified = super::run(&["diff", "--unified=0", &base])?;
         let untracked = super::run_at(&root, &["ls-files", "--others", "--exclude-standard"])?;
 
-        let mut touched = hunks(&diff);
+        let mut diff = Diff::parse(&unified);
         for path in untracked.lines().filter(|line| !line.is_empty()) {
-            touched.insert(PathBuf::from(path), Touched::Whole);
+            diff.add_whole(PathBuf::from(path));
         }
 
         Ok(Self {
             base,
             root: root.canonicalize().unwrap_or(root),
             project: project.to_path_buf(),
-            touched,
+            diff,
         })
     }
 
@@ -62,7 +45,7 @@ impl Changes {
             let Some(relative) = self.relative(path) else {
                 continue;
             };
-            if self.touched.contains_key(&relative) {
+            if self.diff.covers(&relative) {
                 requested.insert(relative, PathBuf::from(project::display(path, project)));
             }
         }
@@ -78,11 +61,13 @@ impl Changes {
     }
 
     pub(crate) fn covers(&self, path: &Path) -> bool {
-        self.entry(path).is_some()
+        self.relative(path)
+            .is_some_and(|relative| self.diff.covers(&relative))
     }
 
     pub(crate) fn touches(&self, path: &Path, span: Span) -> bool {
-        self.entry(path).is_some_and(|touched| touched.covers(span))
+        self.relative(path)
+            .is_some_and(|relative| self.diff.touches(&relative, span))
     }
 
     pub(crate) fn relative(&self, path: &Path) -> Option<PathBuf> {
@@ -92,10 +77,6 @@ impl Changes {
             .strip_prefix(&self.root)
             .ok()
             .map(Path::to_path_buf)
-    }
-
-    fn entry(&self, path: &Path) -> Option<&Touched> {
-        self.touched.get(&self.relative(path)?)
     }
 }
 
@@ -112,57 +93,4 @@ fn merge_base(reference: &str) -> Result<String> {
     }
 
     Ok(base.to_owned())
-}
-
-fn hunks(diff: &str) -> BTreeMap<PathBuf, Touched> {
-    let mut touched: BTreeMap<PathBuf, Vec<RangeInclusive<u32>>> = BTreeMap::new();
-    let mut current = None;
-    let mut previous = "";
-
-    for line in diff.lines() {
-        if let Some(spec) = line.strip_prefix("+++ ")
-            && previous.starts_with("--- ")
-        {
-            current = target(spec);
-        } else if let Some(header) = line.strip_prefix("@@ ")
-            && let (Some(path), Some(range)) = (current.as_ref(), added(header))
-        {
-            touched.entry(path.clone()).or_default().push(range);
-        }
-
-        previous = line;
-    }
-
-    touched
-        .into_iter()
-        .map(|(path, ranges)| (path, Touched::Lines(ranges)))
-        .collect()
-}
-
-fn target(spec: &str) -> Option<PathBuf> {
-    if spec == "/dev/null" {
-        return None;
-    }
-
-    Some(PathBuf::from(spec.strip_prefix("b/").unwrap_or(spec)))
-}
-
-fn added(header: &str) -> Option<RangeInclusive<u32>> {
-    let addition = header
-        .split_whitespace()
-        .find(|part| part.starts_with('+'))?
-        .trim_start_matches('+');
-
-    let mut numbers = addition.split(',');
-    let start: u32 = numbers.next()?.parse().ok()?;
-    let count: u32 = match numbers.next() {
-        Some(value) => value.parse().ok()?,
-        None => 1,
-    };
-
-    if count == 0 {
-        return None;
-    }
-
-    Some(start..=start + count - 1)
 }
