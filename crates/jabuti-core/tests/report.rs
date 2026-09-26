@@ -253,7 +253,7 @@ fn measures_are_reported_for_every_unit_whatever_the_thresholds_say() {
             line: 1,
             subject: Some("wide".to_owned()),
             kind: UnitKind::Function,
-            values: std::collections::BTreeMap::from([("parameters", 5), ("function-lines", 3)]),
+            values: std::collections::BTreeMap::from([("parameters", 5), ("lines", 3)]),
         }],
         &[],
     );

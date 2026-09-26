@@ -1,7 +1,9 @@
+use std::collections::BTreeSet;
+
 use super::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use super::units::Unit;
 use crate::lang::LanguageId;
-use crate::model::{Detail, Finding, Reading, Rule, RuleId, Severity, UnitKind};
+use crate::model::{Detail, Finding, Measure, Reading, Rule, RuleId, Severity, UnitKind};
 use crate::policy::Policy;
 
 #[derive(Debug)]
@@ -19,8 +21,6 @@ pub fn evaluate(policy: &Policy, file: &FileUnderReview<'_>) -> Vec<Finding> {
     let judged = Judged { policy, file };
     let mut findings = Vec::new();
 
-    judged.check(Rule::FileLines, &file.units, &mut findings);
-    judged.check(Rule::Churn, &file.units, &mut findings);
     judged.walk(&file.units, &mut findings);
 
     findings.sort_by(|left, right| {
@@ -33,7 +33,7 @@ pub fn evaluate(policy: &Policy, file: &FileUnderReview<'_>) -> Vec<Finding> {
 }
 
 pub fn read(file: &FileUnderReview<'_>) -> Vec<Reading> {
-    let mut readings = vec![reading(file, &file.units, &[Rule::FileLines, Rule::Churn])];
+    let mut readings = Vec::new();
     gather_readings(file, &file.units, &mut readings);
 
     readings
@@ -46,10 +46,8 @@ struct Judged<'a> {
 
 impl Judged<'_> {
     fn walk(&self, unit: &Unit, findings: &mut Vec<Finding>) {
-        if unit.kind == UnitKind::Function {
-            for rule in PER_FUNCTION {
-                self.check(rule, unit, findings);
-            }
+        for (rule, measure) in thresholds_on(unit.kind) {
+            self.check(rule, measure, unit, findings);
         }
 
         for child in &unit.children {
@@ -57,7 +55,7 @@ impl Judged<'_> {
         }
     }
 
-    fn check(&self, rule: Rule, unit: &Unit, findings: &mut Vec<Finding>) {
+    fn check(&self, rule: Rule, measure: Measure, unit: &Unit, findings: &mut Vec<Finding>) {
         let Some(config) = self.policy.config_for(self.file.language, rule) else {
             return;
         };
@@ -65,7 +63,7 @@ impl Judged<'_> {
             return;
         }
 
-        let measured = self.file.measure(rule, unit);
+        let measured = self.file.measure(measure, unit);
         if measured <= config.limit {
             return;
         }
@@ -84,16 +82,21 @@ impl Judged<'_> {
     }
 }
 
-const PER_FUNCTION: [Rule; 4] = [
-    Rule::FunctionLines,
-    Rule::CyclomaticComplexity,
-    Rule::CognitiveComplexity,
-    Rule::Parameters,
-];
+fn thresholds_on(kind: UnitKind) -> impl Iterator<Item = (Rule, Measure)> {
+    Rule::ALL.into_iter().filter_map(move |rule| {
+        rule.spec()
+            .threshold
+            .filter(|threshold| threshold.unit == kind)
+            .map(|threshold| (rule, threshold.measure))
+    })
+}
 
 fn gather_readings(file: &FileUnderReview<'_>, unit: &Unit, readings: &mut Vec<Reading>) {
-    if unit.kind == UnitKind::Function {
-        readings.push(reading(file, unit, &PER_FUNCTION));
+    let measures: BTreeSet<Measure> = thresholds_on(unit.kind)
+        .map(|(_, measure)| measure)
+        .collect();
+    if !measures.is_empty() {
+        readings.push(reading(file, unit, &measures));
     }
 
     for child in &unit.children {
@@ -101,38 +104,27 @@ fn gather_readings(file: &FileUnderReview<'_>, unit: &Unit, readings: &mut Vec<R
     }
 }
 
-fn reading(file: &FileUnderReview<'_>, unit: &Unit, rules: &[Rule]) -> Reading {
+fn reading(file: &FileUnderReview<'_>, unit: &Unit, measures: &BTreeSet<Measure>) -> Reading {
     Reading {
         path: file.path.clone(),
         line: unit.span.start_line,
         subject: unit.name.clone(),
         kind: unit.kind,
-        values: rules
+        values: measures
             .iter()
-            .map(|rule| (rule.id(), file.measure(*rule, unit)))
+            .map(|measure| (measure.id(), file.measure(*measure, unit)))
             .collect(),
     }
 }
 
-const NOT_MEASURED_PER_UNIT: u32 = 0;
-
 impl FileUnderReview<'_> {
-    fn measure(&self, rule: Rule, unit: &Unit) -> u32 {
-        match rule {
-            Rule::Churn => self.churn,
-            Rule::Assertion
-            | Rule::DuplicateBlock
-            | Rule::ErrorMasking
-            | Rule::Hotspot
-            | Rule::LayerViolation
-            | Rule::NewDependency
-            | Rule::SpeculativeApi
-            | Rule::Suppression
-            | Rule::UncoveredNewCode => NOT_MEASURED_PER_UNIT,
-            Rule::CognitiveComplexity => self.cognitive.cognitive(unit),
-            Rule::Parameters => unit.parameters,
-            Rule::CyclomaticComplexity => self.decisions.cyclomatic(unit),
-            Rule::FileLines | Rule::FunctionLines => self.lines.loc(unit.span).total,
+    fn measure(&self, measure: Measure, unit: &Unit) -> u32 {
+        match measure {
+            Measure::Churn => self.churn,
+            Measure::CognitiveComplexity => self.cognitive.cognitive(unit),
+            Measure::CyclomaticComplexity => self.decisions.cyclomatic(unit),
+            Measure::Lines => self.lines.loc(unit.span).total,
+            Measure::Parameters => unit.parameters,
         }
     }
 }

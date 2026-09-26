@@ -222,7 +222,7 @@ them without parsing text:
 
 ```json
 {
-  "schema": 2,
+  "schema": 3,
   "summary": { "files": 42, "units": 378, "errors": 1, "warnings": 0, "unreadable": 0 },
   "findings": [
     {
@@ -346,7 +346,9 @@ so retain the SARIF artifact or use the JSON output when those coverage gaps mus
 [`docs/languages.md`](languages.md) lists the constructs currently behind this.
 
 `--format measures` is different in kind. It reports every number jabuti computed, for every unit,
-including rules that are switched off:
+including the ones whose rules are switched off. Values are keyed by measure rather than by rule, so
+a file and a function both report `lines`, which `file-lines` and `function-lines` each compare
+against a limit of their own:
 
 ```json
 {
@@ -354,7 +356,7 @@ including rules that are switched off:
   "line": 120,
   "subject": "handle_request",
   "kind": "function",
-  "values": { "cognitive-complexity": 9, "cyclomatic-complexity": 4, "function-lines": 71, "parameters": 2 }
+  "values": { "cognitive-complexity": 9, "cyclomatic-complexity": 4, "lines": 71, "parameters": 2 }
 }
 ```
 

@@ -146,55 +146,21 @@ impl Rule {
 
     pub fn spec(self) -> RuleSpec {
         match self {
-            Self::Assertion => concept_bound("assertion", &[Concept::Assertion]),
-            Self::Churn => RuleSpec {
-                inputs: &[Input::History],
-                ..universal("churn", Severity::Off, 0)
-            },
-            Self::DuplicateBlock => RuleSpec {
-                repository_wide: true,
-                ..universal("duplicate-block", Severity::Warning, 120)
-            },
-            Self::ErrorMasking => concept_bound(
-                "error-masking",
-                &[
-                    Concept::ErrorDiscard,
-                    Concept::ErrorPanic,
-                    Concept::ErrorSwallow,
-                ],
-            ),
-            Self::Hotspot => RuleSpec {
-                repository_wide: true,
-                scoping: Scoping::Repository,
-                inputs: &[Input::History],
-                ..universal("hotspot", Severity::Warning, 90)
-            },
-            Self::LayerViolation => RuleSpec {
-                repository_wide: true,
-                inputs: &[Input::Graph, Input::Layers],
-                ..universal("layer-violation", Severity::Warning, 0)
-            },
-            Self::NewDependency => compared("new-dependency"),
-            Self::SpeculativeApi => compared("speculative-api"),
-            Self::Suppression => concept_bound("suppression", &[Concept::Suppression]),
-            Self::UncoveredNewCode => RuleSpec {
-                scoping: Scoping::Change,
-                ..universal("uncovered-new-code", Severity::Off, 0)
-            },
-            Self::CognitiveComplexity => RuleSpec {
-                language_limits: &[(LanguageId::TypeScript, 18)],
-                ..universal("cognitive-complexity", Severity::Warning, 7)
-            },
-            Self::CyclomaticComplexity => RuleSpec {
-                language_limits: &[(LanguageId::TypeScript, 13)],
-                ..universal("cyclomatic-complexity", Severity::Off, 10)
-            },
-            Self::FileLines => universal("file-lines", Severity::Off, 1000),
-            Self::FunctionLines => RuleSpec {
-                language_limits: &[(LanguageId::Kotlin, 47), (LanguageId::TypeScript, 71)],
-                ..universal("function-lines", Severity::Warning, 60)
-            },
-            Self::Parameters => universal("parameters", Severity::Warning, 4),
+            Self::Assertion => ASSERTION,
+            Self::Churn => CHURN,
+            Self::DuplicateBlock => DUPLICATE_BLOCK,
+            Self::ErrorMasking => ERROR_MASKING,
+            Self::Hotspot => HOTSPOT,
+            Self::LayerViolation => LAYER_VIOLATION,
+            Self::NewDependency => NEW_DEPENDENCY,
+            Self::SpeculativeApi => SPECULATIVE_API,
+            Self::Suppression => SUPPRESSION,
+            Self::UncoveredNewCode => UNCOVERED_NEW_CODE,
+            Self::CognitiveComplexity => COGNITIVE_COMPLEXITY,
+            Self::CyclomaticComplexity => CYCLOMATIC_COMPLEXITY,
+            Self::FileLines => FILE_LINES,
+            Self::FunctionLines => FUNCTION_LINES,
+            Self::Parameters => PARAMETERS,
         }
     }
 
@@ -213,6 +179,119 @@ impl Rule {
     pub fn repository_wide(self) -> bool {
         self.spec().repository_wide
     }
+}
+
+const ASSERTION: RuleSpec = concept_bound("assertion", &[Concept::Assertion]);
+
+const CHURN: RuleSpec = RuleSpec {
+    inputs: &[Input::History],
+    threshold: Some(on(Measure::Churn, UnitKind::File)),
+    ..universal("churn", Severity::Off, 0)
+};
+
+const DUPLICATE_BLOCK: RuleSpec = RuleSpec {
+    repository_wide: true,
+    ..universal("duplicate-block", Severity::Warning, 120)
+};
+
+const ERROR_MASKING: RuleSpec = concept_bound(
+    "error-masking",
+    &[
+        Concept::ErrorDiscard,
+        Concept::ErrorPanic,
+        Concept::ErrorSwallow,
+    ],
+);
+
+const HOTSPOT: RuleSpec = RuleSpec {
+    repository_wide: true,
+    scoping: Scoping::Repository,
+    inputs: &[Input::History],
+    ..universal("hotspot", Severity::Warning, 90)
+};
+
+const LAYER_VIOLATION: RuleSpec = RuleSpec {
+    repository_wide: true,
+    inputs: &[Input::Graph, Input::Layers],
+    ..universal("layer-violation", Severity::Warning, 0)
+};
+
+const NEW_DEPENDENCY: RuleSpec = compared("new-dependency");
+
+const SPECULATIVE_API: RuleSpec = compared("speculative-api");
+
+const SUPPRESSION: RuleSpec = concept_bound("suppression", &[Concept::Suppression]);
+
+const UNCOVERED_NEW_CODE: RuleSpec = RuleSpec {
+    scoping: Scoping::Change,
+    ..universal("uncovered-new-code", Severity::Off, 0)
+};
+
+const COGNITIVE_COMPLEXITY: RuleSpec = RuleSpec {
+    language_limits: &[(LanguageId::TypeScript, 18)],
+    threshold: Some(on(Measure::CognitiveComplexity, UnitKind::Function)),
+    ..universal("cognitive-complexity", Severity::Warning, 7)
+};
+
+const CYCLOMATIC_COMPLEXITY: RuleSpec = RuleSpec {
+    language_limits: &[(LanguageId::TypeScript, 13)],
+    threshold: Some(on(Measure::CyclomaticComplexity, UnitKind::Function)),
+    ..universal("cyclomatic-complexity", Severity::Off, 10)
+};
+
+const FILE_LINES: RuleSpec = RuleSpec {
+    threshold: Some(on(Measure::Lines, UnitKind::File)),
+    ..universal("file-lines", Severity::Off, 1000)
+};
+
+const FUNCTION_LINES: RuleSpec = RuleSpec {
+    language_limits: &[(LanguageId::Kotlin, 47), (LanguageId::TypeScript, 71)],
+    threshold: Some(on(Measure::Lines, UnitKind::Function)),
+    ..universal("function-lines", Severity::Warning, 60)
+};
+
+const PARAMETERS: RuleSpec = RuleSpec {
+    threshold: Some(on(Measure::Parameters, UnitKind::Function)),
+    ..universal("parameters", Severity::Warning, 4)
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Measure {
+    Churn,
+    CognitiveComplexity,
+    CyclomaticComplexity,
+    Lines,
+    Parameters,
+}
+
+impl Measure {
+    pub const ALL: [Self; 5] = [
+        Self::Churn,
+        Self::CognitiveComplexity,
+        Self::CyclomaticComplexity,
+        Self::Lines,
+        Self::Parameters,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Churn => "churn",
+            Self::CognitiveComplexity => "cognitive-complexity",
+            Self::CyclomaticComplexity => "cyclomatic-complexity",
+            Self::Lines => "lines",
+            Self::Parameters => "parameters",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Threshold {
+    pub measure: Measure,
+    pub unit: UnitKind,
+}
+
+const fn on(measure: Measure, unit: UnitKind) -> Threshold {
+    Threshold { measure, unit }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -247,6 +326,7 @@ pub struct RuleSpec {
     pub repository_wide: bool,
     pub scoping: Scoping,
     pub inputs: &'static [Input],
+    pub threshold: Option<Threshold>,
     pub severity: Severity,
     pub limit: u32,
     pub language_limits: &'static [(LanguageId, u32)],
@@ -260,6 +340,7 @@ const fn universal(id: &'static str, severity: Severity, limit: u32) -> RuleSpec
         repository_wide: false,
         scoping: Scoping::Any,
         inputs: &[],
+        threshold: None,
         severity,
         limit,
         language_limits: &[],

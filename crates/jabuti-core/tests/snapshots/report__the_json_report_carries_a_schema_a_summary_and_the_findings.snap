@@ -3,7 +3,7 @@ source: crates/jabuti-core/tests/report.rs
 expression: rendered
 ---
 {
-  "schema": 2,
+  "schema": 3,
   "summary": {
     "files": 42,
     "units": 378,

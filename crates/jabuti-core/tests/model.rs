@@ -2,8 +2,8 @@ use std::collections::BTreeSet;
 
 use jabuti_core::lang::LanguageId;
 use jabuti_core::model::{
-    Concept, ConceptBindings, Detail, Finding, Input, Portability, Rule, RuleId, Scoping, Severity,
-    Span,
+    Concept, ConceptBindings, Detail, Finding, Input, Measure, Portability, Rule, RuleId, Scoping,
+    Severity, Span, Threshold, UnitKind,
 };
 use rstest::rstest;
 
@@ -311,6 +311,50 @@ fn a_scoping_allows_the_runs_it_names() {
             (Scoping::Any, true, true),
             (Scoping::Change, false, true),
             (Scoping::Repository, true, false),
+        ]
+    );
+}
+
+#[test]
+fn every_rule_with_a_limit_names_the_measure_and_the_unit_it_compares() {
+    let thresholds: Vec<(&str, Threshold)> = Rule::ALL
+        .into_iter()
+        .map(Rule::spec)
+        .filter_map(|spec| spec.threshold.map(|threshold| (spec.id, threshold)))
+        .collect();
+    let on = |measure, unit| Threshold { measure, unit };
+
+    assert_eq!(
+        thresholds,
+        [
+            ("churn", on(Measure::Churn, UnitKind::File)),
+            (
+                "cognitive-complexity",
+                on(Measure::CognitiveComplexity, UnitKind::Function),
+            ),
+            (
+                "cyclomatic-complexity",
+                on(Measure::CyclomaticComplexity, UnitKind::Function),
+            ),
+            ("file-lines", on(Measure::Lines, UnitKind::File)),
+            ("function-lines", on(Measure::Lines, UnitKind::Function)),
+            ("parameters", on(Measure::Parameters, UnitKind::Function)),
+        ]
+    );
+}
+
+#[test]
+fn no_two_measures_share_an_id() {
+    let ids: BTreeSet<&str> = Measure::ALL.into_iter().map(Measure::id).collect();
+
+    assert_eq!(
+        ids.into_iter().collect::<Vec<_>>(),
+        [
+            "churn",
+            "cognitive-complexity",
+            "cyclomatic-complexity",
+            "lines",
+            "parameters"
         ]
     );
 }

@@ -330,14 +330,14 @@ fn a_file_and_a_function_are_measured_on_different_things() {
 
     assert_eq!(
         readings[0].values.keys().copied().collect::<Vec<_>>(),
-        ["churn", "file-lines"]
+        ["churn", "lines"]
     );
     assert_eq!(
         readings[1].values.keys().copied().collect::<Vec<_>>(),
         [
             "cognitive-complexity",
             "cyclomatic-complexity",
-            "function-lines",
+            "lines",
             "parameters"
         ]
     );

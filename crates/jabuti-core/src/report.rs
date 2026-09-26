@@ -7,7 +7,7 @@ use serde::Serialize;
 use crate::model::{Detail, Finding, Reading, Severity, Unreadable};
 
 pub const DEFAULT_LIMIT: usize = 40;
-pub const SCHEMA: u32 = 2;
+pub const SCHEMA: u32 = 3;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Scanned {

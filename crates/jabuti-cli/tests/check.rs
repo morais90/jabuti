@@ -222,7 +222,7 @@ fn the_json_format_names_the_rule_the_way_configuration_does() {
         .arg("json")
         .assert()
         .success()
-        .stdout(contains("\"schema\": 2"))
+        .stdout(contains("\"schema\": 3"))
         .stdout(contains("\"rule\": \"parameters\""))
         .stdout(contains("\"warnings\": 1"));
 }
