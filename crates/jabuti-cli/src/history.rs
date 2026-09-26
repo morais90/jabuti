@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use jabuti_core::history::churn;
-use jabuti_core::model::Rule;
+use jabuti_core::model::Input;
 
 use crate::config::Settings;
 
@@ -41,7 +41,7 @@ impl Churn {
 }
 
 pub(crate) fn load(settings: &Settings, notices: &mut Vec<String>) -> Option<Churn> {
-    if !settings.enabled(Rule::Churn) && !settings.enabled(Rule::Hotspot) {
+    if !settings.needs(Input::History) {
         return None;
     }
 

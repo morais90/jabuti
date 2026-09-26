@@ -2,7 +2,8 @@ use std::collections::BTreeSet;
 
 use jabuti_core::lang::LanguageId;
 use jabuti_core::model::{
-    Concept, ConceptBindings, Detail, Finding, Portability, Rule, RuleId, Severity, Span,
+    Concept, ConceptBindings, Detail, Finding, Input, Portability, Rule, RuleId, Scoping, Severity,
+    Span,
 };
 use rstest::rstest;
 
@@ -261,4 +262,55 @@ fn a_rule_measured_across_the_repository_carries_no_limit_per_language() {
         .collect();
 
     assert_eq!(offending, Vec::<&str>::new());
+}
+
+#[test]
+fn every_rule_declares_when_it_runs_and_what_it_reads() {
+    let declared: Vec<(&str, Scoping, &[Input])> = Rule::ALL
+        .into_iter()
+        .map(Rule::spec)
+        .filter(|spec| spec.scoping != Scoping::Any || !spec.inputs.is_empty())
+        .map(|spec| (spec.id, spec.scoping, spec.inputs))
+        .collect();
+
+    assert_eq!(
+        declared,
+        [
+            ("churn", Scoping::Any, [Input::History].as_slice()),
+            ("hotspot", Scoping::Repository, [Input::History].as_slice()),
+            (
+                "layer-violation",
+                Scoping::Any,
+                [Input::Graph, Input::Layers].as_slice(),
+            ),
+            (
+                "new-dependency",
+                Scoping::Change,
+                [Input::BaseRevision, Input::Graph].as_slice(),
+            ),
+            (
+                "speculative-api",
+                Scoping::Change,
+                [Input::BaseRevision, Input::Graph].as_slice(),
+            ),
+            ("uncovered-new-code", Scoping::Change, [].as_slice()),
+        ]
+    );
+}
+
+#[test]
+fn a_scoping_allows_the_runs_it_names() {
+    let allowed: Vec<(Scoping, bool, bool)> = [Scoping::Any, Scoping::Change, Scoping::Repository]
+        .into_iter()
+        .map(|scoping| (scoping, scoping.allows(false), scoping.allows(true)))
+        .collect();
+
+    assert_eq!(
+        allowed,
+        [
+            (Scoping::Any, true, true),
+            (Scoping::Change, false, true),
+            (Scoping::Repository, true, false),
+        ]
+    );
 }

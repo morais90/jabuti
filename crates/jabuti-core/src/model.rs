@@ -147,7 +147,10 @@ impl Rule {
     pub fn spec(self) -> RuleSpec {
         match self {
             Self::Assertion => concept_bound("assertion", &[Concept::Assertion]),
-            Self::Churn => universal("churn", Severity::Off, 0),
+            Self::Churn => RuleSpec {
+                inputs: &[Input::History],
+                ..universal("churn", Severity::Off, 0)
+            },
             Self::DuplicateBlock => RuleSpec {
                 repository_wide: true,
                 ..universal("duplicate-block", Severity::Warning, 120)
@@ -162,16 +165,22 @@ impl Rule {
             ),
             Self::Hotspot => RuleSpec {
                 repository_wide: true,
+                scoping: Scoping::Repository,
+                inputs: &[Input::History],
                 ..universal("hotspot", Severity::Warning, 90)
             },
             Self::LayerViolation => RuleSpec {
                 repository_wide: true,
+                inputs: &[Input::Graph, Input::Layers],
                 ..universal("layer-violation", Severity::Warning, 0)
             },
-            Self::NewDependency => universal("new-dependency", Severity::Warning, 0),
-            Self::SpeculativeApi => universal("speculative-api", Severity::Warning, 0),
+            Self::NewDependency => compared("new-dependency"),
+            Self::SpeculativeApi => compared("speculative-api"),
             Self::Suppression => concept_bound("suppression", &[Concept::Suppression]),
-            Self::UncoveredNewCode => universal("uncovered-new-code", Severity::Off, 0),
+            Self::UncoveredNewCode => RuleSpec {
+                scoping: Scoping::Change,
+                ..universal("uncovered-new-code", Severity::Off, 0)
+            },
             Self::CognitiveComplexity => RuleSpec {
                 language_limits: &[(LanguageId::TypeScript, 18)],
                 ..universal("cognitive-complexity", Severity::Warning, 7)
@@ -207,10 +216,37 @@ impl Rule {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scoping {
+    Any,
+    Change,
+    Repository,
+}
+
+impl Scoping {
+    pub fn allows(self, scoped: bool) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Change => scoped,
+            Self::Repository => !scoped,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Input {
+    BaseRevision,
+    Graph,
+    History,
+    Layers,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuleSpec {
     pub id: &'static str,
     pub portability: Portability,
     pub repository_wide: bool,
+    pub scoping: Scoping,
+    pub inputs: &'static [Input],
     pub severity: Severity,
     pub limit: u32,
     pub language_limits: &'static [(LanguageId, u32)],
@@ -222,10 +258,20 @@ const fn universal(id: &'static str, severity: Severity, limit: u32) -> RuleSpec
         id,
         portability: Portability::Universal,
         repository_wide: false,
+        scoping: Scoping::Any,
+        inputs: &[],
         severity,
         limit,
         language_limits: &[],
         concepts: &[],
+    }
+}
+
+const fn compared(id: &'static str) -> RuleSpec {
+    RuleSpec {
+        scoping: Scoping::Change,
+        inputs: &[Input::BaseRevision, Input::Graph],
+        ..universal(id, Severity::Warning, 0)
     }
 }
 

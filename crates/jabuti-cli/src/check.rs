@@ -6,7 +6,7 @@ use jabuti_core::graph::facts::{self, FileFacts};
 use jabuti_core::graph::index::Source;
 use jabuti_core::history::hotspot::{self, FileSummary};
 use jabuti_core::lang::{self, LanguageId};
-use jabuti_core::model::{Finding, Rule, Unreadable};
+use jabuti_core::model::{Finding, Input, Rule, Scoping, Unreadable};
 
 use crate::git::since::Changes;
 use crate::{code, config, corpus, graph, history, project, tools};
@@ -49,20 +49,29 @@ struct Scope<'a> {
 }
 
 impl Scope<'_> {
-    fn compares(&self) -> bool {
-        self.settings.enabled(Rule::NewDependency) || self.settings.enabled(Rule::SpeculativeApi)
+    fn reads(&self, input: Input) -> bool {
+        Rule::ALL
+            .into_iter()
+            .any(|rule| self.runs(rule) && rule.spec().inputs.contains(&input))
     }
 
-    fn layered(&self) -> bool {
-        !self.settings.layers.is_empty() && self.settings.enabled(Rule::LayerViolation)
+    fn runs(&self, rule: Rule) -> bool {
+        let spec = rule.spec();
+
+        self.settings.enabled(rule)
+            && spec.scoping.allows(self.changes.is_some())
+            && spec.inputs.iter().all(|input| self.available(*input))
     }
 
-    fn graphed(&self) -> bool {
-        (self.changes.is_some() && self.compares()) || self.layered()
+    fn available(&self, input: Input) -> bool {
+        match input {
+            Input::Layers => !self.settings.layers.is_empty(),
+            Input::BaseRevision | Input::Graph | Input::History => true,
+        }
     }
 
     fn extent(&self, request: &code::Scan<'_>) -> Result<Vec<PathBuf>> {
-        if !self.graphed() {
+        if !self.reads(Input::Graph) {
             return Ok(request.scope(self.paths).into_iter().collect());
         }
 
@@ -82,7 +91,7 @@ fn judged(scope: &Scope<'_>, notices: &mut Vec<String>) -> Result<code::Outcome>
 
     let mut outcome = code::scan(examined.reviewed, &request);
     outcome.unreadable = examined.unreadable;
-    if scope.changes.is_none() {
+    if scope.runs(Rule::Hotspot) {
         outcome.findings.extend(hotspot::hotspots(
             &summaries(&outcome.measured),
             &scope.settings.policy,
@@ -123,7 +132,7 @@ struct Examined {
 
 fn examine(scope: &Scope<'_>, extent: &[PathBuf], request: &code::Scan<'_>) -> Examined {
     let reviewed = request.scope(scope.paths);
-    let graphed = scope.graphed();
+    let graphed = scope.reads(Input::Graph);
     let corpus = corpus::examine(extent, scope.root, |text, parsed| Derived {
         review: reviewed.contains(&text.path).then(|| {
             let aliases = graph::aliases(parsed, text.spec.id, &scope.settings.concepts);
@@ -181,7 +190,7 @@ fn graphed(
     opaque: &[String],
     notices: &mut Vec<String>,
 ) -> Result<Vec<Finding>> {
-    let base = match (scope.changes, scope.compares()) {
+    let base = match (scope.changes, scope.reads(Input::BaseRevision)) {
         (Some(changes), true) => base_sources(changes, scope.paths, scope.root)?,
         _ => BTreeMap::new(),
     };
@@ -240,21 +249,17 @@ fn order(outcome: &mut code::Outcome) {
 fn scope_notices(settings: &config::Settings, scoped: bool) -> Vec<String> {
     let mut notices = Vec::new();
 
-    if scoped && settings.enabled(Rule::Hotspot) {
-        notices.push(
-            "hotspot ranks a whole repository, so it is not evaluated with --since".to_owned(),
-        );
-    }
-    for rule in [
-        Rule::NewDependency,
-        Rule::SpeculativeApi,
-        Rule::UncoveredNewCode,
-    ] {
-        if !scoped && settings.gates(rule) {
-            notices.push(format!(
+    for rule in Rule::ALL {
+        match rule.spec().scoping {
+            Scoping::Repository if scoped && settings.enabled(rule) => notices.push(format!(
+                "{} ranks a whole repository, so it is not evaluated with --since",
+                rule.id()
+            )),
+            Scoping::Change if !scoped && settings.gates(rule) => notices.push(format!(
                 "{} compares against an earlier revision, so it needs --since",
                 rule.id()
-            ));
+            )),
+            Scoping::Any | Scoping::Change | Scoping::Repository => {}
         }
     }
 
