@@ -144,24 +144,53 @@ impl Rule {
         Self::Parameters,
     ];
 
-    pub fn id(self) -> &'static str {
+    pub fn spec(self) -> RuleSpec {
         match self {
-            Self::Assertion => "assertion",
-            Self::Churn => "churn",
-            Self::DuplicateBlock => "duplicate-block",
-            Self::ErrorMasking => "error-masking",
-            Self::Hotspot => "hotspot",
-            Self::LayerViolation => "layer-violation",
-            Self::NewDependency => "new-dependency",
-            Self::SpeculativeApi => "speculative-api",
-            Self::Suppression => "suppression",
-            Self::UncoveredNewCode => "uncovered-new-code",
-            Self::CognitiveComplexity => "cognitive-complexity",
-            Self::CyclomaticComplexity => "cyclomatic-complexity",
-            Self::FileLines => "file-lines",
-            Self::FunctionLines => "function-lines",
-            Self::Parameters => "parameters",
+            Self::Assertion => concept_bound("assertion", &[Concept::Assertion]),
+            Self::Churn => universal("churn", Severity::Off, 0),
+            Self::DuplicateBlock => RuleSpec {
+                repository_wide: true,
+                ..universal("duplicate-block", Severity::Warning, 120)
+            },
+            Self::ErrorMasking => concept_bound(
+                "error-masking",
+                &[
+                    Concept::ErrorDiscard,
+                    Concept::ErrorPanic,
+                    Concept::ErrorSwallow,
+                ],
+            ),
+            Self::Hotspot => RuleSpec {
+                repository_wide: true,
+                ..universal("hotspot", Severity::Warning, 90)
+            },
+            Self::LayerViolation => RuleSpec {
+                repository_wide: true,
+                ..universal("layer-violation", Severity::Warning, 0)
+            },
+            Self::NewDependency => universal("new-dependency", Severity::Warning, 0),
+            Self::SpeculativeApi => universal("speculative-api", Severity::Warning, 0),
+            Self::Suppression => concept_bound("suppression", &[Concept::Suppression]),
+            Self::UncoveredNewCode => universal("uncovered-new-code", Severity::Off, 0),
+            Self::CognitiveComplexity => RuleSpec {
+                language_limits: &[(LanguageId::TypeScript, 18)],
+                ..universal("cognitive-complexity", Severity::Warning, 7)
+            },
+            Self::CyclomaticComplexity => RuleSpec {
+                language_limits: &[(LanguageId::TypeScript, 13)],
+                ..universal("cyclomatic-complexity", Severity::Off, 10)
+            },
+            Self::FileLines => universal("file-lines", Severity::Off, 1000),
+            Self::FunctionLines => RuleSpec {
+                language_limits: &[(LanguageId::Kotlin, 47), (LanguageId::TypeScript, 71)],
+                ..universal("function-lines", Severity::Warning, 60)
+            },
+            Self::Parameters => universal("parameters", Severity::Warning, 4),
         }
+    }
+
+    pub fn id(self) -> &'static str {
+        self.spec().id
     }
 
     pub fn from_id(id: &str) -> Option<Self> {
@@ -169,28 +198,42 @@ impl Rule {
     }
 
     pub fn portability(self) -> Portability {
-        match self {
-            Self::ErrorMasking | Self::Suppression | Self::Assertion => Portability::ConceptBound,
-            Self::Churn
-            | Self::DuplicateBlock
-            | Self::Hotspot
-            | Self::LayerViolation
-            | Self::NewDependency
-            | Self::SpeculativeApi
-            | Self::UncoveredNewCode
-            | Self::CognitiveComplexity
-            | Self::CyclomaticComplexity
-            | Self::FileLines
-            | Self::FunctionLines
-            | Self::Parameters => Portability::Universal,
-        }
+        self.spec().portability
     }
 
     pub fn repository_wide(self) -> bool {
-        matches!(
-            self,
-            Self::DuplicateBlock | Self::Hotspot | Self::LayerViolation
-        )
+        self.spec().repository_wide
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuleSpec {
+    pub id: &'static str,
+    pub portability: Portability,
+    pub repository_wide: bool,
+    pub severity: Severity,
+    pub limit: u32,
+    pub language_limits: &'static [(LanguageId, u32)],
+    pub concepts: &'static [Concept],
+}
+
+const fn universal(id: &'static str, severity: Severity, limit: u32) -> RuleSpec {
+    RuleSpec {
+        id,
+        portability: Portability::Universal,
+        repository_wide: false,
+        severity,
+        limit,
+        language_limits: &[],
+        concepts: &[],
+    }
+}
+
+const fn concept_bound(id: &'static str, concepts: &'static [Concept]) -> RuleSpec {
+    RuleSpec {
+        portability: Portability::ConceptBound,
+        concepts,
+        ..universal(id, Severity::Warning, 0)
     }
 }
 

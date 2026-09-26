@@ -1,6 +1,6 @@
 use super::lang;
 use crate::lang::LanguageId;
-use crate::model::{Concept, Portability, Rule};
+use crate::model::{Portability, Rule};
 
 pub fn portability_available(
     portability: Portability,
@@ -14,26 +14,15 @@ pub fn portability_available(
     }
 }
 
-pub(crate) fn required_concepts(rule: Rule) -> &'static [Concept] {
-    match rule {
-        Rule::ErrorMasking => &[
-            Concept::ErrorDiscard,
-            Concept::ErrorPanic,
-            Concept::ErrorSwallow,
-        ],
-        Rule::Suppression => &[Concept::Suppression],
-        Rule::Assertion => &[Concept::Assertion],
-        _ => &[],
-    }
-}
-
 pub fn available_rules(language: LanguageId) -> Vec<Rule> {
     let table = lang::table(language);
 
     Rule::ALL
         .into_iter()
         .filter(|rule| {
-            let has_concept = required_concepts(*rule)
+            let has_concept = rule
+                .spec()
+                .concepts
                 .iter()
                 .any(|concept| table.concepts.contains(concept));
             let language_specific = table.language_specific_rules.contains(rule);

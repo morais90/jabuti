@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::lang::LanguageId;
-use crate::model::{Finding, Rule, RuleId, Severity};
+use crate::model::{Finding, Rule, RuleId, RuleSpec, Severity};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuleConfig {
@@ -24,65 +24,37 @@ impl Default for Policy {
     }
 }
 
-fn reporting(limit: u32) -> RuleConfig {
-    RuleConfig {
-        limit,
-        severity: Severity::Warning,
-    }
-}
-
-fn silent(limit: u32) -> RuleConfig {
-    RuleConfig {
-        limit,
-        severity: Severity::Off,
-    }
-}
-
 fn shared_defaults() -> BTreeMap<RuleId, RuleConfig> {
-    BTreeMap::from([
-        (RuleId::Native(Rule::Assertion), reporting(0)),
-        (RuleId::Native(Rule::Churn), silent(0)),
-        (RuleId::Native(Rule::DuplicateBlock), reporting(120)),
-        (RuleId::Native(Rule::ErrorMasking), reporting(0)),
-        (RuleId::Native(Rule::CognitiveComplexity), reporting(7)),
-        (RuleId::Native(Rule::CyclomaticComplexity), silent(10)),
-        (RuleId::Native(Rule::FileLines), silent(1000)),
-        (RuleId::Native(Rule::FunctionLines), reporting(60)),
-        (RuleId::Native(Rule::Hotspot), reporting(90)),
-        (RuleId::Native(Rule::LayerViolation), reporting(0)),
-        (RuleId::Native(Rule::NewDependency), reporting(0)),
-        (RuleId::Native(Rule::SpeculativeApi), reporting(0)),
-        (RuleId::Native(Rule::Suppression), reporting(0)),
-        (RuleId::Native(Rule::UncoveredNewCode), silent(0)),
-        (RuleId::Native(Rule::Parameters), reporting(4)),
-    ])
+    Rule::ALL
+        .into_iter()
+        .map(|rule| {
+            let spec = rule.spec();
+            (RuleId::Native(rule), default_config(spec, spec.limit))
+        })
+        .collect()
 }
 
 fn language_defaults() -> BTreeMap<(LanguageId, RuleId), RuleConfig> {
-    BTreeMap::from([
-        (
-            (LanguageId::Kotlin, RuleId::Native(Rule::FunctionLines)),
-            reporting(47),
-        ),
-        (
-            (
-                LanguageId::TypeScript,
-                RuleId::Native(Rule::CognitiveComplexity),
-            ),
-            reporting(18),
-        ),
-        (
-            (
-                LanguageId::TypeScript,
-                RuleId::Native(Rule::CyclomaticComplexity),
-            ),
-            silent(13),
-        ),
-        (
-            (LanguageId::TypeScript, RuleId::Native(Rule::FunctionLines)),
-            reporting(71),
-        ),
-    ])
+    let mut defaults = BTreeMap::new();
+
+    for rule in Rule::ALL {
+        let spec = rule.spec();
+        for &(language, limit) in spec.language_limits {
+            defaults.insert(
+                (language, RuleId::Native(rule)),
+                default_config(spec, limit),
+            );
+        }
+    }
+
+    defaults
+}
+
+fn default_config(spec: RuleSpec, limit: u32) -> RuleConfig {
+    RuleConfig {
+        limit,
+        severity: spec.severity,
+    }
 }
 
 impl Policy {

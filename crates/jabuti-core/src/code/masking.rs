@@ -1,5 +1,4 @@
 use super::concepts::Occurrence;
-use super::support;
 use crate::lang::LanguageId;
 use crate::model::{Concept, Detail, Finding, Rule, RuleId, Severity};
 use crate::policy::Policy;
@@ -17,7 +16,7 @@ pub fn findings(
         return Vec::new();
     }
 
-    let concepts = support::required_concepts(Rule::ErrorMasking);
+    let concepts = Rule::ErrorMasking.spec().concepts;
 
     occurrences
         .iter()

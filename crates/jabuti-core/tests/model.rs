@@ -216,3 +216,49 @@ fn findings_settle_into_one_order_whatever_order_they_arrive_in() {
     assert_eq!(forward, expected);
     assert_eq!(reversed, expected);
 }
+
+#[test]
+fn a_rule_names_concepts_exactly_when_it_is_bound_to_them() {
+    let bound: Vec<(&str, &[Concept])> = Rule::ALL
+        .into_iter()
+        .map(Rule::spec)
+        .filter(|spec| spec.portability == Portability::ConceptBound)
+        .map(|spec| (spec.id, spec.concepts))
+        .collect();
+    let unbound_with_concepts: Vec<&str> = Rule::ALL
+        .into_iter()
+        .map(Rule::spec)
+        .filter(|spec| spec.portability != Portability::ConceptBound && !spec.concepts.is_empty())
+        .map(|spec| spec.id)
+        .collect();
+
+    assert_eq!(
+        bound,
+        [
+            ("assertion", [Concept::Assertion].as_slice()),
+            (
+                "error-masking",
+                [
+                    Concept::ErrorDiscard,
+                    Concept::ErrorPanic,
+                    Concept::ErrorSwallow,
+                ]
+                .as_slice(),
+            ),
+            ("suppression", [Concept::Suppression].as_slice()),
+        ]
+    );
+    assert_eq!(unbound_with_concepts, Vec::<&str>::new());
+}
+
+#[test]
+fn a_rule_measured_across_the_repository_carries_no_limit_per_language() {
+    let offending: Vec<&str> = Rule::ALL
+        .into_iter()
+        .map(Rule::spec)
+        .filter(|spec| spec.repository_wide && !spec.language_limits.is_empty())
+        .map(|spec| spec.id)
+        .collect();
+
+    assert_eq!(offending, Vec::<&str>::new());
+}

@@ -1,5 +1,4 @@
 use super::concepts::{self, CallSite, Occurrence};
-use super::support;
 use super::units::Unit;
 use crate::model::{Detail, Finding, Rule, RuleId, Severity, Span, UnitKind};
 use crate::policy::Policy;
@@ -21,7 +20,7 @@ pub fn findings(input: &Input<'_>, policy: &Policy) -> Vec<Finding> {
         return Vec::new();
     }
 
-    let concepts = support::required_concepts(Rule::Assertion);
+    let concepts = Rule::Assertion.spec().concepts;
     let assertions: Vec<&Occurrence> = input
         .occurrences
         .iter()
