@@ -610,4 +610,21 @@ cargo\tllvm-cov\t--version\n";
             "cargo\tclippy\t--version\ncargo\tllvm-cov\t--version\n"
         );
     }
+
+    #[test]
+    fn check_never_probes_a_tool_the_project_left_off() {
+        let fake = FakeTools::new(true);
+        fs::write(
+            fake.project.path().join("jabuti.toml"),
+            "[rules]\nhotspot = { severity = \"off\" }\n",
+        )
+        .expect("configuration written");
+
+        fake.check()
+            .assert()
+            .success()
+            .stdout(contains("No findings"));
+
+        assert_eq!(fake.recorded(), "");
+    }
 }

@@ -324,11 +324,8 @@ pub(crate) fn findings(
     let mut findings = Vec::new();
     let mut produced = None;
 
-    for tool in ALL {
-        if !tool
-            .status(&here, enabled(scan.settings, tool.name))
-            .runnable()
-        {
+    for tool in ALL.iter().filter(|tool| enabled(scan.settings, tool.name)) {
+        if !tool.status(&here, true).runnable() {
             continue;
         }
 
