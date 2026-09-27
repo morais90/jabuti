@@ -8,6 +8,7 @@ use jabuti_core::graph::index::Source;
 use jabuti_core::history::hotspot::{self, FileSummary};
 use jabuti_core::lang::{self, LanguageId};
 use jabuti_core::model::{Finding, Unreadable};
+use jabuti_core::report::Outcome;
 
 use crate::git::since::Changes;
 use crate::{code, config, corpus, graph, history, project, tools};
@@ -16,7 +17,7 @@ pub(crate) fn verdict(
     roots: &[PathBuf],
     since: Option<&str>,
     notices: &mut Vec<String>,
-) -> Result<code::Outcome> {
+) -> Result<Outcome> {
     let (root, settings) = config::discover()?;
     tools::known(&settings)?;
     let changes = since
@@ -36,7 +37,7 @@ pub(crate) fn verdict(
     };
 
     let mut outcome = judged(&scope, notices)?;
-    order(&mut outcome);
+    outcome.order();
 
     Ok(outcome)
 }
@@ -80,7 +81,7 @@ impl Scope<'_> {
     }
 }
 
-fn judged(scope: &Scope<'_>, notices: &mut Vec<String>) -> Result<code::Outcome> {
+fn judged(scope: &Scope<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
     let request = code::Scan {
         policy: &scope.settings.policy,
         bindings: &scope.settings.concepts,
@@ -90,11 +91,11 @@ fn judged(scope: &Scope<'_>, notices: &mut Vec<String>) -> Result<code::Outcome>
     let extent = scope.extent(&request)?;
     let examined = examine(scope, &extent, &request);
 
-    let mut outcome = code::scan(examined.reviewed, &request);
+    let (mut outcome, measured) = code::scan(examined.reviewed, &request);
     outcome.unreadable = examined.unreadable;
     if scope.runs(Rule::Hotspot) {
         outcome.findings.extend(hotspot::hotspots(
-            &summaries(&outcome.measured),
+            &summaries(&measured),
             &scope.settings.policy,
         ));
     }
@@ -238,13 +239,6 @@ fn base_sources(
     }
 
     Ok(sources)
-}
-
-fn order(outcome: &mut code::Outcome) {
-    outcome
-        .unreadable
-        .sort_by(|left, right| left.path.cmp(&right.path));
-    outcome.findings.sort();
 }
 
 fn scope_notices(settings: &config::Settings, scoped: bool) -> Vec<String> {

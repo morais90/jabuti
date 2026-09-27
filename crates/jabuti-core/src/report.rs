@@ -16,6 +16,22 @@ pub struct Scanned {
     pub units: usize,
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Outcome {
+    pub findings: Vec<Finding>,
+    pub readings: Vec<Reading>,
+    pub scanned: Scanned,
+    pub unreadable: Vec<Unreadable>,
+}
+
+impl Outcome {
+    pub fn order(&mut self) {
+        self.findings.sort();
+        self.unreadable
+            .sort_by(|left, right| left.path.cmp(&right.path));
+    }
+}
+
 pub fn agent(
     findings: &[Finding],
     unreadable: &[Unreadable],

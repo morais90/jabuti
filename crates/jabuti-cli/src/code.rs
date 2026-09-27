@@ -7,22 +7,13 @@ use jabuti_core::code::metrics::{self, CognitiveIndex, DecisionIndex, LineIndex}
 use jabuti_core::code::review::{self, FileUnderReview};
 use jabuti_core::code::units::{self, Unit};
 use jabuti_core::code::{assertion, concepts, masking, suppression};
-use jabuti_core::model::{Finding, Reading, Span, Unreadable};
+use jabuti_core::model::{Finding, Reading, Span};
 use jabuti_core::policy::{ConceptBindings, Policy};
-use jabuti_core::report::Scanned;
+use jabuti_core::report::Outcome;
 use jabuti_core::syntax::Parsed;
 
 use crate::corpus::Text;
 use crate::git::since::Changes;
-
-#[derive(Debug, Default)]
-pub(crate) struct Outcome {
-    pub(crate) findings: Vec<Finding>,
-    pub(crate) readings: Vec<Reading>,
-    pub(crate) scanned: Scanned,
-    pub(crate) unreadable: Vec<Unreadable>,
-    pub(crate) measured: Vec<Measured>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Measured {
@@ -113,7 +104,7 @@ pub(crate) fn review(
     }
 }
 
-pub(crate) fn scan(reviewed: Vec<Reviewed>, request: &Scan<'_>) -> Outcome {
+pub(crate) fn scan(reviewed: Vec<Reviewed>, request: &Scan<'_>) -> (Outcome, Vec<Measured>) {
     let measured: Vec<Measured> = reviewed.iter().map(|file| file.measured.clone()).collect();
 
     let repeated: Vec<FileFragments> = reviewed
@@ -127,9 +118,8 @@ pub(crate) fn scan(reviewed: Vec<Reviewed>, request: &Scan<'_>) -> Outcome {
             .into_iter()
             .filter(|finding| in_diff(finding, request.changes)),
     );
-    outcome.measured = measured;
 
-    outcome
+    (outcome, measured)
 }
 
 fn gather(reviewed: Vec<Reviewed>) -> Outcome {

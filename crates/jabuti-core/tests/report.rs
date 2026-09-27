@@ -1,6 +1,6 @@
 use jabuti_core::catalog::{Rule, RuleId, Severity, UnitKind};
 use jabuti_core::model::{Detail, Finding, Reading, Span, Unreadable};
-use jabuti_core::report::{self, Scanned};
+use jabuti_core::report::{self, Outcome, Scanned};
 
 fn finding(severity: Severity, line: u32, subject: Option<&str>) -> Finding {
     Finding {
@@ -337,4 +337,34 @@ fn measures_name_the_files_no_measurement_could_be_taken_from() {
     let rendered = report::measures(&[], &[unreadable("src/theme.kt", 51)]);
 
     insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn an_outcome_puts_its_findings_and_unreadable_files_in_one_order() {
+    let mut outcome = Outcome {
+        findings: vec![
+            finding(Severity::Error, 120, Some("handle_request")),
+            tool_finding(),
+            finding(Severity::Warning, 12, Some("parse")),
+        ],
+        readings: Vec::new(),
+        scanned: scanned(),
+        unreadable: vec![unreadable("src/theme.kt", 51), unreadable("src/app.ts", 3)],
+    };
+
+    outcome.order();
+
+    assert_eq!(
+        outcome,
+        Outcome {
+            findings: vec![
+                finding(Severity::Warning, 12, Some("parse")),
+                finding(Severity::Error, 120, Some("handle_request")),
+                tool_finding(),
+            ],
+            readings: Vec::new(),
+            scanned: scanned(),
+            unreadable: vec![unreadable("src/app.ts", 3), unreadable("src/theme.kt", 51)],
+        }
+    );
 }

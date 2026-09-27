@@ -173,7 +173,7 @@ fn announce(mut notices: Vec<String>) {
     }
 }
 
-fn rendered(format: Format, outcome: &code::Outcome, limit: usize) -> String {
+fn rendered(format: Format, outcome: &report::Outcome, limit: usize) -> String {
     match format {
         Format::Agent => report::agent(
             &outcome.findings,
