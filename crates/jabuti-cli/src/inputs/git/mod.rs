@@ -7,17 +7,20 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
 
+fn git() -> Command {
+    let mut command = Command::new("git");
+    command.args(["-c", "core.quotePath=false"]);
+    command
+}
+
 pub(crate) fn run(arguments: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .args(arguments)
-        .output()
-        .context("running git")?;
+    let output = git().args(arguments).output().context("running git")?;
 
     collected(arguments, output)
 }
 
 pub(crate) fn run_at(root: &Path, arguments: &[&str]) -> Result<String> {
-    let output = Command::new("git")
+    let output = git()
         .arg("-C")
         .arg(root)
         .args(arguments)
@@ -29,7 +32,7 @@ pub(crate) fn run_at(root: &Path, arguments: &[&str]) -> Result<String> {
 
 pub(crate) fn blobs(revision: &str, paths: &[PathBuf]) -> Result<BTreeMap<PathBuf, String>> {
     let arguments = ["cat-file", "--batch"];
-    let mut child = Command::new("git")
+    let mut child = git()
         .args(arguments)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

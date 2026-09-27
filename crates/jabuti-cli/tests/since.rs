@@ -44,25 +44,30 @@ fn unchanged_files_are_skipped_entirely_when_nothing_needs_the_whole_repository(
         .stdout("No findings across 1 file and 2 units.\n");
 }
 
-#[test]
-fn a_unit_overlapping_a_changed_line_is_reported() {
+fn a_function_appended_to_is_reported(name: &str) {
     let directory = repository(&[
         ("jabuti.toml", &error_on_long_functions(60)),
-        ("src/live.rs", "fn small() {}\n"),
+        (name, "fn small() {}\n"),
     ]);
 
-    append(
-        &directory,
-        "src/live.rs",
-        &format!("\n{}", function_of("added", 70)),
-    );
+    append(&directory, name, &format!("\n{}", function_of("added", 70)));
 
     jabuti(&directory)
         .arg("--since")
         .arg("HEAD")
         .assert()
         .code(1)
-        .stdout(contains("src/live.rs:3  error  function-lines  added"));
+        .stdout(contains(format!("{name}:3  error  function-lines  added")));
+}
+
+#[test]
+fn a_unit_overlapping_a_changed_line_is_reported() {
+    a_function_appended_to_is_reported("src/live.rs");
+}
+
+#[test]
+fn a_changed_file_named_with_an_accent_stays_in_the_change() {
+    a_function_appended_to_is_reported("src/ação.rs");
 }
 
 #[test]
@@ -92,21 +97,30 @@ fn a_unit_in_a_touched_file_but_away_from_the_change_is_left_out() {
         .stdout(contains("No findings"));
 }
 
-#[test]
-fn every_unit_of_a_brand_new_file_counts_as_changed() {
+fn a_new_file_is_reported_whole(name: &str) {
     let directory = repository(&[
         ("jabuti.toml", &error_on_long_functions(60)),
         ("src/live.rs", "fn small() {}\n"),
     ]);
 
-    write(&directory, "src/fresh.rs", &function_of("fresh", 70));
+    write(&directory, name, &function_of("fresh", 70));
 
     jabuti(&directory)
         .arg("--since")
         .arg("HEAD")
         .assert()
         .code(1)
-        .stdout(contains("src/fresh.rs:1  error  function-lines  fresh"));
+        .stdout(contains(format!("{name}:1  error  function-lines  fresh")));
+}
+
+#[test]
+fn every_unit_of_a_brand_new_file_counts_as_changed() {
+    a_new_file_is_reported_whole("src/fresh.rs");
+}
+
+#[test]
+fn a_new_file_named_with_an_accent_stays_in_the_change() {
+    a_new_file_is_reported_whole("src/ação.rs");
 }
 
 #[test]

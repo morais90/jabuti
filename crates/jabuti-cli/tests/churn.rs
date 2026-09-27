@@ -9,22 +9,27 @@ function-lines = { severity = \"off\" }\n\
 cognitive-complexity = { severity = \"off\" }\n\
 parameters = { severity = \"off\" }\n";
 
-#[test]
-fn churn_counts_every_commit_that_touched_the_file() {
-    let directory = repository(&[
-        ("jabuti.toml", ONLY_CHURN),
-        ("src/busy.rs", "fn busy() {}\n"),
-    ]);
+fn every_commit_is_counted_against(name: &str) {
+    let directory = repository(&[("jabuti.toml", ONLY_CHURN), (name, "fn busy() {}\n")]);
 
-    write(&directory, "src/busy.rs", "fn busy() { }\n");
+    write(&directory, name, "fn busy() { }\n");
     commit(&directory, "second");
-    write(&directory, "src/busy.rs", "fn busy() {  }\n");
+    write(&directory, name, "fn busy() {  }\n");
     commit(&directory, "third");
 
-    jabuti(&directory)
-        .assert()
-        .code(1)
-        .stdout(contains("src/busy.rs:1  error  churn  measured 3, limit 1"));
+    jabuti(&directory).assert().code(1).stdout(contains(format!(
+        "{name}:1  error  churn  measured 3, limit 1"
+    )));
+}
+
+#[test]
+fn churn_counts_every_commit_that_touched_the_file() {
+    every_commit_is_counted_against("src/busy.rs");
+}
+
+#[test]
+fn a_file_named_with_an_accent_has_every_commit_counted() {
+    every_commit_is_counted_against("src/ação.rs");
 }
 
 #[test]
