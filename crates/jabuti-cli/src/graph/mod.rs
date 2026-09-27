@@ -15,7 +15,6 @@ use jabuti_core::policy::ConceptBindings;
 use jabuti_core::syntax::Parsed;
 
 use crate::config::Settings;
-use crate::git::since::Changes;
 
 #[derive(Debug)]
 pub(crate) struct Scan<'a> {
@@ -26,15 +25,12 @@ pub(crate) struct Scan<'a> {
     pub(crate) base: &'a BTreeMap<PathBuf, Option<Source>>,
     pub(crate) project: &'a Path,
     pub(crate) settings: &'a Settings,
-    pub(crate) changes: Option<&'a Changes>,
+    pub(crate) compared: bool,
 }
 
 impl Scan<'_> {
     fn examines(&self, source: &Source) -> bool {
         self.requested.contains(&source.path)
-            && self
-                .changes
-                .is_none_or(|changes| changes.covers(&source.path))
     }
 }
 
@@ -42,7 +38,7 @@ pub(crate) fn findings(scan: &Scan<'_>, notices: &mut Vec<String>) -> Result<Vec
     let index = Index::of(scan.sources);
     let mut found = Vec::new();
 
-    if scan.changes.is_some() {
+    if scan.compared {
         found.extend(drift::findings(scan, &index));
         found.extend(surface::findings(scan, &index));
     }

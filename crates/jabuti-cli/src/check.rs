@@ -27,18 +27,33 @@ pub(crate) fn verdict(
 
     let paths = project::sources(roots, &settings.exclude, &root)?;
     let churn = history::commits(history.as_ref(), &paths);
+    let touched = changes.as_ref().map(|changes| {
+        paths
+            .iter()
+            .filter(|path| changes.covers(path))
+            .cloned()
+            .collect()
+    });
     let scope = Scope {
         root: &root,
         settings: &settings,
         paths: &paths,
         changes: changes.as_ref(),
         churn: &churn,
+        touched: touched.as_ref(),
     };
 
     let mut outcome = judged(&scope, notices)?;
+    within_change(&mut outcome.findings, scope.changes);
     outcome.order();
 
     Ok(outcome)
+}
+
+fn within_change(findings: &mut Vec<Finding>, changes: Option<&Changes>) {
+    if let Some(changes) = changes {
+        findings.retain(|finding| changes.touches(Path::new(&finding.path), finding.span));
+    }
 }
 
 struct Scope<'a> {
@@ -47,6 +62,7 @@ struct Scope<'a> {
     paths: &'a [PathBuf],
     changes: Option<&'a Changes>,
     churn: &'a BTreeMap<PathBuf, u32>,
+    touched: Option<&'a BTreeSet<PathBuf>>,
 }
 
 impl Scope<'_> {
@@ -84,7 +100,7 @@ fn judged(scope: &Scope<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
     let request = code::Scan {
         policy: &scope.settings.policy,
         bindings: &scope.settings.concepts,
-        changes: scope.changes,
+        touched: scope.touched,
         churn: scope.churn,
     };
     let extent = scope.extent(&request)?;
@@ -103,7 +119,6 @@ fn judged(scope: &Scope<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
         project: scope.root,
         paths: scope.paths,
         settings: scope.settings,
-        changes: scope.changes,
     };
     let (reported, produced) = tools::findings(&tools, notices);
     outcome.findings.extend(reported);
@@ -202,6 +217,7 @@ fn graphed(
     let requested: BTreeSet<PathBuf> = scope
         .paths
         .iter()
+        .filter(|path| scope.touched.is_none_or(|touched| touched.contains(*path)))
         .map(|path| PathBuf::from(project::display(path, scope.root)))
         .collect();
 
@@ -214,7 +230,7 @@ fn graphed(
             base: &base,
             project: scope.root,
             settings: scope.settings,
-            changes: scope.changes,
+            compared: scope.changes.is_some(),
         },
         notices,
     )

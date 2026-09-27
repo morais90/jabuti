@@ -83,6 +83,11 @@ what makes it late.
 A rule that needs a limit is only worth building if the distribution has a tail long enough to place one
 on. Measure first.
 
+With `--since`, every finding is trimmed in one place to the lines the change added, whatever rule
+raised it. A rule whose finding belongs somewhere else, such as a check that was deleted or a caller the
+change broke without touching, would be dropped there without a word. The first such rule declares
+where its findings anchor in the catalog, and the trim learns to respect it, before the rule ships.
+
 ## Style
 
 Write every artifact in English: identifiers, documentation, CLI help, package descriptions, issues and

@@ -26,10 +26,6 @@ pub(crate) fn findings(
 
     let found = graph::layers::violations(&edges, &layers)
         .into_iter()
-        .filter(|violation| {
-            scan.changes
-                .is_none_or(|changes| changes.touches(&violation.from, violation.at))
-        })
         .map(|violation| Finding {
             rule: RuleId::Native(Rule::LayerViolation),
             severity,

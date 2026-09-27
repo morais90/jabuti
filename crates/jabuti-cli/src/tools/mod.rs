@@ -9,7 +9,6 @@ use jabuti_core::tools::cargo_diagnostics;
 use jabuti_core::tools::coverage::Format;
 
 use crate::config::Settings;
-use crate::git::since::Changes;
 use crate::project;
 
 #[derive(Debug, Clone, Copy)]
@@ -316,7 +315,6 @@ pub(crate) struct Scan<'a> {
     pub(crate) project: &'a Path,
     pub(crate) paths: &'a [PathBuf],
     pub(crate) settings: &'a Settings,
-    pub(crate) changes: Option<&'a Changes>,
 }
 
 pub(crate) fn findings(
@@ -348,11 +346,5 @@ fn admitted(reported: Vec<Finding>, scan: &Scan<'_>) -> Vec<Finding> {
     reported
         .into_iter()
         .filter_map(|finding| scan.settings.policy.admit(finding))
-        .filter(|finding| in_scope(finding, scan))
         .collect()
-}
-
-fn in_scope(finding: &Finding, scan: &Scan<'_>) -> bool {
-    scan.changes
-        .is_none_or(|changes| changes.touches(Path::new(&finding.path), finding.span))
 }

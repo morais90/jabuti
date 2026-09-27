@@ -13,7 +13,6 @@ use jabuti_core::report::Outcome;
 use jabuti_core::syntax::Parsed;
 
 use crate::corpus::Text;
-use crate::git::since::Changes;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Measured {
@@ -37,15 +36,15 @@ pub(crate) struct Reviewed {
 pub(crate) struct Scan<'a> {
     pub(crate) policy: &'a Policy,
     pub(crate) bindings: &'a ConceptBindings,
-    pub(crate) changes: Option<&'a Changes>,
+    pub(crate) touched: Option<&'a BTreeSet<PathBuf>>,
     pub(crate) churn: &'a BTreeMap<PathBuf, u32>,
 }
 
 impl Scan<'_> {
     pub(crate) fn scope(&self, paths: &[PathBuf]) -> BTreeSet<PathBuf> {
         let mut scope: BTreeSet<PathBuf> = paths.iter().cloned().collect();
-        if let (Some(changes), None) = (self.changes, duplication_limit(self.policy)) {
-            scope.retain(|path| changes.covers(path));
+        if let (Some(touched), None) = (self.touched, duplication_limit(self.policy)) {
+            scope.retain(|path| touched.contains(path));
         }
 
         scope
@@ -89,7 +88,6 @@ pub(crate) fn review(
         request,
         &file.units,
     ));
-    let findings = scoped(findings, &text.path, request.changes);
 
     Reviewed {
         path: text.path.clone(),
@@ -112,12 +110,10 @@ pub(crate) fn scan(reviewed: Vec<Reviewed>, request: &Scan<'_>) -> (Outcome, Vec
         .filter_map(|file| file.fragments.clone())
         .collect();
 
-    let mut outcome = gather(covered(reviewed, request.changes));
-    outcome.findings.extend(
-        duplication::duplicates(&repeated, request.policy)
-            .into_iter()
-            .filter(|finding| in_diff(finding, request.changes)),
-    );
+    let mut outcome = gather(covered(reviewed, request.touched));
+    outcome
+        .findings
+        .extend(duplication::duplicates(&repeated, request.policy));
 
     (outcome, measured)
 }
@@ -135,14 +131,14 @@ fn gather(reviewed: Vec<Reviewed>) -> Outcome {
     outcome
 }
 
-fn covered(reviewed: Vec<Reviewed>, changes: Option<&Changes>) -> Vec<Reviewed> {
-    let Some(changes) = changes else {
+fn covered(reviewed: Vec<Reviewed>, touched: Option<&BTreeSet<PathBuf>>) -> Vec<Reviewed> {
+    let Some(touched) = touched else {
         return reviewed;
     };
 
     reviewed
         .into_iter()
-        .filter(|file| changes.covers(&file.path))
+        .filter(|file| touched.contains(&file.path))
         .collect()
 }
 
@@ -150,19 +146,6 @@ fn duplication_limit(policy: &Policy) -> Option<u32> {
     policy
         .active(Rule::DuplicateBlock)
         .map(|config| config.limit)
-}
-
-fn in_diff(finding: &Finding, changes: Option<&Changes>) -> bool {
-    changes.is_none_or(|changes| changes.touches(Path::new(&finding.path), finding.span))
-}
-
-fn scoped(mut findings: Vec<Finding>, path: &Path, changes: Option<&Changes>) -> Vec<Finding> {
-    findings.sort_by_key(|finding| finding.span.start_line);
-    if let Some(changes) = changes {
-        findings.retain(|finding| changes.touches(path, finding.span));
-    }
-
-    findings
 }
 
 fn concept_findings(

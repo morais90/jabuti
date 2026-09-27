@@ -127,6 +127,20 @@ fn only_the_corpus_parses_a_source_file_and_no_analysing_context_reads_one() {
 }
 
 #[test]
+fn no_analysing_context_sees_the_diff_because_the_change_is_trimmed_in_one_place() {
+    for context in ["code", "graph", "tools"] {
+        for file in files_of(context) {
+            let source = std::fs::read_to_string(&file).expect("source readable");
+            assert!(
+                !source.contains("crate::git"),
+                "{} reaches the diff instead of leaving the trim to check",
+                file.display()
+            );
+        }
+    }
+}
+
+#[test]
 fn only_main_writes_to_the_terminal_and_every_other_module_hands_it_data() {
     for file in rust_files(&source_root()) {
         if file == source_root().join("main.rs") {
