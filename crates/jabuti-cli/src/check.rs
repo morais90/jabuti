@@ -45,16 +45,14 @@ pub(crate) fn verdict(
     };
 
     let mut outcome = judged(&scope, notices)?;
-    within_change(&mut outcome.findings, scope.changes);
+    if let Some(changes) = scope.changes {
+        changes
+            .diff()
+            .trim(&mut outcome.findings, &changes.placement(scope.paths));
+    }
     outcome.order();
 
     Ok(outcome)
-}
-
-fn within_change(findings: &mut Vec<Finding>, changes: Option<&Changes>) {
-    if let Some(changes) = changes {
-        findings.retain(|finding| changes.touches(Path::new(&finding.path), finding.span));
-    }
 }
 
 struct Scope<'a> {

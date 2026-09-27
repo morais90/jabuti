@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use jabuti_core::diff::Diff;
+use jabuti_core::diff::{Diff, Placement};
 use jabuti_core::model::Span;
 
 use crate::inputs::workspace;
@@ -58,6 +58,28 @@ impl Changes {
             .collect();
 
         Ok(texts)
+    }
+
+    pub(crate) fn diff(&self) -> &Diff {
+        &self.diff
+    }
+
+    pub(crate) fn placement(&self, paths: &[PathBuf]) -> Placement {
+        let project = self
+            .project
+            .strip_prefix(&self.root)
+            .map_or_else(|_| PathBuf::new(), Path::to_path_buf);
+        let aliases = paths
+            .iter()
+            .filter_map(|path| {
+                let shown = PathBuf::from(workspace::display(path, &self.project));
+                let real = self.relative(path)?;
+
+                (real != project.join(&shown)).then_some((shown, real))
+            })
+            .collect();
+
+        Placement { project, aliases }
     }
 
     pub(crate) fn covers(&self, path: &Path) -> bool {

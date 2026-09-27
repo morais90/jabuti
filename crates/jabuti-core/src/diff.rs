@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 
-use crate::model::Span;
+use crate::model::{Finding, Span};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Touched {
@@ -45,6 +45,30 @@ impl Diff {
         self.touched
             .get(path)
             .is_some_and(|touched| touched.covers(span))
+    }
+
+    pub fn trim(&self, findings: &mut Vec<Finding>, placement: &Placement) {
+        findings.retain(|finding| {
+            self.touches(
+                &placement.in_repository(Path::new(&finding.path)),
+                finding.span,
+            )
+        });
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Placement {
+    pub project: PathBuf,
+    pub aliases: BTreeMap<PathBuf, PathBuf>,
+}
+
+impl Placement {
+    pub fn in_repository(&self, shown: &Path) -> PathBuf {
+        self.aliases
+            .get(shown)
+            .cloned()
+            .unwrap_or_else(|| self.project.join(shown))
     }
 }
 

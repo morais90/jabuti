@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use jabuti_core::diff::Diff;
-use jabuti_core::model::Span;
+use jabuti_core::catalog::{Rule, RuleId, Severity};
+use jabuti_core::diff::{Diff, Placement};
+use jabuti_core::model::{Detail, Finding, Span};
 use rstest::rstest;
 
 const UNIFIED: &str = "\
@@ -101,4 +103,50 @@ fn an_empty_diff_covers_nothing() {
 
     assert!(!diff.covers(Path::new("src/lib.rs")));
     assert_eq!(diff, Diff::default());
+}
+
+fn finding(path: &str, start_line: u32, end_line: u32) -> Finding {
+    Finding {
+        rule: RuleId::Native(Rule::FunctionLines),
+        severity: Severity::Warning,
+        path: path.to_owned(),
+        span: lines(start_line, end_line),
+        subject: None,
+        detail: Detail::Threshold {
+            measured: 71,
+            limit: 60,
+        },
+    }
+}
+
+#[test]
+fn trimming_keeps_only_findings_on_added_lines_wherever_the_project_sits_and_through_a_link() {
+    let placement = Placement {
+        project: PathBuf::from("src"),
+        aliases: BTreeMap::from([(PathBuf::from("mirror.rs"), PathBuf::from("src/new.rs"))]),
+    };
+    let mut findings = vec![
+        finding("lib.rs", 4, 4),
+        finding("lib.rs", 6, 11),
+        finding("mirror.rs", 2, 2),
+        finding("new.rs", 9, 9),
+        finding("untouched.rs", 1, 3),
+    ];
+
+    Diff::parse(UNIFIED).trim(&mut findings, &placement);
+
+    assert_eq!(
+        findings,
+        [finding("lib.rs", 4, 4), finding("mirror.rs", 2, 2)]
+    );
+}
+
+#[test]
+fn a_project_at_the_repository_root_places_every_file_where_it_is_shown() {
+    let placement = Placement::default();
+
+    assert_eq!(
+        placement.in_repository(Path::new("src/lib.rs")),
+        PathBuf::from("src/lib.rs")
+    );
 }

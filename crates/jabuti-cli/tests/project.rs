@@ -97,6 +97,38 @@ fn a_symlink_under_the_paths_given_is_still_reviewed_when_the_whole_project_is_r
 }
 
 #[test]
+fn a_committed_symlink_is_reported_when_the_file_it_points_at_changes() {
+    let directory = repository(&[
+        (
+            "jabuti.toml",
+            "[rules]\nfunction-lines = { limit = 2, severity = \"error\" }\n",
+        ),
+        ("src/outside/real.rs", "fn wide() {}\n"),
+    ]);
+    std::fs::create_dir_all(directory.path().join("src/inside")).expect("directory created");
+    std::os::unix::fs::symlink(
+        "../outside/real.rs",
+        directory.path().join("src/inside/link.rs"),
+    )
+    .expect("symlink created");
+    common::commit(&directory, "link the file");
+    write(
+        &directory,
+        "src/outside/real.rs",
+        "fn wide() -> u32 {\n    let a = 1;\n    a\n}\n",
+    );
+
+    binary(&directory)
+        .arg("check")
+        .arg("src/inside")
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .code(1)
+        .stdout(contains("src/inside/link.rs:1  error  function-lines"));
+}
+
+#[test]
 fn paths_are_shown_relative_to_the_project_wherever_the_command_runs_from() {
     let directory = repository(&[
         ("jabuti.toml", "[rules]\n"),
