@@ -150,3 +150,69 @@ fn a_project_at_the_repository_root_places_every_file_where_it_is_shown() {
         PathBuf::from("src/lib.rs")
     );
 }
+
+const LOOKALIKE: &str = "\
+diff --git a/src/query.rs b/src/query.rs
+index 1111111..2222222 100644
+--- a/src/query.rs
++++ b/src/query.rs
+@@ -2,2 +2 @@ fn query() {
+-    stale();
+--- the old comment
++++ the new comment
+@@ -9,0 +10,2 @@ fn later() {
++    first();
++    second();
+diff --git a/src/tail.rs b/src/tail.rs
+index 3333333..4444444 100644
+--- a/src/tail.rs
++++ b/src/tail.rs
+@@ -1 +1 @@
+-fn old() {}
+\\ No newline at end of file
++fn new() {}
+\\ No newline at end of file
+";
+
+#[test]
+fn a_changed_line_that_looks_like_a_file_header_stays_inside_its_hunk() {
+    let diff = Diff::parse(LOOKALIKE);
+
+    assert_eq!(
+        [
+            diff.touches(Path::new("src/query.rs"), lines(2, 2)),
+            diff.touches(Path::new("src/query.rs"), lines(10, 11)),
+            diff.touches(Path::new("src/query.rs"), lines(3, 9)),
+            diff.covers(Path::new("the new comment")),
+            diff.touches(Path::new("src/tail.rs"), lines(1, 1)),
+        ],
+        [true, true, false, false, true]
+    );
+}
+
+const WITH_CONTEXT: &str = "\
+diff --git a/src/query.rs b/src/query.rs
+index 1111111..2222222 100644
+--- a/src/query.rs
++++ b/src/query.rs
+@@ -1,3 +1,4 @@
+ fn query() {
++    prepare();
+     run();
+ }
+diff --git a/src/tail.rs b/src/tail.rs
+index 3333333..4444444 100644
+--- a/src/tail.rs
++++ b/src/tail.rs
+@@ -1 +1 @@
+-fn old() {}
++fn new() {}
+";
+
+#[test]
+fn a_hunk_with_context_lines_ends_where_both_of_its_sides_do() {
+    let diff = Diff::parse(WITH_CONTEXT);
+
+    assert!(diff.covers(Path::new("src/query.rs")));
+    assert!(diff.touches(Path::new("src/tail.rs"), lines(1, 1)));
+}

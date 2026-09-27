@@ -73,28 +73,51 @@ impl Placement {
 }
 
 fn hunks(diff: &str) -> BTreeMap<PathBuf, Touched> {
-    let mut touched: BTreeMap<PathBuf, Vec<RangeInclusive<u32>>> = BTreeMap::new();
-    let mut current = None;
-    let mut previous = "";
-
+    let mut reader = Reader::default();
     for line in diff.lines() {
-        if let Some(spec) = line.strip_prefix("+++ ")
-            && previous.starts_with("--- ")
-        {
-            current = target(spec);
-        } else if let Some(header) = line.strip_prefix("@@ ")
-            && let (Some(path), Some(range)) = (current.as_ref(), added(header))
-        {
-            touched.entry(path.clone()).or_default().push(range);
-        }
-
-        previous = line;
+        reader.read(line);
     }
 
-    touched
+    reader
+        .touched
         .into_iter()
         .map(|(path, ranges)| (path, Touched::Lines(ranges)))
         .collect()
+}
+
+#[derive(Default)]
+struct Reader<'a> {
+    touched: BTreeMap<PathBuf, Vec<RangeInclusive<u32>>>,
+    current: Option<PathBuf>,
+    previous: &'a str,
+    remaining: (u32, u32),
+}
+
+impl<'a> Reader<'a> {
+    fn read(&mut self, line: &'a str) {
+        if self.remaining != (0, 0) {
+            self.remaining = consumed(self.remaining, line);
+            return;
+        }
+
+        if let Some(spec) = line.strip_prefix("+++ ")
+            && self.previous.starts_with("--- ")
+        {
+            self.current = target(spec);
+        } else if let Some(header) = line.strip_prefix("@@ ") {
+            self.open(header);
+        }
+
+        self.previous = line;
+    }
+
+    fn open(&mut self, header: &str) {
+        self.remaining = sides(header);
+
+        if let (Some(path), Some(range)) = (self.current.as_ref(), added(header)) {
+            self.touched.entry(path.clone()).or_default().push(range);
+        }
+    }
 }
 
 fn target(spec: &str) -> Option<PathBuf> {
@@ -106,21 +129,38 @@ fn target(spec: &str) -> Option<PathBuf> {
 }
 
 fn added(header: &str) -> Option<RangeInclusive<u32>> {
-    let addition = header
-        .split_whitespace()
-        .find(|part| part.starts_with('+'))?
-        .trim_start_matches('+');
+    let (start, count) = span_of(header, '+')?;
 
-    let mut numbers = addition.split(',');
+    (count > 0).then(|| start..=start + count - 1)
+}
+
+fn sides(header: &str) -> (u32, u32) {
+    let count = |sign| span_of(header, sign).map_or(0, |(_, count)| count);
+
+    (count('-'), count('+'))
+}
+
+fn consumed((old, new): (u32, u32), line: &str) -> (u32, u32) {
+    match line.chars().next() {
+        Some('-') => (old.saturating_sub(1), new),
+        Some('+') => (old, new.saturating_sub(1)),
+        Some(' ') => (old.saturating_sub(1), new.saturating_sub(1)),
+        _ => (old, new),
+    }
+}
+
+fn span_of(header: &str, sign: char) -> Option<(u32, u32)> {
+    let side = header
+        .split_whitespace()
+        .find(|part| part.starts_with(sign))?
+        .trim_start_matches(sign);
+
+    let mut numbers = side.split(',');
     let start: u32 = numbers.next()?.parse().ok()?;
     let count: u32 = match numbers.next() {
         Some(value) => value.parse().ok()?,
         None => 1,
     };
 
-    if count == 0 {
-        return None;
-    }
-
-    Some(start..=start + count - 1)
+    Some((start, count))
 }
