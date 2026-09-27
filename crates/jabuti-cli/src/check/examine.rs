@@ -150,21 +150,22 @@ pub(super) fn base_sources(
     paths: &[PathBuf],
     project: &Path,
 ) -> Result<BTreeMap<PathBuf, Option<Source>>> {
-    let mut sources = BTreeMap::new();
+    Ok(changes
+        .base_texts(paths, project)?
+        .into_par_iter()
+        .filter_map(|(shown, text)| base_source(shown, &text))
+        .collect())
+}
 
-    for (shown, text) in changes.base_texts(paths, project)? {
-        let Some(spec) = lang::detect(&shown) else {
-            continue;
-        };
-        let source = parsed(&text, spec, facts::facts).ok().map(|facts| Source {
-            path: shown.clone(),
-            language: spec.id,
-            facts,
-        });
-        sources.insert(shown, source);
-    }
+fn base_source(shown: PathBuf, text: &str) -> Option<(PathBuf, Option<Source>)> {
+    let spec = lang::detect(&shown)?;
+    let source = parsed(text, spec, facts::facts).ok().map(|facts| Source {
+        path: shown.clone(),
+        language: spec.id,
+        facts,
+    });
 
-    Ok(sources)
+    Some((shown, source))
 }
 
 fn source(shown: &str, language: LanguageId, facts: FileFacts) -> Source {
