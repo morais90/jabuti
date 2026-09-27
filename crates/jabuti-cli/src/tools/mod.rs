@@ -10,6 +10,7 @@ use jabuti_core::tools::coverage::Format;
 
 use crate::config::Settings;
 use crate::git::since::Changes;
+use crate::project;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Output {
@@ -183,8 +184,11 @@ impl Tool {
                     .unwrap_or_default()
             ));
         }
+        if findings.is_empty() {
+            return Ok(findings);
+        }
 
-        Ok(findings)
+        Ok(located(findings, &workspace_root(root)?, project))
     }
 
     fn arguments(&self, fixed: &[&str], project: &Path) -> Result<Vec<OsString>, String> {
@@ -223,6 +227,40 @@ impl Tool {
             .output()
             .is_ok_and(|output| output.status.success())
     }
+}
+
+fn workspace_root(root: &Path) -> Result<PathBuf, String> {
+    let output = command("cargo", root)
+        .args(["locate-project", "--workspace", "--message-format", "plain"])
+        .output()
+        .map_err(|error| format!("locating the cargo workspace: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "locating the cargo workspace exited with {}",
+            output.status
+        ));
+    }
+
+    let manifest = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+    manifest
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| format!("cargo located no workspace from {}", root.display()))
+}
+
+fn located(findings: Vec<Finding>, base: &Path, project: &Path) -> Vec<Finding> {
+    findings
+        .into_iter()
+        .filter_map(|finding| {
+            let absolute = base.join(&finding.path);
+            let resolved = absolute.canonicalize().unwrap_or(absolute);
+
+            resolved.starts_with(project).then(|| Finding {
+                path: project::display(&resolved, project),
+                ..finding
+            })
+        })
+        .collect()
 }
 
 pub(crate) fn install(root: &Path) -> Result<Vec<&'static str>> {
@@ -316,5 +354,5 @@ fn admitted(reported: Vec<Finding>, scan: &Scan<'_>) -> Vec<Finding> {
 
 fn in_scope(finding: &Finding, scan: &Scan<'_>) -> bool {
     scan.changes
-        .is_none_or(|changes| changes.touches(&scan.here.join(&finding.path), finding.span))
+        .is_none_or(|changes| changes.touches(Path::new(&finding.path), finding.span))
 }

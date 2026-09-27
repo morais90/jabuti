@@ -187,6 +187,73 @@ fn a_lint_outside_the_changed_lines_is_left_out_when_scoping_to_a_diff() {
 }
 
 #[test]
+fn a_lint_is_placed_relative_to_the_project_whichever_member_of_a_nested_workspace_runs_it() {
+    let directory = project(&[
+        ("jabuti.toml", CLIPPY_ON),
+        (
+            "rust/Cargo.toml",
+            "[workspace]\nmembers = [\"member\"]\nresolver = \"2\"\n",
+        ),
+        (
+            "rust/member/Cargo.toml",
+            "[package]\nname = \"member\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        ),
+        ("rust/member/src/lib.rs", "pub fn small() {}\n"),
+    ]);
+    common::init_repository(&directory);
+    common::append(
+        &directory,
+        "rust/member/src/lib.rs",
+        "\npub fn sum(values: &[i32]) -> i32 {\n    let mut total = 0;\n    for index in 0..values.len() {\n        total += values[index];\n    }\n    total\n}\n",
+    );
+
+    common::binary(&directory)
+        .current_dir(directory.path().join("rust/member"))
+        .arg("check")
+        .arg(".")
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stdout(contains(
+            "rust/member/src/lib.rs:5  warning  clippy/needless_range_loop",
+        ));
+}
+
+#[test]
+fn a_lint_in_a_workspace_member_outside_the_project_is_left_out() {
+    let looping = "pub fn sum(values: &[i32]) -> i32 {\n    let mut total = 0;\n    for index in 0..values.len() {\n        total += values[index];\n    }\n    total\n}\n";
+    let directory = project(&[
+        ("rust/member/jabuti.toml", CLIPPY_ON),
+        (
+            "rust/Cargo.toml",
+            "[workspace]\nmembers = [\"member\", \"other\"]\nresolver = \"2\"\n",
+        ),
+        (
+            "rust/member/Cargo.toml",
+            "[package]\nname = \"member\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        ),
+        ("rust/member/src/lib.rs", looping),
+        (
+            "rust/other/Cargo.toml",
+            "[package]\nname = \"other\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        ),
+        ("rust/other/src/lib.rs", looping),
+    ]);
+    common::init_repository(&directory);
+
+    common::binary(&directory)
+        .current_dir(directory.path().join("rust/member"))
+        .arg("check")
+        .arg(".")
+        .assert()
+        .stdout(
+            contains("src/lib.rs:3  warning  clippy/needless_range_loop")
+                .and(contains("other").not()),
+        );
+}
+
+#[test]
 fn a_tool_that_finds_nothing_is_not_mistaken_for_a_tool_that_failed() {
     let directory = project(&[
         ("jabuti.toml", CLIPPY_ON),
