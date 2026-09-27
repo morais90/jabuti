@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 mod common;
+mod findings;
 mod surface;
 
 use common::{fixture_root, sources_under};

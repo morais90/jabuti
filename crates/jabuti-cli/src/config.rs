@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use jabuti_core::catalog::{Concept, Input, Rule, RuleId, Severity};
-use jabuti_core::lang::{self, LanguageId};
+use jabuti_core::lang::LanguageId;
 use jabuti_core::policy::{ConceptBindings, Policy, RuleConfig};
 use serde::Deserialize;
 
@@ -20,26 +20,10 @@ pub(crate) struct Settings {
 }
 
 impl Settings {
-    pub(crate) fn enabled(&self, rule: Rule) -> bool {
-        self.somewhere(rule, |severity| severity != Severity::Off)
-    }
-
-    pub(crate) fn gates(&self, rule: Rule) -> bool {
-        self.somewhere(rule, |severity| severity == Severity::Error)
-    }
-
     pub(crate) fn needs(&self, input: Input) -> bool {
         Rule::ALL
             .into_iter()
-            .any(|rule| self.enabled(rule) && rule.spec().inputs.contains(&input))
-    }
-
-    fn somewhere(&self, rule: Rule, holds: fn(Severity) -> bool) -> bool {
-        lang::ALL.iter().any(|spec| {
-            self.policy
-                .config_for(spec.id, rule)
-                .is_some_and(|config| holds(config.severity))
-        })
+            .any(|rule| self.policy.enabled(rule) && rule.spec().inputs.contains(&input))
     }
 }
 

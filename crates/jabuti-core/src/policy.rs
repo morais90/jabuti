@@ -96,6 +96,21 @@ impl Policy {
             .filter(|config| config.reports())
     }
 
+    pub fn enabled(&self, rule: Rule) -> bool {
+        self.anywhere(rule, |severity| severity != Severity::Off)
+    }
+
+    pub fn gates(&self, rule: Rule) -> bool {
+        self.anywhere(rule, |severity| severity == Severity::Error)
+    }
+
+    fn anywhere(&self, rule: Rule, holds: fn(Severity) -> bool) -> bool {
+        lang::ALL.iter().any(|spec| {
+            self.config_for(spec.id, rule)
+                .is_some_and(|config| holds(config.severity))
+        })
+    }
+
     pub fn admit(&self, finding: Finding) -> Option<Finding> {
         let configured = match lang::detect(Path::new(&finding.path)) {
             Some(spec) => self.config_for(spec.id, finding.rule.clone()),

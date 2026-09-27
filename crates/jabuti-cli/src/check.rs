@@ -3,16 +3,17 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use jabuti_core::catalog::{Input, Rule, Scoping};
-use jabuti_core::code;
 use jabuti_core::graph::facts::{self, FileFacts};
 use jabuti_core::graph::index::Source;
 use jabuti_core::lang::{self, LanguageId};
 use jabuti_core::model::{Finding, Unreadable};
+use jabuti_core::policy::Policy;
 use jabuti_core::report::Outcome;
+use jabuti_core::{code, graph};
 
 use crate::inputs::git::since::Changes;
 use crate::inputs::{history, layers, tools, workspace};
-use crate::{config, corpus, crossings, graph};
+use crate::{config, corpus, crossings};
 
 pub(crate) fn verdict(
     roots: &[PathBuf],
@@ -24,7 +25,7 @@ pub(crate) fn verdict(
     let changes = since
         .map(|reference| Changes::since(reference, &root))
         .transpose()?;
-    notices.extend(scope_notices(&settings, since.is_some()));
+    notices.extend(scope_notices(&settings.policy, since.is_some()));
     let history = history::load(&settings, notices);
 
     let paths = workspace::sources(roots, &settings.exclude, &root)?;
@@ -75,7 +76,7 @@ impl Scope<'_> {
     fn runs(&self, rule: Rule) -> bool {
         let spec = rule.spec();
 
-        self.settings.enabled(rule)
+        self.settings.policy.enabled(rule)
             && spec.scoping.allows(self.changes.is_some())
             && spec.inputs.iter().all(|input| self.available(*input))
     }
@@ -235,7 +236,7 @@ fn graphed(
         sources,
         opaque,
         base: &base,
-        settings: scope.settings,
+        policy: &scope.settings.policy,
         compared: scope.changes.is_some(),
         layers: layers.as_ref(),
     }))
@@ -265,16 +266,16 @@ fn base_sources(
     Ok(sources)
 }
 
-fn scope_notices(settings: &config::Settings, scoped: bool) -> Vec<String> {
+fn scope_notices(policy: &Policy, scoped: bool) -> Vec<String> {
     let mut notices = Vec::new();
 
     for rule in Rule::ALL {
         match rule.spec().scoping {
-            Scoping::Repository if scoped && settings.enabled(rule) => notices.push(format!(
+            Scoping::Repository if scoped && policy.enabled(rule) => notices.push(format!(
                 "{} ranks a whole repository, so it is not evaluated with --since",
                 rule.id()
             )),
-            Scoping::Change if !scoped && settings.gates(rule) => notices.push(format!(
+            Scoping::Change if !scoped && policy.gates(rule) => notices.push(format!(
                 "{} compares against an earlier revision, so it needs --since",
                 rule.id()
             )),

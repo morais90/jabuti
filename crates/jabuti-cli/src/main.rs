@@ -2,7 +2,6 @@ mod check;
 mod config;
 mod corpus;
 mod crossings;
-mod graph;
 mod inputs;
 
 use std::path::PathBuf;

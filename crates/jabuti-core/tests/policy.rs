@@ -131,3 +131,26 @@ fn concept_bindings_report_global_and_per_language_emptiness() {
         (false, false, true)
     );
 }
+
+#[test]
+fn a_rule_is_enabled_where_any_language_reports_it_and_gates_where_any_fails_on_it() {
+    let mut policy = Policy::default();
+    policy.set_for(
+        LanguageId::Kotlin,
+        Rule::Churn,
+        RuleConfig {
+            limit: 0,
+            severity: Severity::Error,
+        },
+    );
+    let asked = |rule| (policy.enabled(rule), policy.gates(rule));
+
+    assert_eq!(
+        [
+            asked(Rule::FunctionLines),
+            asked(Rule::CyclomaticComplexity),
+            asked(Rule::Churn),
+        ],
+        [(true, false), (false, false), (true, true)]
+    );
+}

@@ -1,9 +1,11 @@
 use std::collections::{BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
 
+use super::Scan;
 use super::facts::{Declared, FileFacts};
 use super::index::{Index, Source};
-use crate::model::Span;
+use crate::catalog::{Rule, RuleId};
+use crate::model::{Detail, Finding, Span};
 
 const ENTRY_POINT: &str = "main";
 const CRATE_ROOT: &str = "lib.rs";
@@ -136,4 +138,54 @@ fn is_identifier_character(character: char) -> bool {
 
 fn within(at: Span, declaration: Span) -> bool {
     declaration.start_line <= at.start_line && at.end_line <= declaration.end_line
+}
+
+pub(crate) fn findings(scan: &Scan<'_>, index: &Index) -> Vec<Finding> {
+    if !scan.policy.enabled(Rule::SpeculativeApi) {
+        return Vec::new();
+    }
+    let roots = roots(scan.sources, index);
+
+    let mut found = Vec::new();
+    for source in scan
+        .sources
+        .iter()
+        .filter(|source| considered(source, scan))
+    {
+        let Some(severity) = super::reporting(scan.policy, source.language, Rule::SpeculativeApi)
+        else {
+            continue;
+        };
+        let then = match scan.base.get(&source.path) {
+            None => None,
+            Some(None) => continue,
+            Some(Some(then)) => Some(&then.facts),
+        };
+
+        for item in speculative(source, then, scan.sources, &roots)
+            .into_iter()
+            .filter(|item| !mentioned_in_unreadable(scan, &item.name))
+        {
+            found.push(Finding {
+                rule: RuleId::Native(Rule::SpeculativeApi),
+                severity,
+                path: item.path.display().to_string(),
+                span: item.span,
+                subject: Some(item.name),
+                detail: Detail::Message {
+                    message: "public, and nothing references it".to_owned(),
+                },
+            });
+        }
+    }
+
+    found
+}
+
+fn considered(source: &Source, scan: &Scan<'_>) -> bool {
+    scan.examines(source) && !source.language.spec().is_test_path(&source.path)
+}
+
+fn mentioned_in_unreadable(scan: &Scan<'_>, name: &str) -> bool {
+    scan.opaque.iter().any(|text| mentioned_in(text, name))
 }

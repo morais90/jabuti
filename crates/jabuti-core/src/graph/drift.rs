@@ -1,17 +1,16 @@
 use std::path::PathBuf;
 
-use jabuti_core::catalog::{Rule, RuleId};
-use jabuti_core::graph::index::{Index, Source};
-use jabuti_core::model::{Detail, Finding, Span};
-
 use super::Scan;
+use super::index::{Index, Source};
+use crate::catalog::{Rule, RuleId};
+use crate::model::{Detail, Finding, Span};
 
 pub(crate) fn findings(scan: &Scan<'_>, index: &Index) -> Vec<Finding> {
     let rule = RuleId::Native(Rule::NewDependency);
 
     let mut found = Vec::new();
     for now in scan.sources {
-        let Some(severity) = super::reporting(scan.settings, now.language, Rule::NewDependency)
+        let Some(severity) = super::reporting(scan.policy, now.language, Rule::NewDependency)
         else {
             continue;
         };

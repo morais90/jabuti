@@ -41,7 +41,7 @@ pub(crate) fn uncovered(
     produced: Option<PathBuf>,
     notices: &mut Vec<String>,
 ) -> Vec<Finding> {
-    if !scan.settings.enabled(Rule::UncoveredNewCode) {
+    if !scan.settings.policy.enabled(Rule::UncoveredNewCode) {
         return Vec::new();
     }
     let configured = scan
