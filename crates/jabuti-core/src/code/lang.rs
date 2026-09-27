@@ -2,7 +2,6 @@ use std::sync::LazyLock;
 
 use tree_sitter::Query;
 
-use crate::catalog::Concept;
 use crate::lang::LanguageId;
 
 #[derive(Debug)]
@@ -66,7 +65,6 @@ pub(crate) struct Table {
     pub(crate) decorators_before: &'static [&'static str],
     pub(crate) decorators_within: &'static [&'static str],
     pub(crate) test_entry_markers: &'static [&'static str],
-    pub(crate) concepts: &'static [Concept],
     pub(crate) language_specific_rules: &'static [crate::catalog::Rule],
     pub(crate) cognitive: CognitiveSpec,
     queries: LazyLock<Queries>,
@@ -100,7 +98,6 @@ static KOTLIN: Table = Table {
     decorators_before: &[],
     decorators_within: &["modifiers", "annotation"],
     test_entry_markers: &["@Test", "@ParameterizedTest", "@RepeatedTest"],
-    concepts: &Concept::ALL,
     language_specific_rules: &[],
     cognitive: CognitiveSpec {
         conditionals: &[ConditionalSpec {
@@ -148,7 +145,6 @@ static RUST: Table = Table {
     decorators_before: &["attribute_item"],
     decorators_within: &["inner_attribute_item"],
     test_entry_markers: &["test", "rstest", "test_case"],
-    concepts: &Concept::ALL,
     language_specific_rules: &[],
     cognitive: CognitiveSpec {
         conditionals: &[ConditionalSpec {
@@ -195,11 +191,6 @@ static TYPESCRIPT: Table = Table {
     decorators_before: &[],
     decorators_within: &["decorator"],
     test_entry_markers: &[],
-    concepts: &[
-        Concept::ErrorSwallow,
-        Concept::Suppression,
-        Concept::Assertion,
-    ],
     language_specific_rules: &[],
     cognitive: CognitiveSpec {
         conditionals: &[

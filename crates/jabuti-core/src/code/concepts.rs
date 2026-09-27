@@ -142,7 +142,7 @@ fn resolve(written: &str, separator: &str, aliases: &BTreeMap<String, String>) -
     Some(format!("{prefix}{separator}{rest}"))
 }
 
-fn concept_of(label: &str) -> Option<Concept> {
+pub(crate) fn concept_of(label: &str) -> Option<Concept> {
     let suffix = label.strip_prefix("concept.")?;
 
     match suffix {
