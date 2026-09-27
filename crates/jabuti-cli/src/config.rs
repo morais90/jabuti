@@ -117,7 +117,7 @@ fn language_settings(
                 severity: Severity::Warning,
             });
 
-        policy.set_for(language, target, adjusted(current, rule)?);
+        policy.set_for(language, target, Override::of(&rule)?.applied_to(current));
     }
 
     for (id, paths) in entry.concepts {
@@ -137,12 +137,14 @@ fn settings(document: Document) -> Result<Settings> {
 
     for (id, entry) in document.rules {
         let rule = RuleId::parse(&id).with_context(|| format!("unknown rule {id}"))?;
+        let set = Override::of(&entry)?;
         let current = policy.config(rule.clone()).unwrap_or(RuleConfig {
             limit: 0,
             severity: Severity::Warning,
         });
 
-        policy.set(rule, adjusted(current, entry)?);
+        policy.set(rule.clone(), set.applied_to(current));
+        policy.adjust_per_language(rule, |config| set.applied_to(config));
     }
 
     for (name, entry) in document.languages {
@@ -197,14 +199,26 @@ fn checked(name: &str, entry: &LayerEntry, names: &[&str]) -> Result<()> {
     Ok(())
 }
 
-fn adjusted(current: RuleConfig, entry: Entry) -> Result<RuleConfig> {
-    Ok(RuleConfig {
-        limit: entry.limit.unwrap_or(current.limit),
-        severity: match entry.severity {
-            Some(name) => severity(&name)?,
-            None => current.severity,
-        },
-    })
+#[derive(Debug, Clone, Copy)]
+struct Override {
+    limit: Option<u32>,
+    severity: Option<Severity>,
+}
+
+impl Override {
+    fn of(entry: &Entry) -> Result<Self> {
+        Ok(Self {
+            limit: entry.limit,
+            severity: entry.severity.as_deref().map(severity).transpose()?,
+        })
+    }
+
+    fn applied_to(self, current: RuleConfig) -> RuleConfig {
+        RuleConfig {
+            limit: self.limit.unwrap_or(current.limit),
+            severity: self.severity.unwrap_or(current.severity),
+        }
+    }
 }
 
 fn severity(name: &str) -> Result<Severity> {

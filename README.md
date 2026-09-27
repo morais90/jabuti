@@ -121,6 +121,10 @@ exclude = ["generated/**"]
 function-lines = { limit = 60, severity = "error" }
 ```
 
+A rule set under `[rules]` applies to every language, over the limit each language is calibrated to
+by default; a field left out keeps that language's default. A rule set under
+`[languages.<name>.rules]` applies to that language alone and wins over both.
+
 Severity is `error` (fails the gate), `warning` (reported, exit 0) or `off`. Nothing defaults to
 `error`, because without diff scoping an absolute gate fails on the first legacy file it meets.
 Opting in is the project's decision, not ours.

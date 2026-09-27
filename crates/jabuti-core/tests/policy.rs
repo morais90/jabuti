@@ -154,3 +154,40 @@ fn a_rule_is_enabled_where_any_language_reports_it_and_gates_where_any_fails_on_
         [(true, false), (false, false), (true, true)]
     );
 }
+
+#[test]
+fn adjusting_per_language_reaches_every_calibrated_language_and_nothing_else() {
+    let mut policy = Policy::default();
+
+    policy.adjust_per_language(Rule::FunctionLines, |config| RuleConfig {
+        severity: Severity::Error,
+        ..config
+    });
+
+    let error = |limit| {
+        Some(RuleConfig {
+            limit,
+            severity: Severity::Error,
+        })
+    };
+    assert_eq!(
+        [
+            policy.config_for(LanguageId::TypeScript, Rule::FunctionLines),
+            policy.config_for(LanguageId::Kotlin, Rule::FunctionLines),
+            policy.config_for(LanguageId::Rust, Rule::FunctionLines),
+            policy.config_for(LanguageId::TypeScript, Rule::CognitiveComplexity),
+        ],
+        [
+            error(71),
+            error(47),
+            Some(RuleConfig {
+                limit: 60,
+                severity: Severity::Warning,
+            }),
+            Some(RuleConfig {
+                limit: 18,
+                severity: Severity::Warning,
+            }),
+        ]
+    );
+}

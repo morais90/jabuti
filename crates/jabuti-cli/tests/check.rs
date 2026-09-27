@@ -195,6 +195,54 @@ fn a_language_limit_written_in_the_configuration_wins() {
 }
 
 #[test]
+fn a_severity_the_project_set_for_every_language_keeps_each_languages_own_limit() {
+    let body = "    consume(value);\n".repeat(71);
+    let source = format!("export function wide(value: number): void {{\n{body}}}\n");
+    let directory = project(&[
+        (
+            "jabuti.toml",
+            "[rules]\nfunction-lines = { severity = \"error\" }\n",
+        ),
+        ("src/live.ts", &source),
+    ]);
+
+    jabuti(&directory).assert().code(1).stdout(contains(
+        "src/live.ts:1  error  function-lines  wide  measured 73, limit 71",
+    ));
+}
+
+#[test]
+fn a_limit_the_project_set_for_every_language_replaces_each_languages_default() {
+    let body = "    val value = 1\n".repeat(50);
+    let directory = project(&[
+        ("jabuti.toml", "[rules]\nfunction-lines = { limit = 60 }\n"),
+        ("src/Main.kt", &format!("fun wide() {{\n{body}}}\n")),
+    ]);
+
+    jabuti(&directory)
+        .assert()
+        .success()
+        .stdout(contains("No findings"));
+}
+
+#[test]
+fn a_limit_the_project_set_for_one_language_wins_over_the_one_it_set_for_all() {
+    let body = "    val value = 1\n".repeat(50);
+    let directory = project(&[
+        (
+            "jabuti.toml",
+            "[languages.kotlin.rules]\nfunction-lines = { limit = 80 }\n\n[rules]\nfunction-lines = { limit = 30 }\n",
+        ),
+        ("src/Main.kt", &format!("fun wide() {{\n{body}}}\n")),
+    ]);
+
+    jabuti(&directory)
+        .assert()
+        .success()
+        .stdout(contains("No findings"));
+}
+
+#[test]
 fn a_language_nobody_supports_stops_the_run() {
     let directory = project(&[
         (

@@ -96,6 +96,20 @@ impl Policy {
             .filter(|config| config.reports())
     }
 
+    pub fn adjust_per_language(
+        &mut self,
+        rule: impl Into<RuleId>,
+        adjust: impl Fn(RuleConfig) -> RuleConfig,
+    ) {
+        let rule = rule.into();
+
+        for ((_, configured), config) in &mut self.by_language {
+            if *configured == rule {
+                *config = adjust(*config);
+            }
+        }
+    }
+
     pub fn enabled(&self, rule: Rule) -> bool {
         self.anywhere(rule, |severity| severity != Severity::Off)
     }
