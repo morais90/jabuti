@@ -152,6 +152,21 @@ fn only_the_examination_parses_a_source_file() {
 }
 
 #[test]
+fn only_the_examination_spreads_work_across_threads() {
+    for file in rust_files(&source_root()) {
+        if files_of(EXAMINE).contains(&file) {
+            continue;
+        }
+        let source = std::fs::read_to_string(&file).expect("source readable");
+        assert!(
+            !source.contains("rayon"),
+            "{} schedules work across threads outside the examination",
+            file.display()
+        );
+    }
+}
+
+#[test]
 fn the_pipeline_names_no_rule_and_leaves_that_to_the_crossings() {
     for file in files_of("check") {
         if files_of(CROSSINGS).contains(&file) {
