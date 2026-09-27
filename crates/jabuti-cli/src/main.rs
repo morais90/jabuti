@@ -1,7 +1,5 @@
 mod check;
 mod config;
-mod corpus;
-mod crossings;
 mod inputs;
 
 use std::path::PathBuf;

@@ -9,11 +9,16 @@ use jabuti_core::model::{Finding, Span};
 use jabuti_core::policy::Policy;
 use jabuti_core::tools::coverage::Coverage;
 
+use super::plan::Plan;
 use crate::inputs::git::since::Changes;
 use crate::inputs::tools::Scan;
 use crate::inputs::{coverage, workspace};
 
-pub(crate) fn hotspots(measured: &[Measured], policy: &Policy) -> Vec<Finding> {
+pub(crate) fn hotspots(plan: Plan<'_>, measured: &[Measured], policy: &Policy) -> Vec<Finding> {
+    if !plan.runs(Rule::Hotspot) {
+        return Vec::new();
+    }
+
     hotspot::hotspots(&summaries(measured), policy)
 }
 

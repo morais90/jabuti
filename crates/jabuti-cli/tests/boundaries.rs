@@ -1,8 +1,10 @@
 use std::path::{Path, PathBuf};
 
-const KERNEL: [&str; 4] = ["check", "config", "corpus", "main"];
+const KERNEL: [&str; 3] = ["check", "config", "main"];
 const INPUTS: &str = "inputs";
-const COMPOSERS: [&str; 3] = ["check", "crossings", "main"];
+const COMPOSERS: [&str; 2] = ["check", "main"];
+const EXAMINE: &str = "check/examine";
+const CROSSINGS: &str = "check/crossings";
 const CORE_KERNEL: [&str; 7] = [
     "catalog", "diff", "lang", "model", "policy", "report", "syntax",
 ];
@@ -113,8 +115,8 @@ fn the_inputs_reach_the_configuration_and_the_core_and_nothing_that_analyses() {
 }
 
 #[test]
-fn only_the_inputs_the_configuration_the_corpus_and_main_touch_the_world() {
-    let allowed: Vec<PathBuf> = [INPUTS, "config", "corpus", "main"]
+fn only_the_inputs_the_configuration_the_examination_and_main_touch_the_world() {
+    let allowed: Vec<PathBuf> = [INPUTS, "config", EXAMINE, "main"]
         .into_iter()
         .flat_map(files_of)
         .collect();
@@ -135,9 +137,9 @@ fn only_the_inputs_the_configuration_the_corpus_and_main_touch_the_world() {
 }
 
 #[test]
-fn only_the_corpus_parses_a_source_file() {
+fn only_the_examination_parses_a_source_file() {
     for file in rust_files(&source_root()) {
-        if files_of("corpus").contains(&file) {
+        if files_of(EXAMINE).contains(&file) {
             continue;
         }
         let source = std::fs::read_to_string(&file).expect("source readable");
@@ -146,6 +148,23 @@ fn only_the_corpus_parses_a_source_file() {
             "{} parses on its own instead of receiving the corpus",
             file.display()
         );
+    }
+}
+
+#[test]
+fn the_pipeline_names_no_rule_and_leaves_that_to_the_crossings() {
+    for file in files_of("check") {
+        if files_of(CROSSINGS).contains(&file) {
+            continue;
+        }
+        for named in paths_after(&file, "Rule::") {
+            assert_eq!(
+                named,
+                "ALL",
+                "{} names Rule::{named}, but the pipeline asks the catalog instead",
+                file.display()
+            );
+        }
     }
 }
 
@@ -168,7 +187,11 @@ fn only_main_writes_to_the_terminal_and_every_other_module_hands_it_data() {
 
 #[test]
 fn every_module_the_boundary_names_exists() {
-    for module in KERNEL.into_iter().chain([INPUTS]).chain(COMPOSERS) {
+    for module in KERNEL
+        .into_iter()
+        .chain([INPUTS, EXAMINE, CROSSINGS])
+        .chain(COMPOSERS)
+    {
         assert!(!files_of(module).is_empty(), "{module}");
         for file in files_of(module) {
             assert!(file.is_file(), "{}", file.display());

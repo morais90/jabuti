@@ -120,8 +120,10 @@ Keep the three extension axes distinct: a new rule on an existing sensor, a new 
 Keep each context in its own module tree, shaped like a crate of its own: `code`, `graph`, `history`,
 `tools` and `crossings` in the core. A context owns its rules, its measures, its language tables, its queries and its
 tests, and reaches only the kernel (`catalog`, `model`, `policy`, `report`, `lang`, `syntax`, `diff`), never another
-context. A test in each crate holds that boundary. Composition happens in the kernel of the binary, so a
-context can grow, be replaced or become a subcommand without touching the others.
+context. A test in each crate holds that boundary. Composition happens in `check` of the binary, so a
+context can grow, be replaced or become a subcommand without touching the others. `check` reads as the
+run itself, plan, examine, judge, trim and order, and it asks the catalog rather than naming a rule; the
+one place in it that may name a rule is `check/crossings`.
 
 A rule that crosses two contexts, the way `hotspot` crosses history with complexity, belongs to neither.
 It lives in `crossings`, the one context allowed to reach the others, and no context reaches back into
