@@ -1,13 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use jabuti_core::catalog::{Rule, UnitKind};
 use jabuti_core::code::duplication::{self, FileFragments};
 use jabuti_core::code::metrics::{self, CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::code::review::{self, FileUnderReview};
 use jabuti_core::code::units::{self, Unit};
 use jabuti_core::code::{assertion, concepts, masking, suppression};
-use jabuti_core::model::{ConceptBindings, Finding, Reading, Rule, Span, UnitKind, Unreadable};
-use jabuti_core::policy::Policy;
+use jabuti_core::model::{Finding, Reading, Span, Unreadable};
+use jabuti_core::policy::{ConceptBindings, Policy};
 use jabuti_core::report::Scanned;
 use jabuti_core::syntax::Parsed;
 

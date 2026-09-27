@@ -343,9 +343,9 @@ fn every_rule_has_a_page_explaining_it_in_the_repository() {
     }
 
     let pages = repository.join("docs/rules");
-    let missing: Vec<&str> = jabuti_core::model::Rule::ALL
+    let missing: Vec<&str> = jabuti_core::catalog::Rule::ALL
         .into_iter()
-        .map(jabuti_core::model::Rule::id)
+        .map(jabuti_core::catalog::Rule::id)
         .filter(|id| !pages.join(format!("{id}.md")).is_file())
         .collect();
 

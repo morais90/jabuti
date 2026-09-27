@@ -1,8 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use crate::catalog::{Concept, Rule, RuleId, RuleSpec, Severity};
 use crate::lang::{self, LanguageId};
-use crate::model::{Finding, Rule, RuleId, RuleSpec, Severity};
+use crate::model::Finding;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuleConfig {
@@ -109,5 +110,31 @@ impl Policy {
             }),
             None => Some(finding),
         }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConceptBindings {
+    paths: BTreeMap<(LanguageId, Concept), BTreeSet<String>>,
+}
+
+impl ConceptBindings {
+    pub fn set(&mut self, language: LanguageId, concept: Concept, paths: Vec<String>) {
+        self.paths
+            .entry((language, concept))
+            .or_default()
+            .extend(paths);
+    }
+
+    pub fn paths(&self, language: LanguageId, concept: Concept) -> Option<&BTreeSet<String>> {
+        self.paths.get(&(language, concept))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.paths.is_empty()
+    }
+
+    pub fn is_empty_for(&self, language: LanguageId) -> bool {
+        !self.paths.keys().any(|(bound, _)| *bound == language)
     }
 }

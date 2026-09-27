@@ -1,7 +1,8 @@
+use jabuti_core::catalog::{Concept, Rule, RuleId, Severity};
 use jabuti_core::code::concepts::Occurrence;
 use jabuti_core::code::suppression;
 use jabuti_core::lang::LanguageId;
-use jabuti_core::model::{Concept, Detail, Finding, Rule, RuleId, Severity, Span};
+use jabuti_core::model::{Detail, Finding, Span};
 use jabuti_core::policy::{Policy, RuleConfig};
 use rstest::rstest;
 

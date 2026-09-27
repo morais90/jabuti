@@ -1,6 +1,7 @@
+use jabuti_core::catalog::{Rule, RuleId};
 use jabuti_core::graph::index::{Index, Source};
 use jabuti_core::graph::surface;
-use jabuti_core::model::{Detail, Finding, Rule, RuleId};
+use jabuti_core::model::{Detail, Finding};
 
 use super::Scan;
 

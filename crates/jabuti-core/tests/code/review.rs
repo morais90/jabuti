@@ -1,8 +1,9 @@
+use jabuti_core::catalog::{Rule, RuleId, Severity, UnitKind};
 use jabuti_core::code::metrics::{self, CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::code::review::{self, FileUnderReview};
 use jabuti_core::code::units;
 use jabuti_core::lang::LanguageId;
-use jabuti_core::model::{Detail, Finding, Reading, Rule, RuleId, Severity, Span, UnitKind};
+use jabuti_core::model::{Detail, Finding, Reading, Span};
 use jabuti_core::policy::{Policy, RuleConfig};
 
 use super::common::parse_fixture;

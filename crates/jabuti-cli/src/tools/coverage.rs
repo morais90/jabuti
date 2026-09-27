@@ -2,8 +2,9 @@ use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
 
+use jabuti_core::catalog::Rule;
 use jabuti_core::lang::{self, LangSpec};
-use jabuti_core::model::{Finding, Rule, Span};
+use jabuti_core::model::{Finding, Span};
 use jabuti_core::tools::coverage::{self, Coverage, FileUnderCoverage, Format};
 
 use super::Scan;

@@ -1,6 +1,7 @@
 use super::concepts::Occurrence;
+use crate::catalog::{Concept, Rule, RuleId};
 use crate::lang::LanguageId;
-use crate::model::{Concept, Detail, Finding, Rule, RuleId};
+use crate::model::{Detail, Finding};
 use crate::policy::Policy;
 
 pub fn findings(

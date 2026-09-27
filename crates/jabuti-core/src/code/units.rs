@@ -3,8 +3,9 @@ use std::ops::Range;
 use tree_sitter::{Node, Query, QueryMatch};
 
 use super::lang::{self, Table};
+use crate::catalog::UnitKind;
 use crate::lang::LanguageId;
-use crate::model::{Span, UnitKind};
+use crate::model::Span;
 use crate::syntax::{self, Parsed};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

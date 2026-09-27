@@ -2,7 +2,8 @@ pub mod coverage;
 
 use serde::Deserialize;
 
-use crate::model::{Detail, Finding, RuleId, Severity, Span};
+use crate::catalog::{RuleId, Severity};
+use crate::model::{Detail, Finding, Span};
 
 pub fn cargo_diagnostics(tool: &str, output: &str) -> Vec<Finding> {
     let mut findings: Vec<Finding> = output

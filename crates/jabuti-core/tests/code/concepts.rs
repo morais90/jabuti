@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
+use jabuti_core::catalog::Concept;
 use jabuti_core::code::concepts;
 use jabuti_core::graph::facts;
 use jabuti_core::lang::{self, LangSpec, LanguageId};
-use jabuti_core::model::{Concept, ConceptBindings};
+use jabuti_core::policy::ConceptBindings;
 use jabuti_core::syntax;
 use rstest::rstest;
 

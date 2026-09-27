@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
+use jabuti_core::catalog::{Rule, Severity};
 use jabuti_core::code::{assertion, concepts, units};
 use jabuti_core::lang::{self, LangSpec};
-use jabuti_core::model::{ConceptBindings, Finding, Rule, Severity};
-use jabuti_core::policy::{Policy, RuleConfig};
+use jabuti_core::model::Finding;
+use jabuti_core::policy::{ConceptBindings, Policy, RuleConfig};
 use jabuti_core::syntax;
 
 fn findings_for(source: &str, spec: &'static LangSpec, policy: &Policy) -> Vec<Finding> {

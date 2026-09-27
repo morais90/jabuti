@@ -1,6 +1,7 @@
 use super::concepts::{self, CallSite, Occurrence};
 use super::units::Unit;
-use crate::model::{Detail, Finding, Rule, RuleId, Severity, Span, UnitKind};
+use crate::catalog::{Rule, RuleId, Severity, UnitKind};
+use crate::model::{Detail, Finding, Span};
 use crate::policy::Policy;
 use crate::syntax::Parsed;
 

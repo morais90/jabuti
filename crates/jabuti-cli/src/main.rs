@@ -13,7 +13,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use jabuti_core::model::Rule;
+use jabuti_core::catalog::Rule;
 use jabuti_core::{lang, report};
 
 #[derive(Debug, Parser)]

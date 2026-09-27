@@ -6,10 +6,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use jabuti_core::catalog::{Rule, Severity};
 use jabuti_core::graph::facts;
 use jabuti_core::graph::index::{Index, Source};
 use jabuti_core::lang::LanguageId;
-use jabuti_core::model::{ConceptBindings, Finding, Rule, Severity};
+use jabuti_core::model::Finding;
+use jabuti_core::policy::ConceptBindings;
 use jabuti_core::syntax::Parsed;
 
 use crate::config::Settings;

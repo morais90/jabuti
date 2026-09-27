@@ -1,10 +1,11 @@
 use std::ops::Range;
 
+use jabuti_core::catalog::UnitKind;
 use jabuti_core::code::metrics::{
     self, CognitiveIndex, Decision, DecisionEffect, DecisionIndex, Increment, LineIndex, Loc,
 };
 use jabuti_core::code::units::{self, Unit};
-use jabuti_core::model::{Span, UnitKind};
+use jabuti_core::model::Span;
 use rstest::rstest;
 
 use super::common::{find_unit, kinds, line_index_of, parse_fixture, read_fixture, units_of};

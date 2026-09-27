@@ -1,6 +1,7 @@
 mod coverage;
 
-use jabuti_core::model::{Detail, Finding, RuleId, Severity, Span};
+use jabuti_core::catalog::{RuleId, Severity};
+use jabuti_core::model::{Detail, Finding, Span};
 use jabuti_core::tools;
 
 fn diagnostics() -> Vec<Finding> {

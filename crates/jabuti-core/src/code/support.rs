@@ -1,6 +1,6 @@
 use super::lang;
+use crate::catalog::{Portability, Rule};
 use crate::lang::LanguageId;
-use crate::model::{Portability, Rule};
 
 pub fn portability_available(
     portability: Portability,

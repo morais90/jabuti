@@ -1,4 +1,5 @@
-use crate::model::{Detail, Finding, Rule, RuleId, Span};
+use crate::catalog::{Rule, RuleId};
+use crate::model::{Detail, Finding, Span};
 use crate::policy::Policy;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

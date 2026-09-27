@@ -1,7 +1,8 @@
 use std::path::Path;
 
+use jabuti_core::catalog::{Rule, RuleId, Severity};
 use jabuti_core::lang::LanguageId;
-use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span};
+use jabuti_core::model::{Detail, Finding, Span};
 use jabuti_core::policy::{Policy, RuleConfig};
 use jabuti_core::tools::coverage::{
     self, Coverage, CoverageError, FileCoverage, FileUnderCoverage, Format,

@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use roxmltree::Node;
 use thiserror::Error;
 
+use crate::catalog::{Rule, RuleId};
 use crate::lang::LanguageId;
-use crate::model::{Detail, Finding, Rule, RuleId, Span};
+use crate::model::{Detail, Finding, Span};
 use crate::policy::Policy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

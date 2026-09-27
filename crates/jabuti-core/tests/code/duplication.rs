@@ -1,5 +1,5 @@
+use jabuti_core::catalog::{Rule, Severity};
 use jabuti_core::code::duplication::{self, FileFragments};
-use jabuti_core::model::{Rule, Severity};
 use jabuti_core::policy::{Policy, RuleConfig};
 
 use super::common::parse_fixture;

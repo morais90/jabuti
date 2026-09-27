@@ -1,3 +1,4 @@
+pub mod catalog;
 pub mod code;
 pub mod diff;
 pub mod graph;

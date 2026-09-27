@@ -4,7 +4,8 @@ use std::ops::Range;
 use tree_sitter::Node;
 
 use super::lang;
-use crate::model::{Detail, Finding, Rule, RuleId, Severity, Span};
+use crate::catalog::{Rule, RuleId, Severity};
+use crate::model::{Detail, Finding, Span};
 use crate::policy::Policy;
 use crate::syntax::{self, Parsed};
 

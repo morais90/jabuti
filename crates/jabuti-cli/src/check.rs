@@ -2,11 +2,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use jabuti_core::catalog::{Input, Rule, Scoping};
 use jabuti_core::graph::facts::{self, FileFacts};
 use jabuti_core::graph::index::Source;
 use jabuti_core::history::hotspot::{self, FileSummary};
 use jabuti_core::lang::{self, LanguageId};
-use jabuti_core::model::{Finding, Input, Rule, Scoping, Unreadable};
+use jabuti_core::model::{Finding, Unreadable};
 
 use crate::git::since::Changes;
 use crate::{code, config, corpus, graph, history, project, tools};

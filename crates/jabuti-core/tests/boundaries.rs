@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
-const KERNEL: [&str; 6] = ["diff", "lang", "model", "policy", "report", "syntax"];
+const KERNEL: [&str; 7] = [
+    "catalog", "diff", "lang", "model", "policy", "report", "syntax",
+];
 const CONTEXTS: [&str; 4] = ["code", "graph", "history", "tools"];
 
 fn source_root() -> PathBuf {
@@ -63,6 +65,20 @@ fn the_kernel_reaches_no_context() {
                 file.display()
             );
         }
+    }
+}
+
+#[test]
+fn the_catalog_reaches_nothing_but_the_language_table() {
+    let file = source_root().join("catalog.rs");
+
+    for reached in crate_paths_in(&file) {
+        assert_eq!(
+            reached,
+            "lang",
+            "{} reaches crate::{reached}, but what jabuti knows cannot depend on what a run produces",
+            file.display()
+        );
     }
 }
 

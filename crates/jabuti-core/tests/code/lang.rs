@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
+use jabuti_core::catalog::{Portability, Rule};
 use jabuti_core::code::lang::{declared_fields, declared_node_kinds};
 use jabuti_core::code::{concepts, duplication, metrics, support, units};
 use jabuti_core::lang::{self, LanguageId};
-use jabuti_core::model::{ConceptBindings, Portability, Rule};
+use jabuti_core::policy::ConceptBindings;
 use jabuti_core::syntax;
 
 #[test]

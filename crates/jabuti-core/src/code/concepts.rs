@@ -3,8 +3,10 @@ use std::collections::BTreeMap;
 use tree_sitter::{Node, Query, QueryMatch};
 
 use super::lang::{self, Table};
+use crate::catalog::Concept;
 use crate::lang::LanguageId;
-use crate::model::{Concept, ConceptBindings, Span};
+use crate::model::Span;
+use crate::policy::ConceptBindings;
 use crate::syntax::{self, Parsed};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

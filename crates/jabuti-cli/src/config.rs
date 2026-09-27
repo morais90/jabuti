@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use jabuti_core::catalog::{Concept, Input, Rule, RuleId, Severity};
 use jabuti_core::lang::{self, LanguageId};
-use jabuti_core::model::{Concept, ConceptBindings, Input, Rule, RuleId, Severity};
-use jabuti_core::policy::{Policy, RuleConfig};
+use jabuti_core::policy::{ConceptBindings, Policy, RuleConfig};
 use serde::Deserialize;
 
 pub(crate) const FILE_NAME: &str = "jabuti.toml";

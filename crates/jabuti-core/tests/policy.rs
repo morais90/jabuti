@@ -1,8 +1,9 @@
 use std::fmt::Write as _;
 
+use jabuti_core::catalog::{Concept, Rule, RuleId, Severity};
 use jabuti_core::lang::{self, LanguageId};
-use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity, Span};
-use jabuti_core::policy::{Policy, RuleConfig};
+use jabuti_core::model::{Detail, Finding, Span};
+use jabuti_core::policy::{ConceptBindings, Policy, RuleConfig};
 
 #[test]
 fn the_default_policy_sets_every_rule_in_every_language() {
@@ -100,5 +101,33 @@ fn a_tool_lint_follows_the_setting_for_the_language_of_its_file() {
                 ..lint_at("build/Cargo.toml")
             }),
         ]
+    );
+}
+
+#[test]
+fn concept_bindings_report_global_and_per_language_emptiness() {
+    let mut bindings = ConceptBindings::default();
+    assert_eq!(
+        (
+            bindings.is_empty(),
+            bindings.is_empty_for(LanguageId::Rust),
+            bindings.is_empty_for(LanguageId::TypeScript),
+        ),
+        (true, true, true)
+    );
+
+    bindings.set(
+        LanguageId::Rust,
+        Concept::ErrorDiscard,
+        vec!["mycorp::discard".to_owned()],
+    );
+
+    assert_eq!(
+        (
+            bindings.is_empty(),
+            bindings.is_empty_for(LanguageId::Rust),
+            bindings.is_empty_for(LanguageId::TypeScript),
+        ),
+        (false, false, true)
     );
 }

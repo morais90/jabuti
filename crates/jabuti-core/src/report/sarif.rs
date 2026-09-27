@@ -5,7 +5,8 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use crate::model::{Detail, Finding, RuleId, Severity, Unreadable};
+use crate::catalog::{RuleId, Severity};
+use crate::model::{Detail, Finding, Unreadable};
 
 const INFORMATION_URI: &str = "https://github.com/morais90/jabuti";
 const SCHEMA: &str =

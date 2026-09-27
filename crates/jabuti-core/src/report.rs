@@ -4,7 +4,8 @@ use std::fmt::Write;
 
 use serde::Serialize;
 
-use crate::model::{Detail, Finding, Reading, Severity, Unreadable};
+use crate::catalog::Severity;
+use crate::model::{Detail, Finding, Reading, Unreadable};
 
 pub const DEFAULT_LIMIT: usize = 40;
 pub const SCHEMA: u32 = 3;

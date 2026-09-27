@@ -2,8 +2,8 @@ use std::sync::LazyLock;
 
 use tree_sitter::Query;
 
+use crate::catalog::Concept;
 use crate::lang::LanguageId;
-use crate::model::Concept;
 
 #[derive(Debug)]
 pub(crate) struct Queries {
@@ -58,7 +58,7 @@ pub(crate) struct Table {
     pub(crate) decorators_within: &'static [&'static str],
     pub(crate) test_entry_markers: &'static [&'static str],
     pub(crate) concepts: &'static [Concept],
-    pub(crate) language_specific_rules: &'static [crate::model::Rule],
+    pub(crate) language_specific_rules: &'static [crate::catalog::Rule],
     pub(crate) path_separator: &'static str,
     pub(crate) cognitive: CognitiveSpec,
     queries: LazyLock<Queries>,

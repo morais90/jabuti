@@ -1,6 +1,5 @@
-use jabuti_core::model::{
-    Detail, Finding, Reading, Rule, RuleId, Severity, Span, UnitKind, Unreadable,
-};
+use jabuti_core::catalog::{Rule, RuleId, Severity, UnitKind};
+use jabuti_core::model::{Detail, Finding, Reading, Span, Unreadable};
 use jabuti_core::report::{self, Scanned};
 
 fn finding(severity: Severity, line: u32, subject: Option<&str>) -> Finding {

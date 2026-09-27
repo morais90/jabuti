@@ -1,6 +1,6 @@
+use jabuti_core::catalog::UnitKind;
 use jabuti_core::code::metrics::{self, CognitiveIndex, DecisionIndex, LineIndex, Loc};
 use jabuti_core::code::units::{self, Unit};
-use jabuti_core::model::UnitKind;
 use jabuti_core::{lang, syntax};
 use rstest::rstest;
 

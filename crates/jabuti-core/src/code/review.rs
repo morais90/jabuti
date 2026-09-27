@@ -2,8 +2,9 @@ use std::collections::BTreeSet;
 
 use super::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use super::units::Unit;
+use crate::catalog::{Measure, Rule, RuleId, UnitKind};
 use crate::lang::LanguageId;
-use crate::model::{Detail, Finding, Measure, Reading, Rule, RuleId, UnitKind};
+use crate::model::{Detail, Finding, Reading};
 use crate::policy::Policy;
 
 #[derive(Debug)]

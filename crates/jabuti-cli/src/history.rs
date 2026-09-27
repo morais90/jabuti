@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use jabuti_core::catalog::Input;
 use jabuti_core::history::churn;
-use jabuti_core::model::Input;
 
 use crate::config::Settings;
 

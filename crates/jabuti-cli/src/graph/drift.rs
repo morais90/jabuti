@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
+use jabuti_core::catalog::{Rule, RuleId};
 use jabuti_core::graph::index::{Index, Source};
-use jabuti_core::model::{Detail, Finding, Rule, RuleId, Span};
+use jabuti_core::model::{Detail, Finding, Span};
 
 use super::Scan;
 

@@ -3,10 +3,10 @@
 use std::fmt::Write;
 use std::path::PathBuf;
 
+use jabuti_core::catalog::UnitKind;
 use jabuti_core::code::metrics::{self, LineIndex};
 use jabuti_core::code::units::{self, Unit};
 use jabuti_core::lang;
-use jabuti_core::model::UnitKind;
 use jabuti_core::syntax::{self, Parsed};
 
 pub(crate) fn read_fixture(relative: &str) -> String {

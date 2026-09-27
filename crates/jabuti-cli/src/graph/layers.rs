@@ -2,10 +2,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use ignore::overrides::{Override, OverrideBuilder};
+use jabuti_core::catalog::{Rule, RuleId, Severity};
 use jabuti_core::graph;
 use jabuti_core::graph::index::{Edges, Index};
 use jabuti_core::graph::layers::Layers;
-use jabuti_core::model::{Detail, Finding, Rule, RuleId, Severity};
+use jabuti_core::model::{Detail, Finding};
 
 use super::Scan;
 use crate::config::{Layer, Settings};

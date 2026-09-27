@@ -1,5 +1,6 @@
+use jabuti_core::catalog::UnitKind;
 use jabuti_core::code::units;
-use jabuti_core::model::{Span, UnitKind};
+use jabuti_core::model::Span;
 use jabuti_core::{lang, syntax};
 use rstest::rstest;
 
