@@ -1,6 +1,7 @@
 mod sarif;
 
 use std::fmt::Write;
+use std::path::Path;
 
 use serde::Serialize;
 
@@ -27,6 +28,8 @@ pub struct Outcome {
 impl Outcome {
     pub fn order(&mut self) {
         self.findings.sort();
+        self.readings
+            .sort_by(|left, right| Path::new(&left.path).cmp(Path::new(&right.path)));
         self.unreadable
             .sort_by(|left, right| left.path.cmp(&right.path));
     }

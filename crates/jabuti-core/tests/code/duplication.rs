@@ -258,3 +258,21 @@ fn a_family_that_fits_the_message_is_listed_without_a_tally() {
         "{messages:?}"
     );
 }
+
+#[test]
+fn the_same_files_in_any_order_are_reported_the_same_way() {
+    let files = [
+        fragments("src/a.rs", HEADER, 40),
+        fragments("src/b.rs", RENAMED, 40),
+        fragments("src/c.rs", COMMENTED, 40),
+        fragments("src/d.rs", EXTRA_PARAMETER, 40),
+        fragments("src/e.rs", HEADER, 40),
+    ];
+    let reversed: Vec<FileFragments> = files.iter().rev().cloned().collect();
+    let policy = reporting_above(40);
+
+    assert_eq!(
+        duplication::duplicates(&reversed, &policy),
+        duplication::duplicates(&files, &policy)
+    );
+}

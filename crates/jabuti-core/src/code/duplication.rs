@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::ops::Range;
+use std::path::Path;
 
 use tree_sitter::Node;
 
@@ -96,6 +97,7 @@ pub fn duplicates(files: &[FileFragments], policy: &Policy) -> Vec<Finding> {
     let repeated: Vec<Vec<Occurrence>> = classes
         .into_values()
         .filter(|occurrences| occurrences.len() > 1)
+        .map(in_place_order)
         .collect();
 
     let mut findings: Vec<Finding> = widest(repeated)
@@ -109,6 +111,15 @@ pub fn duplicates(files: &[FileFragments], policy: &Policy) -> Vec<Finding> {
             .then(left.span.start_line.cmp(&right.span.start_line))
     });
     findings
+}
+
+fn in_place_order(mut occurrences: Vec<Occurrence>) -> Vec<Occurrence> {
+    occurrences.sort_by(|left, right| {
+        Path::new(&left.path)
+            .cmp(Path::new(&right.path))
+            .then(left.fragment.bytes.start.cmp(&right.fragment.bytes.start))
+    });
+    occurrences
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
