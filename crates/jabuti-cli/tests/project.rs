@@ -249,3 +249,18 @@ fn a_root_that_does_not_exist_is_an_error_rather_than_an_empty_report() {
         .code(2)
         .stderr(contains("resolving nope"));
 }
+
+#[test]
+fn a_directory_named_like_a_source_file_is_not_read_as_one() {
+    let directory = repository(&[
+        ("src/lib.rs", "fn small() {}\n"),
+        ("src/generated.rs/notes.txt", "not source\n"),
+    ]);
+
+    binary(&directory)
+        .arg("check")
+        .arg(".")
+        .assert()
+        .success()
+        .stdout("No findings across 1 file and 1 unit.\n");
+}
