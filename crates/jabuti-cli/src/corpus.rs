@@ -4,7 +4,7 @@ use jabuti_core::lang::{self, LangSpec, LanguageId};
 use jabuti_core::syntax::{self, Parsed, SyntaxError};
 use rayon::prelude::*;
 
-use crate::project;
+use crate::inputs::workspace;
 
 #[derive(Debug)]
 pub(crate) struct Text {
@@ -44,7 +44,7 @@ fn examine_one<T>(
     derive: &impl Fn(&Text, &Parsed<'_>) -> T,
 ) -> Option<File<T>> {
     let spec = lang::detect(path)?;
-    let shown = project::display(path, project);
+    let shown = workspace::display(path, project);
 
     let outcome = match std::fs::read_to_string(path) {
         Ok(source) => derived(

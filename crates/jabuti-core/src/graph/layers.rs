@@ -1,14 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use super::index::Edges;
 use crate::model::Span;
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Layers {
-    pub of: BTreeMap<PathBuf, String>,
-    pub allowed: BTreeMap<String, BTreeSet<String>>,
-}
+use crate::policy::Layers;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Violation {

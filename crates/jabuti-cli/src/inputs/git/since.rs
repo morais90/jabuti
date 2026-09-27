@@ -5,7 +5,7 @@ use anyhow::{Context, Result, bail};
 use jabuti_core::diff::Diff;
 use jabuti_core::model::Span;
 
-use crate::project;
+use crate::inputs::workspace;
 
 #[derive(Debug)]
 pub(crate) struct Changes {
@@ -46,7 +46,7 @@ impl Changes {
                 continue;
             };
             if self.diff.covers(&relative) {
-                requested.insert(relative, PathBuf::from(project::display(path, project)));
+                requested.insert(relative, PathBuf::from(workspace::display(path, project)));
             }
         }
         let inside: Vec<PathBuf> = requested.keys().cloned().collect();

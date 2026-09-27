@@ -15,8 +15,9 @@ pub(crate) struct Churn {
 
 impl Churn {
     fn of_repository() -> Result<Self> {
-        let root = PathBuf::from(crate::git::run(&["rev-parse", "--show-toplevel"])?.trim());
-        let log = crate::git::run(&["log", "--numstat", "--format="])?;
+        let root =
+            PathBuf::from(crate::inputs::git::run(&["rev-parse", "--show-toplevel"])?.trim());
+        let log = crate::inputs::git::run(&["log", "--numstat", "--format="])?;
 
         Ok(Self {
             root: root.canonicalize().unwrap_or(root),

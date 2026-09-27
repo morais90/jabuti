@@ -6,6 +6,8 @@ use ignore::WalkBuilder;
 use ignore::overrides::OverrideBuilder;
 use jabuti_core::lang;
 
+use crate::config::{self, Settings};
+
 pub(crate) fn sources(
     roots: &[PathBuf],
     exclude: &[String],
@@ -88,4 +90,27 @@ pub(crate) fn display(path: &Path, project: &Path) -> String {
         .unwrap_or(path)
         .display()
         .to_string()
+}
+
+pub(crate) fn discover() -> Result<(PathBuf, Settings)> {
+    let here = std::env::current_dir()
+        .context("reading the current directory")?
+        .canonicalize()
+        .context("resolving the current directory")?;
+
+    let boundary = repository_root().unwrap_or_else(|| here.clone());
+    let root = here
+        .ancestors()
+        .take_while(|directory| directory.starts_with(&boundary))
+        .find(|directory| directory.join(config::FILE_NAME).is_file())
+        .map_or(here.clone(), Path::to_path_buf);
+    let settings = config::load(&root)?;
+
+    Ok((root, settings))
+}
+
+fn repository_root() -> Option<PathBuf> {
+    let top = super::git::run(&["rev-parse", "--show-toplevel"]).ok()?;
+
+    PathBuf::from(top.trim()).canonicalize().ok()
 }

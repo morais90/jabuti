@@ -97,6 +97,26 @@ fn the_catalog_reaches_nothing_but_the_language_table() {
 }
 
 #[test]
+fn the_core_never_touches_the_file_system_a_process_or_the_environment() {
+    for file in rust_files(&source_root()) {
+        let source = std::fs::read_to_string(&file).expect("source readable");
+        for call in [
+            "std::fs",
+            "fs::",
+            "std::process",
+            "std::env",
+            "canonicalize",
+        ] {
+            assert!(
+                !source.contains(call),
+                "{} calls {call}, but the core only computes on what it is handed",
+                file.display()
+            );
+        }
+    }
+}
+
+#[test]
 fn every_context_and_kernel_module_the_boundary_names_exists() {
     for context in CONTEXTS {
         assert!(

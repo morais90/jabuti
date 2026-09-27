@@ -1,11 +1,23 @@
 use std::path::{Path, PathBuf};
 
-const KERNEL: [&str; 6] = ["check", "config", "corpus", "git", "main", "project"];
+const KERNEL: [&str; 4] = ["check", "config", "corpus", "main"];
+const INPUTS: &str = "inputs";
 const COMPOSERS: [&str; 3] = ["check", "crossings", "main"];
 const CORE_KERNEL: [&str; 7] = [
     "catalog", "diff", "lang", "model", "policy", "report", "syntax",
 ];
-const CONTEXTS: [&str; 4] = ["code", "graph", "history", "tools"];
+const CONTEXTS: [&str; 2] = ["code", "graph"];
+const TOUCHING_THE_WORLD: [&str; 9] = [
+    "std::fs",
+    "fs::",
+    "std::process",
+    "Command::new",
+    "canonicalize",
+    "current_dir",
+    "read_to_string",
+    ".modified()",
+    "WalkBuilder",
+];
 
 fn source_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
@@ -91,35 +103,42 @@ fn a_context_reaches_only_the_kernel_of_either_crate_and_its_own_core_context() 
 
 #[test]
 fn the_kernel_reaches_no_context_except_where_it_composes_them() {
+    let reachable: Vec<&str> = KERNEL.into_iter().chain([INPUTS]).collect();
+
     for module in KERNEL
         .into_iter()
         .filter(|module| !COMPOSERS.contains(module))
     {
         for file in files_of(module) {
-            assert_reaches_only(&file, "crate::", &KERNEL, "");
+            assert_reaches_only(&file, "crate::", &reachable, "");
             assert_reaches_only(&file, "jabuti_core::", &CORE_KERNEL, "");
         }
     }
 }
 
 #[test]
-fn only_the_corpus_parses_a_source_file_and_no_analysing_context_reads_one() {
-    for context in CONTEXTS {
-        for file in files_of(context) {
-            let source = std::fs::read_to_string(&file).expect("source readable");
-            assert!(
-                !source.contains("syntax::parse"),
-                "{} parses on its own instead of receiving the corpus",
-                file.display()
-            );
-        }
+fn the_inputs_reach_the_configuration_and_the_core_and_nothing_that_analyses() {
+    for file in files_of(INPUTS) {
+        assert_reaches_only(&file, "crate::", &["config"], INPUTS);
     }
-    for context in ["code", "graph"] {
-        for file in files_of(context) {
-            let source = std::fs::read_to_string(&file).expect("source readable");
+}
+
+#[test]
+fn only_the_inputs_the_configuration_the_corpus_and_main_touch_the_world() {
+    let allowed: Vec<PathBuf> = [INPUTS, "config", "corpus", "main"]
+        .into_iter()
+        .flat_map(files_of)
+        .collect();
+
+    for file in rust_files(&source_root()) {
+        if allowed.contains(&file) {
+            continue;
+        }
+        let source = std::fs::read_to_string(&file).expect("source readable");
+        for call in TOUCHING_THE_WORLD {
             assert!(
-                !source.contains("read_to_string") && !source.contains("fs::read"),
-                "{} reads a file instead of receiving the corpus",
+                !source.contains(call),
+                "{} calls {call} instead of receiving what inputs loaded",
                 file.display()
             );
         }
@@ -127,13 +146,13 @@ fn only_the_corpus_parses_a_source_file_and_no_analysing_context_reads_one() {
 }
 
 #[test]
-fn no_analysing_context_sees_the_diff_because_the_change_is_trimmed_in_one_place() {
-    for context in ["code", "graph", "tools"] {
+fn only_the_corpus_parses_a_source_file() {
+    for context in CONTEXTS {
         for file in files_of(context) {
             let source = std::fs::read_to_string(&file).expect("source readable");
             assert!(
-                !source.contains("crate::git"),
-                "{} reaches the diff instead of leaving the trim to check",
+                !source.contains("syntax::parse"),
+                "{} parses on its own instead of receiving the corpus",
                 file.display()
             );
         }
@@ -159,7 +178,12 @@ fn only_main_writes_to_the_terminal_and_every_other_module_hands_it_data() {
 
 #[test]
 fn every_module_the_boundary_names_exists() {
-    for module in KERNEL.into_iter().chain(COMPOSERS).chain(CONTEXTS) {
+    for module in KERNEL
+        .into_iter()
+        .chain([INPUTS])
+        .chain(COMPOSERS)
+        .chain(CONTEXTS)
+    {
         assert!(!files_of(module).is_empty(), "{module}");
         for file in files_of(module) {
             assert!(file.is_file(), "{}", file.display());

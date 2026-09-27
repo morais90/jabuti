@@ -3,11 +3,8 @@ mod code;
 mod config;
 mod corpus;
 mod crossings;
-mod git;
 mod graph;
-mod history;
-mod project;
-mod tools;
+mod inputs;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -16,6 +13,8 @@ use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use jabuti_core::catalog::Rule;
 use jabuti_core::{lang, report};
+
+use crate::inputs::workspace;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -113,18 +112,18 @@ fn list_languages() -> ExitCode {
 }
 
 fn list_tools() -> Result<ExitCode> {
-    let (_, settings) = config::discover()?;
-    tools::known(&settings)?;
+    let (_, settings) = workspace::discover()?;
+    inputs::tools::known(&settings)?;
     let root = std::env::current_dir()?;
 
-    for tool in tools::ALL {
-        let note = match tool.status(&root, tools::enabled(&settings, tool.name)) {
-            tools::Status::NotApplicable => "not applicable here".to_owned(),
-            tools::Status::Unavailable => "install with `jabuti tools install`".to_owned(),
-            tools::Status::Disabled => {
+    for tool in inputs::tools::ALL {
+        let note = match tool.status(&root, inputs::tools::enabled(&settings, tool.name)) {
+            inputs::tools::Status::NotApplicable => "not applicable here".to_owned(),
+            inputs::tools::Status::Unavailable => "install with `jabuti tools install`".to_owned(),
+            inputs::tools::Status::Disabled => {
                 format!("enable with [tools.{}] enabled = true", tool.name)
             }
-            tools::Status::Ready => "will run".to_owned(),
+            inputs::tools::Status::Ready => "will run".to_owned(),
         };
 
         println!("{:<16} {note}", tool.name);
@@ -134,10 +133,10 @@ fn list_tools() -> Result<ExitCode> {
 }
 
 fn install_tools() -> Result<ExitCode> {
-    let (_, settings) = config::discover()?;
-    tools::known(&settings)?;
+    let (_, settings) = workspace::discover()?;
+    inputs::tools::known(&settings)?;
     let root = std::env::current_dir()?;
-    let installed = tools::install(&root)?;
+    let installed = inputs::tools::install(&root)?;
 
     if installed.is_empty() {
         println!("No tools need installation.");

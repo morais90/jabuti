@@ -9,7 +9,7 @@ use jabuti_core::tools::cargo_diagnostics;
 use jabuti_core::tools::coverage::Format;
 
 use crate::config::Settings;
-use crate::project;
+use crate::inputs::workspace;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Output {
@@ -255,7 +255,7 @@ fn located(findings: Vec<Finding>, base: &Path, project: &Path) -> Vec<Finding> 
             let resolved = absolute.canonicalize().unwrap_or(absolute);
 
             resolved.starts_with(project).then(|| Finding {
-                path: project::display(&resolved, project),
+                path: workspace::display(&resolved, project),
                 ..finding
             })
         })
@@ -311,7 +311,6 @@ pub(crate) fn enabled(settings: &Settings, name: &str) -> bool {
 }
 
 pub(crate) struct Scan<'a> {
-    pub(crate) here: &'a Path,
     pub(crate) project: &'a Path,
     pub(crate) paths: &'a [PathBuf],
     pub(crate) settings: &'a Settings,
@@ -320,26 +319,27 @@ pub(crate) struct Scan<'a> {
 pub(crate) fn findings(
     scan: &Scan<'_>,
     notices: &mut Vec<String>,
-) -> (Vec<Finding>, Option<PathBuf>) {
+) -> Result<(Vec<Finding>, Option<PathBuf>)> {
+    let here = env::current_dir()?;
     let mut findings = Vec::new();
     let mut produced = None;
 
     for tool in ALL {
         if !tool
-            .status(scan.here, enabled(scan.settings, tool.name))
+            .status(&here, enabled(scan.settings, tool.name))
             .runnable()
         {
             continue;
         }
 
-        match tool.run(scan.here, scan.project) {
+        match tool.run(&here, scan.project) {
             Ok(reported) => findings.extend(admitted(reported, scan)),
             Err(reason) => notices.push(reason),
         }
         produced = produced.or_else(|| tool.produces(scan.project));
     }
 
-    (findings, produced)
+    Ok((findings, produced))
 }
 
 fn admitted(reported: Vec<Finding>, scan: &Scan<'_>) -> Vec<Finding> {

@@ -117,8 +117,8 @@ threshold.
 
 Keep the three extension axes distinct: a new rule on an existing sensor, a new sensor, a new language.
 
-Keep each context in its own module tree, shaped like a crate of its own: `code`, `graph`, `history` and
-`tools` in both crates. A context owns its rules, its measures, its language tables, its queries and its
+Keep each context in its own module tree, shaped like a crate of its own: `code`, `graph`, `history`,
+`tools` and `crossings` in the core. A context owns its rules, its measures, its language tables, its queries and its
 tests, and reaches only the kernel (`catalog`, `model`, `policy`, `report`, `lang`, `syntax`, `diff`), never another
 context. A test in each crate holds that boundary. Composition happens in the kernel of the binary, so a
 context can grow, be replaced or become a subcommand without touching the others.
@@ -126,6 +126,11 @@ context can grow, be replaced or become a subcommand without touching the others
 A rule that crosses two contexts, the way `hotspot` crosses history with complexity, belongs to neither.
 It lives in `crossings`, the one context allowed to reach the others, and no context reaches back into
 it.
+
+Everything that touches the world lives in `inputs` of the binary: walking the project, asking git,
+running a tool, reading a coverage report, resolving which file belongs to which layer. The rest of the
+binary receives what `inputs` loaded, the core never touches the world at all, and a boundary test holds
+both.
 
 Treat rule ids as public API. Deprecate with an alias, and never rename silently.
 

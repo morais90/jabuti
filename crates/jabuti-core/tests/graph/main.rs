@@ -6,7 +6,8 @@ mod surface;
 use common::{fixture_root, sources_under};
 use jabuti_core::graph::facts::{self, FileFacts};
 use jabuti_core::graph::index::{self, Edges};
-use jabuti_core::graph::layers::{Layers, Violation, violations};
+use jabuti_core::graph::layers::{Violation, violations};
+use jabuti_core::policy::Layers;
 use jabuti_core::{lang, syntax};
 
 fn read_fixture(relative: &str) -> String {

@@ -1,6 +1,4 @@
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
 use jabuti_core::catalog::Rule;
 use jabuti_core::crossings::hotspot::{self, FileSummary};
@@ -8,12 +6,12 @@ use jabuti_core::crossings::uncovered::{self, FileUnderCoverage};
 use jabuti_core::lang::{self, LangSpec};
 use jabuti_core::model::{Finding, Span};
 use jabuti_core::policy::Policy;
-use jabuti_core::tools::coverage::{Coverage, Format};
+use jabuti_core::tools::coverage::Coverage;
 
 use crate::code::Measured;
-use crate::git::since::Changes;
-use crate::project;
-use crate::tools::Scan;
+use crate::inputs::git::since::Changes;
+use crate::inputs::tools::Scan;
+use crate::inputs::{coverage, workspace};
 
 pub(crate) fn hotspots(measured: &[Measured], policy: &Policy) -> Vec<Finding> {
     hotspot::hotspots(&summaries(measured), policy)
@@ -60,7 +58,11 @@ pub(crate) fn uncovered(
     };
 
     let candidates = candidates(scan, changes);
-    let coverage = match read(&report, scan.project, &candidates) {
+    let sources: Vec<(&Path, &str)> = candidates
+        .iter()
+        .map(|candidate| (candidate.path, candidate.shown.as_str()))
+        .collect();
+    let coverage = match coverage::read(&report, scan.project, &sources) {
         Ok(coverage) => coverage,
         Err(reason) => {
             notices.push(format!("{} skipped: {reason}", Rule::UncoveredNewCode.id()));
@@ -68,6 +70,15 @@ pub(crate) fn uncovered(
         }
     };
 
+    stretches_in(&candidates, &coverage, changes, &scan.settings.policy)
+}
+
+fn stretches_in(
+    candidates: &[Candidate<'_>],
+    coverage: &Coverage,
+    changes: &Changes,
+    policy: &Policy,
+) -> Vec<Finding> {
     let mut found = Vec::new();
     for candidate in candidates {
         let Some(file) = coverage.file(candidate.path) else {
@@ -86,12 +97,7 @@ pub(crate) fn uncovered(
             path: &candidate.shown,
             language: candidate.spec.id,
         };
-        found.extend(uncovered::findings(
-            &under_coverage,
-            file,
-            added,
-            &scan.settings.policy,
-        ));
+        found.extend(uncovered::findings(&under_coverage, file, added, policy));
     }
 
     found
@@ -104,7 +110,7 @@ fn candidates<'a>(scan: &Scan<'a>, changes: &Changes) -> Vec<Candidate<'a>> {
         let Some(spec) = lang::detect(path) else {
             continue;
         };
-        let shown = project::display(path, scan.project);
+        let shown = workspace::display(path, scan.project);
         if spec.is_test_path(Path::new(&shown)) {
             continue;
         }
@@ -121,28 +127,4 @@ fn candidates<'a>(scan: &Scan<'a>, changes: &Changes) -> Vec<Candidate<'a>> {
     }
 
     candidates
-}
-
-fn read(report: &Path, project: &Path, candidates: &[Candidate<'_>]) -> Result<Coverage, String> {
-    let shown = project::display(report, project);
-    let Some(format) = Format::of(report) else {
-        return Err(format!("{shown} has an extension jabuti cannot read"));
-    };
-    let written = modified(report).map_err(|error| format!("{shown} {error}"))?;
-
-    for candidate in candidates {
-        let changed =
-            modified(candidate.path).map_err(|error| format!("{} {error}", candidate.shown))?;
-        if written < changed {
-            return Err(format!("{shown} is older than {}", candidate.shown));
-        }
-    }
-
-    let text = fs::read_to_string(report).map_err(|error| format!("{shown} {error}"))?;
-
-    Coverage::parse(format, &text).map_err(|error| format!("{shown} {error}"))
-}
-
-fn modified(path: &Path) -> std::io::Result<SystemTime> {
-    fs::metadata(path)?.modified()
 }

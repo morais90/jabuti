@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::catalog::{Concept, Rule, RuleId, RuleSpec, Severity};
 use crate::lang::{self, LanguageId};
@@ -137,4 +137,10 @@ impl ConceptBindings {
     pub fn is_empty_for(&self, language: LanguageId) -> bool {
         !self.paths.keys().any(|(bound, _)| *bound == language)
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Layers {
+    pub of: BTreeMap<PathBuf, String>,
+    pub allowed: BTreeMap<String, BTreeSet<String>>,
 }

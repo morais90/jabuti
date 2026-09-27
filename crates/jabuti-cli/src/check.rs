@@ -9,15 +9,16 @@ use jabuti_core::lang::{self, LanguageId};
 use jabuti_core::model::{Finding, Unreadable};
 use jabuti_core::report::Outcome;
 
-use crate::git::since::Changes;
-use crate::{code, config, corpus, crossings, graph, history, project, tools};
+use crate::inputs::git::since::Changes;
+use crate::inputs::{history, layers, tools, workspace};
+use crate::{code, config, corpus, crossings, graph};
 
 pub(crate) fn verdict(
     roots: &[PathBuf],
     since: Option<&str>,
     notices: &mut Vec<String>,
 ) -> Result<Outcome> {
-    let (root, settings) = config::discover()?;
+    let (root, settings) = workspace::discover()?;
     tools::known(&settings)?;
     let changes = since
         .map(|reference| Changes::since(reference, &root))
@@ -25,7 +26,7 @@ pub(crate) fn verdict(
     notices.extend(scope_notices(&settings, since.is_some()));
     let history = history::load(&settings, notices);
 
-    let paths = project::sources(roots, &settings.exclude, &root)?;
+    let paths = workspace::sources(roots, &settings.exclude, &root)?;
     let churn = history::commits(history.as_ref(), &paths);
     let touched = changes.as_ref().map(|changes| {
         paths
@@ -92,7 +93,7 @@ impl Scope<'_> {
             return Ok(request.scope(self.paths).into_iter().collect());
         }
 
-        project::extended(self.paths, &self.settings.exclude, self.root)
+        workspace::extended(self.paths, &self.settings.exclude, self.root)
     }
 }
 
@@ -115,12 +116,11 @@ fn judged(scope: &Scope<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
     }
 
     let tools = tools::Scan {
-        here: &std::env::current_dir()?,
         project: scope.root,
         paths: scope.paths,
         settings: scope.settings,
     };
-    let (reported, produced) = tools::findings(&tools, notices);
+    let (reported, produced) = tools::findings(&tools, notices)?;
     outcome.findings.extend(reported);
     if let Some(changes) = scope.changes {
         outcome
@@ -218,22 +218,28 @@ fn graphed(
         .paths
         .iter()
         .filter(|path| scope.touched.is_none_or(|touched| touched.contains(*path)))
-        .map(|path| PathBuf::from(project::display(path, scope.root)))
+        .map(|path| PathBuf::from(workspace::display(path, scope.root)))
         .collect();
+    let layers = if scope.reads(Input::Layers) {
+        Some(layers::assign(
+            &scope.settings.layers,
+            scope.root,
+            extent,
+            notices,
+        )?)
+    } else {
+        None
+    };
 
-    graph::findings(
-        &graph::Scan {
-            paths: extent,
-            requested: &requested,
-            sources,
-            opaque,
-            base: &base,
-            project: scope.root,
-            settings: scope.settings,
-            compared: scope.changes.is_some(),
-        },
-        notices,
-    )
+    Ok(graph::findings(&graph::Scan {
+        requested: &requested,
+        sources,
+        opaque,
+        base: &base,
+        settings: scope.settings,
+        compared: scope.changes.is_some(),
+        layers: layers.as_ref(),
+    }))
 }
 
 fn base_sources(
