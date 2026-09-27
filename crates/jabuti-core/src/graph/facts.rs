@@ -46,9 +46,12 @@ pub fn aliases(parsed: &Parsed<'_>) -> BTreeMap<String, String> {
     let mut found = BTreeMap::new();
 
     parsed.for_each_match(table.references(), |matched, query| {
-        if let Some((local, canonical)) =
-            captured_alias(matched, query, parsed.source(), table.path_separator)
-        {
+        if let Some((local, canonical)) = captured_alias(
+            matched,
+            query,
+            parsed.source(),
+            table.id.spec().path_separator,
+        ) {
             found.entry(local).or_insert(canonical);
         }
     });
@@ -109,9 +112,12 @@ struct Recorder<'a> {
 
 impl Recorder<'_> {
     fn record_match(&mut self, matched: &QueryMatch<'_, '_>, query: &Query) {
-        if let Some((local, canonical)) =
-            captured_alias(matched, query, self.source, self.table.path_separator)
-        {
+        if let Some((local, canonical)) = captured_alias(
+            matched,
+            query,
+            self.source,
+            self.table.id.spec().path_separator,
+        ) {
             self.facts.aliases.entry(local).or_insert(canonical);
         }
 

@@ -59,7 +59,6 @@ pub(crate) struct Table {
     pub(crate) test_entry_markers: &'static [&'static str],
     pub(crate) concepts: &'static [Concept],
     pub(crate) language_specific_rules: &'static [crate::catalog::Rule],
-    pub(crate) path_separator: &'static str,
     pub(crate) cognitive: CognitiveSpec,
     queries: LazyLock<Queries>,
 }
@@ -92,7 +91,6 @@ static KOTLIN: Table = Table {
     test_entry_markers: &["@Test", "@ParameterizedTest", "@RepeatedTest"],
     concepts: &Concept::ALL,
     language_specific_rules: &[],
-    path_separator: ".",
     cognitive: CognitiveSpec {
         conditionals: &[ConditionalSpec {
             kind: "if_expression",
@@ -139,7 +137,6 @@ static RUST: Table = Table {
     test_entry_markers: &["test", "rstest", "test_case"],
     concepts: &Concept::ALL,
     language_specific_rules: &[],
-    path_separator: "::",
     cognitive: CognitiveSpec {
         conditionals: &[ConditionalSpec {
             kind: "if_expression",
@@ -189,7 +186,6 @@ static TYPESCRIPT: Table = Table {
         Concept::Assertion,
     ],
     language_specific_rules: &[],
-    path_separator: ".",
     cognitive: CognitiveSpec {
         conditionals: &[
             ConditionalSpec {

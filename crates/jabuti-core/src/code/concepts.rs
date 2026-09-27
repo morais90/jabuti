@@ -32,7 +32,7 @@ pub fn occurrences(
     let table = lang::table(parsed.language());
     let configured = (!bindings.is_empty_for(parsed.language())).then_some(Configured {
         language: parsed.language(),
-        separator: table.path_separator,
+        separator: table.id.spec().path_separator,
         bindings,
         aliases,
     });

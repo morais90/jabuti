@@ -7,7 +7,6 @@ use crate::lang::LanguageId;
 #[derive(Debug)]
 pub(crate) struct Table {
     pub(crate) id: LanguageId,
-    pub(crate) path_separator: &'static str,
     pub(crate) decorators_before: &'static [&'static str],
     pub(crate) decorators_within: &'static [&'static str],
     pub(crate) decorators_direct: &'static [&'static str],
@@ -29,7 +28,6 @@ pub(crate) struct Table {
 
 static KOTLIN: Table = Table {
     id: LanguageId::Kotlin,
-    path_separator: ".",
     decorators_before: &[],
     decorators_within: &["modifiers"],
     decorators_direct: &[],
@@ -55,7 +53,6 @@ static KOTLIN: Table = Table {
 
 static RUST: Table = Table {
     id: LanguageId::Rust,
-    path_separator: "::",
     decorators_before: &["attribute_item"],
     decorators_within: &[],
     decorators_direct: &[],
@@ -99,7 +96,6 @@ static RUST: Table = Table {
 
 static TYPESCRIPT: Table = Table {
     id: LanguageId::TypeScript,
-    path_separator: ".",
     decorators_before: &["decorator"],
     decorators_within: &[],
     decorators_direct: &["decorator"],
