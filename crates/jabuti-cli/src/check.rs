@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use jabuti_core::catalog::{Input, Rule, Scoping};
+use jabuti_core::code;
 use jabuti_core::graph::facts::{self, FileFacts};
 use jabuti_core::graph::index::Source;
 use jabuti_core::lang::{self, LanguageId};
@@ -11,7 +12,7 @@ use jabuti_core::report::Outcome;
 
 use crate::inputs::git::since::Changes;
 use crate::inputs::{history, layers, tools, workspace};
-use crate::{code, config, corpus, crossings, graph};
+use crate::{config, corpus, crossings, graph};
 
 pub(crate) fn verdict(
     roots: &[PathBuf],
@@ -154,7 +155,7 @@ fn examine(scope: &Scope<'_>, extent: &[PathBuf], request: &code::Scan<'_>) -> E
     let corpus = corpus::examine(extent, scope.root, |text, parsed| Derived {
         review: reviewed.contains(&text.path).then(|| {
             let aliases = graph::aliases(parsed, text.spec.id, &scope.settings.concepts);
-            code::review(text, parsed, &aliases, request)
+            code::reviewed(text, parsed, &aliases, request)
         }),
         facts: graphed.then(|| facts::facts(parsed)),
     });

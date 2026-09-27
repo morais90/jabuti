@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use jabuti_core::catalog::Rule;
+use jabuti_core::code::Measured;
 use jabuti_core::crossings::hotspot::{self, FileSummary};
 use jabuti_core::crossings::uncovered::{self, FileUnderCoverage};
 use jabuti_core::lang::{self, LangSpec};
@@ -8,7 +9,6 @@ use jabuti_core::model::{Finding, Span};
 use jabuti_core::policy::Policy;
 use jabuti_core::tools::coverage::Coverage;
 
-use crate::code::Measured;
 use crate::inputs::git::since::Changes;
 use crate::inputs::tools::Scan;
 use crate::inputs::{coverage, workspace};

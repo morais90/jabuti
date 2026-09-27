@@ -6,7 +6,7 @@ const COMPOSERS: [&str; 3] = ["check", "crossings", "main"];
 const CORE_KERNEL: [&str; 7] = [
     "catalog", "diff", "lang", "model", "policy", "report", "syntax",
 ];
-const CONTEXTS: [&str; 2] = ["code", "graph"];
+const CONTEXTS: [&str; 1] = ["graph"];
 const TOUCHING_THE_WORLD: [&str; 9] = [
     "std::fs",
     "fs::",

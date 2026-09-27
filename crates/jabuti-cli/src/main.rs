@@ -1,5 +1,4 @@
 mod check;
-mod code;
 mod config;
 mod corpus;
 mod crossings;

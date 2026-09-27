@@ -7,6 +7,7 @@ mod lang;
 mod masking;
 mod metrics;
 mod review;
+mod scan;
 mod suppression;
 mod typescript;
 mod units;

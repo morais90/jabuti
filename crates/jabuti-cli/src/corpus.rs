@@ -1,18 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use jabuti_core::lang::{self, LangSpec, LanguageId};
-use jabuti_core::syntax::{self, Parsed, SyntaxError};
+use jabuti_core::syntax::{self, Parsed, SyntaxError, Text};
 use rayon::prelude::*;
 
 use crate::inputs::workspace;
-
-#[derive(Debug)]
-pub(crate) struct Text {
-    pub(crate) path: PathBuf,
-    pub(crate) shown: String,
-    pub(crate) spec: &'static LangSpec,
-    pub(crate) source: String,
-}
 
 #[derive(Debug)]
 pub(crate) struct File<T> {

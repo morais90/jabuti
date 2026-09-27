@@ -1,7 +1,17 @@
+use std::path::PathBuf;
+
 use tree_sitter::{Node, Parser, Query, QueryCursor, QueryMatch, StreamingIterator, Tree};
 
 use crate::lang::{LangSpec, LanguageId};
 use crate::model::Span;
+
+#[derive(Debug)]
+pub struct Text {
+    pub path: PathBuf,
+    pub shown: String,
+    pub spec: &'static LangSpec,
+    pub source: String,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum SyntaxError {
