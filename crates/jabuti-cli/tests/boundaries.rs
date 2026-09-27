@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 const KERNEL: [&str; 6] = ["check", "config", "corpus", "git", "main", "project"];
-const COMPOSERS: [&str; 2] = ["check", "main"];
+const COMPOSERS: [&str; 3] = ["check", "crossings", "main"];
 const CORE_KERNEL: [&str; 7] = [
     "catalog", "diff", "lang", "model", "policy", "report", "syntax",
 ];
@@ -145,7 +145,7 @@ fn only_main_writes_to_the_terminal_and_every_other_module_hands_it_data() {
 
 #[test]
 fn every_module_the_boundary_names_exists() {
-    for module in KERNEL.into_iter().chain(CONTEXTS) {
+    for module in KERNEL.into_iter().chain(COMPOSERS).chain(CONTEXTS) {
         assert!(!files_of(module).is_empty(), "{module}");
         for file in files_of(module) {
             assert!(file.is_file(), "{}", file.display());

@@ -2,6 +2,7 @@ mod check;
 mod code;
 mod config;
 mod corpus;
+mod crossings;
 mod git;
 mod graph;
 mod history;

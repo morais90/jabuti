@@ -5,13 +5,12 @@ use anyhow::Result;
 use jabuti_core::catalog::{Input, Rule, Scoping};
 use jabuti_core::graph::facts::{self, FileFacts};
 use jabuti_core::graph::index::Source;
-use jabuti_core::history::hotspot::{self, FileSummary};
 use jabuti_core::lang::{self, LanguageId};
 use jabuti_core::model::{Finding, Unreadable};
 use jabuti_core::report::Outcome;
 
 use crate::git::since::Changes;
-use crate::{code, config, corpus, graph, history, project, tools};
+use crate::{code, config, corpus, crossings, graph, history, project, tools};
 
 pub(crate) fn verdict(
     roots: &[PathBuf],
@@ -94,21 +93,25 @@ fn judged(scope: &Scope<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
     let (mut outcome, measured) = code::scan(examined.reviewed, &request);
     outcome.unreadable = examined.unreadable;
     if scope.runs(Rule::Hotspot) {
-        outcome.findings.extend(hotspot::hotspots(
-            &summaries(&measured),
-            &scope.settings.policy,
-        ));
+        outcome
+            .findings
+            .extend(crossings::hotspots(&measured, &scope.settings.policy));
     }
-    outcome.findings.extend(tools::findings(
-        &tools::Scan {
-            here: &std::env::current_dir()?,
-            project: scope.root,
-            paths: scope.paths,
-            settings: scope.settings,
-            changes: scope.changes,
-        },
-        notices,
-    ));
+
+    let tools = tools::Scan {
+        here: &std::env::current_dir()?,
+        project: scope.root,
+        paths: scope.paths,
+        settings: scope.settings,
+        changes: scope.changes,
+    };
+    let (reported, produced) = tools::findings(&tools, notices);
+    outcome.findings.extend(reported);
+    if let Some(changes) = scope.changes {
+        outcome
+            .findings
+            .extend(crossings::uncovered(&tools, changes, produced, notices));
+    }
     outcome.findings.extend(graphed(
         scope,
         &extent,
@@ -259,16 +262,4 @@ fn scope_notices(settings: &config::Settings, scoped: bool) -> Vec<String> {
     }
 
     notices
-}
-
-fn summaries(measured: &[code::Measured]) -> Vec<FileSummary> {
-    measured
-        .iter()
-        .map(|file| FileSummary {
-            path: file.path.clone(),
-            span: file.span,
-            churn: file.churn,
-            complexity: file.complexity,
-        })
-        .collect()
 }

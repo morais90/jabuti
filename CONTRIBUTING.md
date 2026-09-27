@@ -118,6 +118,10 @@ tests, and reaches only the kernel (`catalog`, `model`, `policy`, `report`, `lan
 context. A test in each crate holds that boundary. Composition happens in the kernel of the binary, so a
 context can grow, be replaced or become a subcommand without touching the others.
 
+A rule that crosses two contexts, the way `hotspot` crosses history with complexity, belongs to neither.
+It lives in `crossings`, the one context allowed to reach the others, and no context reaches back into
+it.
+
 Treat rule ids as public API. Deprecate with an alias, and never rename silently.
 
 Extend in tree and declaratively. There is no dynamic plugin loading and there will not be.

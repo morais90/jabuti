@@ -1,2 +1,1 @@
 mod churn;
-mod hotspot;

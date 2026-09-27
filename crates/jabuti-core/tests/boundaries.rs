@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 const KERNEL: [&str; 7] = [
     "catalog", "diff", "lang", "model", "policy", "report", "syntax",
 ];
-const CONTEXTS: [&str; 4] = ["code", "graph", "history", "tools"];
+const CONTEXTS: [&str; 5] = ["code", "crossings", "graph", "history", "tools"];
+const CROSSINGS: &str = "crossings";
 
 fn source_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
@@ -41,7 +42,7 @@ fn crate_paths_in(path: &Path) -> Vec<String> {
 
 #[test]
 fn a_context_reaches_only_the_kernel_and_itself() {
-    for context in CONTEXTS {
+    for context in CONTEXTS.into_iter().filter(|context| *context != CROSSINGS) {
         for file in rust_files(&source_root().join(context)) {
             for module in crate_paths_in(&file) {
                 assert!(
@@ -50,6 +51,19 @@ fn a_context_reaches_only_the_kernel_and_itself() {
                     file.display()
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn only_the_crossings_reach_more_than_one_context() {
+    for file in rust_files(&source_root().join(CROSSINGS)) {
+        for module in crate_paths_in(&file) {
+            assert!(
+                KERNEL.contains(&module.as_str()) || CONTEXTS.contains(&module.as_str()),
+                "{} reaches crate::{module}, which is neither the kernel nor a context",
+                file.display()
+            );
         }
     }
 }

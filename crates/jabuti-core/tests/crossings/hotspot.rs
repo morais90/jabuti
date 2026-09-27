@@ -1,5 +1,5 @@
 use jabuti_core::catalog::{Rule, Severity};
-use jabuti_core::history::hotspot::{self, FileSummary};
+use jabuti_core::crossings::hotspot::{self, FileSummary};
 use jabuti_core::model::{Detail, Finding, Span};
 use jabuti_core::policy::{Policy, RuleConfig};
 

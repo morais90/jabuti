@@ -1,15 +1,35 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use jabuti_core::catalog::Rule;
+use jabuti_core::crossings::hotspot::{self, FileSummary};
+use jabuti_core::crossings::uncovered::{self, FileUnderCoverage};
 use jabuti_core::lang::{self, LangSpec};
 use jabuti_core::model::{Finding, Span};
-use jabuti_core::tools::coverage::{self, Coverage, FileUnderCoverage, Format};
+use jabuti_core::policy::Policy;
+use jabuti_core::tools::coverage::{Coverage, Format};
 
-use super::Scan;
+use crate::code::Measured;
 use crate::git::since::Changes;
 use crate::project;
+use crate::tools::Scan;
+
+pub(crate) fn hotspots(measured: &[Measured], policy: &Policy) -> Vec<Finding> {
+    hotspot::hotspots(&summaries(measured), policy)
+}
+
+fn summaries(measured: &[Measured]) -> Vec<FileSummary> {
+    measured
+        .iter()
+        .map(|file| FileSummary {
+            path: file.path.clone(),
+            span: file.span,
+            churn: file.churn,
+            complexity: file.complexity,
+        })
+        .collect()
+}
 
 struct Candidate<'a> {
     path: &'a Path,
@@ -17,16 +37,21 @@ struct Candidate<'a> {
     spec: &'static LangSpec,
 }
 
-pub(crate) fn findings(
+pub(crate) fn uncovered(
     scan: &Scan<'_>,
     changes: &Changes,
-    report: Option<&Path>,
+    produced: Option<PathBuf>,
     notices: &mut Vec<String>,
 ) -> Vec<Finding> {
     if !scan.settings.enabled(Rule::UncoveredNewCode) {
         return Vec::new();
     }
-    let Some(report) = report else {
+    let configured = scan
+        .settings
+        .coverage
+        .as_ref()
+        .map(|report| scan.project.join(report));
+    let Some(report) = configured.or(produced) else {
         notices.push(format!(
             "{} needs a coverage report; set [coverage] report or enable a tool that produces one",
             Rule::UncoveredNewCode.id()
@@ -35,7 +60,7 @@ pub(crate) fn findings(
     };
 
     let candidates = candidates(scan, changes);
-    let coverage = match read(report, scan.project, &candidates) {
+    let coverage = match read(&report, scan.project, &candidates) {
         Ok(coverage) => coverage,
         Err(reason) => {
             notices.push(format!("{} skipped: {reason}", Rule::UncoveredNewCode.id()));
@@ -61,7 +86,7 @@ pub(crate) fn findings(
             path: &candidate.shown,
             language: candidate.spec.id,
         };
-        found.extend(coverage::findings(
+        found.extend(uncovered::findings(
             &under_coverage,
             file,
             added,

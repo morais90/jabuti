@@ -1,5 +1,3 @@
-mod coverage;
-
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -283,7 +281,10 @@ pub(crate) struct Scan<'a> {
     pub(crate) changes: Option<&'a Changes>,
 }
 
-pub(crate) fn findings(scan: &Scan<'_>, notices: &mut Vec<String>) -> Vec<Finding> {
+pub(crate) fn findings(
+    scan: &Scan<'_>,
+    notices: &mut Vec<String>,
+) -> (Vec<Finding>, Option<PathBuf>) {
     let mut findings = Vec::new();
     let mut produced = None;
 
@@ -302,22 +303,7 @@ pub(crate) fn findings(scan: &Scan<'_>, notices: &mut Vec<String>) -> Vec<Findin
         produced = produced.or_else(|| tool.produces(scan.project));
     }
 
-    if let Some(changes) = scan.changes {
-        let configured = scan
-            .settings
-            .coverage
-            .as_ref()
-            .map(|report| scan.project.join(report));
-        let report = configured.or(produced);
-        findings.extend(coverage::findings(
-            scan,
-            changes,
-            report.as_deref(),
-            notices,
-        ));
-    }
-
-    findings
+    (findings, produced)
 }
 
 fn admitted(reported: Vec<Finding>, scan: &Scan<'_>) -> Vec<Finding> {
