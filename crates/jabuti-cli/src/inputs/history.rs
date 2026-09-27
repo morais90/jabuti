@@ -17,7 +17,7 @@ impl Churn {
     fn of_repository() -> Result<Self> {
         let root =
             PathBuf::from(crate::inputs::git::run(&["rev-parse", "--show-toplevel"])?.trim());
-        let log = crate::inputs::git::run(&["log", "--numstat", "--format="])?;
+        let log = crate::inputs::git::run(&["log", "--name-only", "--format="])?;
 
         Ok(Self {
             root: root.canonicalize().unwrap_or(root),

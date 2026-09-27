@@ -163,3 +163,21 @@ fn hotspot_is_skipped_with_since_and_says_so() {
         .stdout(contains("No findings"))
         .stderr(contains("not evaluated with --since"));
 }
+
+#[test]
+fn the_commit_that_renamed_a_file_counts_against_its_new_name() {
+    let directory = repository(&[
+        ("jabuti.toml", ONLY_CHURN),
+        ("src/old.rs", "fn busy() {}\n"),
+    ]);
+
+    common::git(&directory, &["mv", "src/old.rs", "src/new.rs"]);
+    commit(&directory, "rename");
+    write(&directory, "src/new.rs", "fn busy() { }\n");
+    commit(&directory, "edit");
+
+    jabuti(&directory)
+        .assert()
+        .code(1)
+        .stdout(contains("src/new.rs:1  error  churn  measured 2, limit 1"));
+}
