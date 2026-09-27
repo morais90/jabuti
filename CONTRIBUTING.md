@@ -110,6 +110,12 @@ a reader of any level follows it, and back it with literature rather than assert
 Keep language specifics in declarative tables and tree-sitter queries. Extract with `.scm` queries, and
 hand write traversal only where the algorithm carries state across the walk.
 
+Where languages differ in how something works rather than in what it is called, the table names a
+strategy, such as how a reference resolves to a file or how a test is recognised, and the code matches
+on the strategy. A new language picks from the strategies already there, and only a way of working no
+language has shown yet adds one. A boundary test keeps a language's name out of everything but its
+tables and the catalog.
+
 When the dogfooding gate flags our own implementation, fix the implementation rather than raising the
 threshold.
 

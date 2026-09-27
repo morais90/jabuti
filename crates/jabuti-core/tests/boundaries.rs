@@ -117,6 +117,24 @@ fn the_core_never_touches_the_file_system_a_process_or_the_environment() {
 }
 
 #[test]
+fn only_the_language_tables_and_the_catalog_name_a_language() {
+    for file in rust_files(&source_root()) {
+        let name = file.file_name().and_then(|name| name.to_str());
+        if matches!(name, Some("lang.rs" | "catalog.rs")) {
+            continue;
+        }
+        let source = std::fs::read_to_string(&file).expect("source readable");
+        for language in ["Kotlin", "Rust", "TypeScript"] {
+            assert!(
+                !source.contains(&format!("LanguageId::{language}")),
+                "{} branches on {language} instead of reading its language table",
+                file.display()
+            );
+        }
+    }
+}
+
+#[test]
 fn every_context_and_kernel_module_the_boundary_names_exists() {
     for context in CONTEXTS {
         assert!(

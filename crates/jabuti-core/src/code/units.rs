@@ -2,9 +2,8 @@ use std::ops::Range;
 
 use tree_sitter::{Node, Query, QueryMatch};
 
-use super::lang::{self, Table};
+use super::lang::{self, Table, TestDetection};
 use crate::catalog::UnitKind;
-use crate::lang::LanguageId;
 use crate::model::Span;
 use crate::syntax::{self, Parsed};
 
@@ -93,18 +92,18 @@ fn captured_unit(
         bytes: node.byte_range(),
         parameters,
         is_test: is_test_unit(node, source, table),
-        should_panic: table.id == LanguageId::Rust
+        should_panic: table.test_detection == TestDetection::Attribute
             && rust_attribute_names(node, source, table).any(|name| name == "should_panic"),
         children: Vec::new(),
     })
 }
 
 fn is_test_unit(node: Node<'_>, source: &str, table: &Table) -> bool {
-    match table.id {
-        LanguageId::TypeScript => is_test_callback(node, source),
-        LanguageId::Rust => rust_attribute_names(node, source, table)
+    match table.test_detection {
+        TestDetection::Callback => is_test_callback(node, source),
+        TestDetection::Attribute => rust_attribute_names(node, source, table)
             .any(|name| table.test_entry_markers.contains(&name)),
-        LanguageId::Kotlin => lang::markers(node, source, table, table.test_entry_markers),
+        TestDetection::Annotation => lang::markers(node, source, table, table.test_entry_markers),
     }
 }
 

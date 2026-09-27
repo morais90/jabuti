@@ -4,9 +4,17 @@ use tree_sitter::Query;
 
 use crate::lang::LanguageId;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Resolution {
+    Modules,
+    Declarations,
+    RelativeModules,
+}
+
 #[derive(Debug)]
 pub(crate) struct Table {
     pub(crate) id: LanguageId,
+    pub(crate) resolution: Resolution,
     pub(crate) decorators_before: &'static [&'static str],
     pub(crate) decorators_within: &'static [&'static str],
     pub(crate) decorators_direct: &'static [&'static str],
@@ -28,6 +36,7 @@ pub(crate) struct Table {
 
 static KOTLIN: Table = Table {
     id: LanguageId::Kotlin,
+    resolution: Resolution::Declarations,
     decorators_before: &[],
     decorators_within: &["modifiers"],
     decorators_direct: &[],
@@ -53,6 +62,7 @@ static KOTLIN: Table = Table {
 
 static RUST: Table = Table {
     id: LanguageId::Rust,
+    resolution: Resolution::Modules,
     decorators_before: &["attribute_item"],
     decorators_within: &[],
     decorators_direct: &[],
@@ -96,6 +106,7 @@ static RUST: Table = Table {
 
 static TYPESCRIPT: Table = Table {
     id: LanguageId::TypeScript,
+    resolution: Resolution::RelativeModules,
     decorators_before: &["decorator"],
     decorators_within: &[],
     decorators_direct: &["decorator"],

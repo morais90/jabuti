@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 
 use super::facts::FileFacts;
+use super::lang::{self, Resolution};
 use crate::lang::LanguageId;
 use crate::model::Span;
 
@@ -42,10 +43,10 @@ impl Index {
         let mut index = Self::default();
 
         for source in sources {
-            match source.language {
-                LanguageId::Rust => index.add_module(source),
-                LanguageId::Kotlin => index.add_declarations(source),
-                LanguageId::TypeScript => index.add_typescript_module(source),
+            match lang::table(source.language).resolution {
+                Resolution::Modules => index.add_module(source),
+                Resolution::Declarations => index.add_declarations(source),
+                Resolution::RelativeModules => index.add_typescript_module(source),
             }
         }
 
@@ -94,10 +95,10 @@ impl Index {
     }
 
     pub fn targets(&self, source: &Source) -> BTreeMap<PathBuf, Span> {
-        let mut reached = match source.language {
-            LanguageId::Rust => rust_targets(source, &self.modules, &self.crates),
-            LanguageId::Kotlin => kotlin_targets(source, &self.declarations),
-            LanguageId::TypeScript => typescript_targets(source, &self.typescript_modules),
+        let mut reached = match lang::table(source.language).resolution {
+            Resolution::Modules => rust_targets(source, &self.modules, &self.crates),
+            Resolution::Declarations => kotlin_targets(source, &self.declarations),
+            Resolution::RelativeModules => typescript_targets(source, &self.typescript_modules),
         };
         reached.sort_by_key(|(target, at)| (target.clone(), at.start_line));
 

@@ -1,4 +1,5 @@
 use super::concepts::Occurrence;
+use super::lang;
 use crate::catalog::{Rule, RuleId};
 use crate::lang::LanguageId;
 use crate::model::{Detail, Finding};
@@ -36,7 +37,7 @@ pub fn findings(
 }
 
 fn consequence(language: LanguageId, subject: &str) -> &'static str {
-    if language == LanguageId::TypeScript && subject == "any" {
+    if lang::table(language).type_escapes.contains(&subject) {
         "a type-checker diagnostic is suppressed instead of satisfied"
     } else {
         "a linter diagnostic is suppressed instead of satisfied"

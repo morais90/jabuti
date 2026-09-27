@@ -47,9 +47,18 @@ pub(crate) struct CognitiveSpec {
     pub(crate) contextual_boundaries: &'static [ContextualBoundary],
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TestDetection {
+    Attribute,
+    Annotation,
+    Callback,
+}
+
 #[derive(Debug)]
 pub(crate) struct Table {
     pub(crate) id: LanguageId,
+    pub(crate) test_detection: TestDetection,
+    pub(crate) type_escapes: &'static [&'static str],
     pub(crate) implicit_parameters: &'static [&'static str],
     pub(crate) parameter_containers: &'static [&'static str],
     pub(crate) implicit_parameter_patterns: &'static [&'static str],
@@ -82,6 +91,8 @@ fn compile_queries(language: LanguageId, sources: &QuerySources) -> Queries {
 
 static KOTLIN: Table = Table {
     id: LanguageId::Kotlin,
+    test_detection: TestDetection::Annotation,
+    type_escapes: &[],
     implicit_parameters: &[],
     parameter_containers: &["function_value_parameters"],
     implicit_parameter_patterns: &[],
@@ -128,6 +139,8 @@ static KOTLIN: Table = Table {
 
 static RUST: Table = Table {
     id: LanguageId::Rust,
+    test_detection: TestDetection::Attribute,
+    type_escapes: &[],
     implicit_parameters: &["self_parameter", "attribute_item"],
     parameter_containers: &["parameters", "closure_parameters"],
     implicit_parameter_patterns: &[],
@@ -173,6 +186,8 @@ static RUST: Table = Table {
 
 static TYPESCRIPT: Table = Table {
     id: LanguageId::TypeScript,
+    test_detection: TestDetection::Callback,
+    type_escapes: &["any"],
     implicit_parameters: &[],
     parameter_containers: &["formal_parameters"],
     implicit_parameter_patterns: &["this"],
