@@ -6,7 +6,7 @@ use std::path::{Component, Path};
 
 use super::sarif::encode_component;
 use super::trail::{Line, Trail};
-use super::{Rhythm, Scanned, WEEKS, json, plural};
+use super::{Judgement, Rhythm, Scanned, WEEKS, json, plural, write_detail};
 use crate::model::{Detail, Finding, Unreadable};
 
 const BAR_WIDTH: u32 = 12;
@@ -126,17 +126,17 @@ impl Columns {
     }
 }
 
-pub(super) fn render(
-    findings: &[Finding],
-    unreadable: &[Unreadable],
-    scanned: Scanned,
-    limit: usize,
-    view: View<'_>,
-) -> String {
+pub(super) fn render(judgement: Judgement<'_>, limit: usize, view: View<'_>) -> String {
     let paint = Paint { view };
-    let seal = seal(findings, unreadable, scanned);
+    let seal = seal(judgement);
+    let Judgement {
+        findings,
+        context,
+        unreadable,
+        scanned,
+    } = judgement;
 
-    if findings.is_empty() {
+    if findings.is_empty() && context.is_empty() {
         let summary = format!(
             "{}nothing to fix · {} · seal {seal}",
             scope(view),
@@ -153,9 +153,10 @@ pub(super) fn render(
     rendered.push('\n');
 
     let shown = &findings[..limit.min(findings.len())];
-    write_files(&mut rendered, &paint, shown);
+    let noted = &context[..limit.min(context.len())];
+    write_files(&mut rendered, &paint, shown, noted);
 
-    let hidden = findings.len() - shown.len();
+    let hidden = findings.len() - shown.len() + context.len() - noted.len();
     if hidden > 0 {
         let indent = indent(view);
         let note = format!(
@@ -166,17 +167,52 @@ pub(super) fn render(
             .expect("writing to a string never fails");
     }
 
-    writeln!(rendered, "{}", footer(&paint, findings, unreadable, &seal))
+    writeln!(rendered, "{}", footer(&paint, judgement, &seal))
         .expect("writing to a string never fails");
     rendered.push_str(&unmeasured(&paint, unreadable, limit));
 
     rendered
 }
 
-fn write_files(rendered: &mut String, paint: &Paint<'_>, shown: &[Finding]) {
-    let mut files: Vec<&[Finding]> = shown
+struct File<'a> {
+    path: &'a str,
+    findings: &'a [Finding],
+    context: Vec<&'a Finding>,
+}
+
+fn grouped<'a>(shown: &'a [Finding], noted: &'a [Finding]) -> Vec<File<'a>> {
+    let mut files: BTreeMap<&str, File<'a>> = shown
         .chunk_by(|left, right| left.path == right.path)
+        .map(|findings| {
+            let path = findings[0].path.as_str();
+            (
+                path,
+                File {
+                    path,
+                    findings,
+                    context: Vec::new(),
+                },
+            )
+        })
         .collect();
+    for note in noted {
+        let path = note.path.as_str();
+        files
+            .entry(path)
+            .or_insert_with(|| File {
+                path,
+                findings: &[],
+                context: Vec::new(),
+            })
+            .context
+            .push(note);
+    }
+
+    files.into_values().collect()
+}
+
+fn write_files(rendered: &mut String, paint: &Paint<'_>, shown: &[Finding], noted: &[Finding]) {
+    let mut files = grouped(shown, noted);
     let columns = Columns::of(shown, indent(paint.view));
     let rhythm = |path: &str| -> Rhythm {
         paint
@@ -186,16 +222,16 @@ fn write_files(rendered: &mut String, paint: &Paint<'_>, shown: &[Finding]) {
             .unwrap_or_default()
     };
     if paint.view.rhythm.is_some() {
-        files.sort_by_key(|file| Reverse(rhythm(&file[0].path).commits()));
+        files.sort_by_key(|file| Reverse(rhythm(file.path).commits()));
     }
     let busiest = files
         .iter()
-        .flat_map(|file| rhythm(&file[0].path).weeks)
+        .flat_map(|file| rhythm(file.path).weeks)
         .max()
         .unwrap_or(0);
 
     for file in files {
-        let path = &file[0].path;
+        let path = file.path;
         let heading = paint.linked(path, paint.strong(Tone::Bone, path));
         match paint.view.rhythm {
             Some(_) => {
@@ -210,8 +246,20 @@ fn write_files(rendered: &mut String, paint: &Paint<'_>, shown: &[Finding]) {
             None => writeln!(rendered, "{heading}"),
         }
         .expect("writing to a string never fails");
-        write_rows(rendered, paint, &columns, file);
+        write_rows(rendered, paint, &columns, file.findings);
+        write_context(rendered, paint, columns.indent, &file.context);
         rendered.push('\n');
+    }
+}
+
+fn write_context(rendered: &mut String, paint: &Paint<'_>, indent: usize, context: &[&Finding]) {
+    for note in context {
+        let mut text = format!("{}  ", note.rule.id());
+        write_detail(&mut text, &note.detail);
+        let mark = paint.plain(Tone::Amber, "◇");
+        let line = paint.plain(Tone::Dim, &text);
+        let row = format!("{:indent$}{mark} {line}\n", "");
+        rendered.push_str(&row);
     }
 }
 
@@ -398,15 +446,23 @@ fn bar(paint: &Paint<'_>, tone: Tone, measured: u32, limit: u32) -> String {
     )
 }
 
-fn footer(
-    paint: &Paint<'_>,
-    findings: &[Finding],
-    unreadable: &[Unreadable],
-    seal: &str,
-) -> String {
+fn footer(paint: &Paint<'_>, judgement: Judgement<'_>, seal: &str) -> String {
+    let Judgement {
+        findings,
+        context,
+        unreadable,
+        ..
+    } = judgement;
     let mut notes = Vec::new();
 
-    let badge = paint.badge(Tone::Scale, &format!("{} to fix", findings.len()));
+    let badge = if findings.is_empty() {
+        paint.badge(Tone::Moss, "nothing to fix")
+    } else {
+        paint.badge(Tone::Scale, &format!("{} to fix", findings.len()))
+    };
+    if !context.is_empty() {
+        notes.push(plural(context.len(), "note"));
+    }
     if !unreadable.is_empty() {
         notes.push(format!("{} unreadable", unreadable.len()));
     }
@@ -484,12 +540,10 @@ fn printable(text: &str) -> String {
         .collect()
 }
 
-fn seal(findings: &[Finding], unreadable: &[Unreadable], scanned: Scanned) -> String {
-    let digest = json(findings, unreadable, scanned)
-        .bytes()
-        .fold(FNV_OFFSET, |hash, byte| {
-            (hash ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
-        });
+fn seal(judgement: Judgement<'_>) -> String {
+    let digest = json(judgement).bytes().fold(FNV_OFFSET, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
+    });
     let high = digest >> 48;
     let low = (digest >> 32) & 0xffff;
     format!("{high:04x}·{low:04x}")

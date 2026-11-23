@@ -6,23 +6,18 @@ use crate::config::Settings;
 pub(crate) struct Plan<'a> {
     settings: &'a Settings,
     compared: bool,
-    whole: bool,
 }
 
 impl<'a> Plan<'a> {
-    pub(crate) fn of(settings: &'a Settings, compared: bool, whole: bool) -> Self {
-        Self {
-            settings,
-            compared,
-            whole,
-        }
+    pub(crate) fn of(settings: &'a Settings, compared: bool) -> Self {
+        Self { settings, compared }
     }
 
     pub(crate) fn runs(self, rule: Rule) -> bool {
         let spec = rule.spec();
 
         self.settings.policy.enabled(rule)
-            && spec.scoping.allows(self.compared, self.whole)
+            && spec.scoping.allows(self.compared)
             && spec.inputs.iter().all(|input| self.available(*input))
     }
 

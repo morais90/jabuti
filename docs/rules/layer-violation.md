@@ -70,9 +70,9 @@ change. A crossing is a defect by your own declaration, so it fails the run like
 and a codebase with a hundred existing violations can declare its layers today and hear about them
 one at a time, as each is touched, rather than all at once.
 
-The same line often carries two findings on a change: [`new-dependency`](new-dependency.md)
-says the dependency did not exist before, and this rule says it is not allowed. They are different
-facts and both are worth knowing.
+The same line often carries a finding and a note of context: [`new-dependency`](new-dependency.md)
+says the dependency did not exist before, and this rule says it is not allowed. Only the second fails
+the run.
 
 ## Further reading
 

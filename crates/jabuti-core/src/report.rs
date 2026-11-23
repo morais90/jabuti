@@ -23,7 +23,7 @@ impl Rhythm {
         self.weeks.iter().sum()
     }
 }
-pub const SCHEMA: u32 = 4;
+pub const SCHEMA: u32 = 5;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Scanned {
@@ -34,14 +34,41 @@ pub struct Scanned {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Outcome {
     pub findings: Vec<Finding>,
+    pub context: Vec<Finding>,
     pub readings: Vec<Reading>,
     pub scanned: Scanned,
     pub unreadable: Vec<Unreadable>,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Judgement<'a> {
+    pub findings: &'a [Finding],
+    pub context: &'a [Finding],
+    pub unreadable: &'a [Unreadable],
+    pub scanned: Scanned,
+}
+
 impl Outcome {
+    pub fn judgement(&self) -> Judgement<'_> {
+        Judgement {
+            findings: &self.findings,
+            context: &self.context,
+            unreadable: &self.unreadable,
+            scanned: self.scanned,
+        }
+    }
+
+    pub fn set_context_apart(&mut self) {
+        let (findings, context): (Vec<Finding>, Vec<Finding>) = std::mem::take(&mut self.findings)
+            .into_iter()
+            .partition(|finding| finding.rule.fails());
+        self.findings = findings;
+        self.context.extend(context);
+    }
+
     pub fn order(&mut self) {
         self.findings.sort();
+        self.context.sort();
         self.readings
             .sort_by(|left, right| Path::new(&left.path).cmp(Path::new(&right.path)));
         self.unreadable
@@ -49,16 +76,18 @@ impl Outcome {
     }
 }
 
-pub fn agent(
-    findings: &[Finding],
-    unreadable: &[Unreadable],
-    scanned: Scanned,
-    limit: usize,
-) -> String {
+pub fn agent(judgement: Judgement<'_>, limit: usize) -> String {
+    let Judgement {
+        findings,
+        unreadable,
+        scanned,
+        ..
+    } = judgement;
     let mut rendered = String::new();
     if findings.is_empty() {
         writeln!(rendered, "No findings across {}.", files_and_units(scanned))
             .expect("writing to a string never fails");
+        write_context(&mut rendered, judgement.context, limit);
         rendered.push_str(&self::unreadable(unreadable, limit));
 
         return rendered;
@@ -86,9 +115,27 @@ pub fn agent(
         .expect("writing to a string never fails");
     }
 
+    write_context(&mut rendered, judgement.context, limit);
     rendered.push_str(&self::unreadable(unreadable, limit));
 
     rendered
+}
+
+fn write_context(rendered: &mut String, context: &[Finding], limit: usize) {
+    if context.is_empty() {
+        return;
+    }
+
+    rendered.push_str("\nContext, which does not fail the run:\n");
+    for finding in context.iter().take(limit) {
+        write_finding(rendered, finding);
+    }
+
+    let hidden = context.len().saturating_sub(limit);
+    if hidden > 0 {
+        let withheld = format!("{} not shown.\n", plural(hidden, "further note"));
+        rendered.push_str(&withheld);
+    }
 }
 
 fn unreadable(unreadable: &[Unreadable], limit: usize) -> String {
@@ -164,12 +211,15 @@ fn plural(count: usize, noun: &str) -> String {
     }
 }
 
-pub fn shown_files(findings: &[Finding], limit: usize) -> Vec<&str> {
-    let mut paths: Vec<&str> = findings
+pub fn shown_files<'a>(judgement: &Judgement<'a>, limit: usize) -> Vec<&'a str> {
+    let mut paths: Vec<&str> = judgement
+        .findings
         .iter()
         .take(limit)
+        .chain(judgement.context.iter().take(limit))
         .map(|finding| finding.path.as_str())
         .collect();
+    paths.sort_unstable();
     paths.dedup();
     paths
 }
@@ -183,6 +233,7 @@ struct Report<'a> {
     schema: u32,
     summary: Summary,
     findings: &'a [Finding],
+    context: &'a [Finding],
     unreadable: &'a [Unreadable],
 }
 
@@ -191,6 +242,7 @@ struct Summary {
     files: usize,
     units: usize,
     findings: usize,
+    context: usize,
     unreadable: usize,
 }
 
@@ -201,34 +253,30 @@ struct Measurements<'a> {
     unreadable: &'a [Unreadable],
 }
 
-pub fn json(findings: &[Finding], unreadable: &[Unreadable], scanned: Scanned) -> String {
+pub fn json(judgement: Judgement<'_>) -> String {
     let report = Report {
         schema: SCHEMA,
         summary: Summary {
-            files: scanned.files,
-            units: scanned.units,
-            findings: findings.len(),
-            unreadable: unreadable.len(),
+            files: judgement.scanned.files,
+            units: judgement.scanned.units,
+            findings: judgement.findings.len(),
+            context: judgement.context.len(),
+            unreadable: judgement.unreadable.len(),
         },
-        findings,
-        unreadable,
+        findings: judgement.findings,
+        context: judgement.context,
+        unreadable: judgement.unreadable,
     };
 
     rendered(&report)
 }
 
-pub fn human(
-    findings: &[Finding],
-    unreadable: &[Unreadable],
-    scanned: Scanned,
-    limit: usize,
-    view: View<'_>,
-) -> String {
-    human::render(findings, unreadable, scanned, limit, view)
+pub fn human(judgement: Judgement<'_>, limit: usize, view: View<'_>) -> String {
+    human::render(judgement, limit, view)
 }
 
-pub fn sarif(findings: &[Finding], unreadable: &[Unreadable]) -> String {
-    sarif::render(findings, unreadable)
+pub fn sarif(judgement: Judgement<'_>) -> String {
+    sarif::render(judgement)
 }
 
 pub fn measures(readings: &[Reading], unreadable: &[Unreadable]) -> String {

@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use super::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use super::units::Unit;
-use crate::catalog::{Measure, Rule, RuleId, UnitKind};
+use crate::catalog::{MEASURED_WITHOUT_LIMIT, Measure, Rule, RuleId, UnitKind};
 use crate::lang::LanguageId;
 use crate::model::{Detail, Finding, Reading};
 use crate::policy::Policy;
@@ -89,8 +89,13 @@ fn thresholds_on(kind: UnitKind) -> impl Iterator<Item = (Rule, Measure)> {
 }
 
 fn gather_readings(file: &FileUnderReview<'_>, unit: &Unit, readings: &mut Vec<Reading>) {
+    let unlimited = MEASURED_WITHOUT_LIMIT
+        .into_iter()
+        .filter(|threshold| threshold.unit == unit.kind)
+        .map(|threshold| threshold.measure);
     let measures: BTreeSet<Measure> = thresholds_on(unit.kind)
         .map(|(_, measure)| measure)
+        .chain(unlimited)
         .collect();
     if !measures.is_empty() {
         readings.push(reading(file, unit, &measures));

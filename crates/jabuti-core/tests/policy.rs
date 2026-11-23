@@ -43,7 +43,7 @@ fn only_a_rule_that_reports_is_active() {
     assert_eq!(
         [
             policy.active(Rule::DuplicateBlock),
-            policy.active(Rule::Churn),
+            policy.active(Rule::FileLines),
             policy.active_for(LanguageId::TypeScript, Rule::FunctionLines),
             policy.active_for(LanguageId::Rust, Rule::CyclomaticComplexity),
             policy.active(RuleId::parse("clippy/unwrap_used").expect("a tool lint")),
@@ -129,7 +129,7 @@ fn a_rule_is_enabled_where_any_language_reports_it() {
     let mut policy = Policy::default();
     policy.set_for(
         LanguageId::Kotlin,
-        Rule::Churn,
+        Rule::FileLines,
         RuleConfig {
             limit: 0,
             enabled: true,
@@ -141,7 +141,7 @@ fn a_rule_is_enabled_where_any_language_reports_it() {
         [
             asked(Rule::FunctionLines),
             asked(Rule::CyclomaticComplexity),
-            asked(Rule::Churn),
+            asked(Rule::FileLines),
         ],
         [true, false, true]
     );

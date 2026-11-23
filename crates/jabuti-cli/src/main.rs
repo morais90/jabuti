@@ -204,7 +204,7 @@ struct Extras {
 impl Extras {
     fn load(arguments: &CheckArgs, verdict: &check::Verdict) -> Self {
         let findings = &verdict.outcome.findings;
-        let shown = report::shown_files(findings, arguments.limit);
+        let shown = report::shown_files(&verdict.outcome.judgement(), arguments.limit);
         let units = report::trail::units(findings, arguments.limit);
         Self {
             rhythm: inputs::history::rhythm(&verdict.root, &shown),
@@ -232,21 +232,10 @@ struct Request<'a> {
 
 fn rendered(request: &Request<'_>, outcome: &report::Outcome) -> String {
     match request.format {
-        Format::Human => report::human(
-            &outcome.findings,
-            &outcome.unreadable,
-            outcome.scanned,
-            request.limit,
-            request.view,
-        ),
-        Format::Agent => report::agent(
-            &outcome.findings,
-            &outcome.unreadable,
-            outcome.scanned,
-            request.limit,
-        ),
-        Format::Json => report::json(&outcome.findings, &outcome.unreadable, outcome.scanned),
+        Format::Human => report::human(outcome.judgement(), request.limit, request.view),
+        Format::Agent => report::agent(outcome.judgement(), request.limit),
+        Format::Json => report::json(outcome.judgement()),
         Format::Measures => report::measures(&outcome.readings, &outcome.unreadable),
-        Format::Sarif => report::sarif(&outcome.findings, &outcome.unreadable),
+        Format::Sarif => report::sarif(outcome.judgement()),
     }
 }

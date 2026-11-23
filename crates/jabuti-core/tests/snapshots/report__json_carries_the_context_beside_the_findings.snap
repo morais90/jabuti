@@ -1,0 +1,31 @@
+---
+source: crates/jabuti-core/tests/report.rs
+assertion_line: 1100
+expression: "report::json(with_context(&[], &context))"
+---
+{
+  "schema": 5,
+  "summary": {
+    "files": 42,
+    "units": 378,
+    "findings": 0,
+    "context": 1,
+    "unreadable": 0
+  },
+  "findings": [],
+  "context": [
+    {
+      "rule": "new-dependency",
+      "path": "src/report.rs",
+      "span": {
+        "start_line": 2,
+        "end_line": 2
+      },
+      "subject": null,
+      "detail": {
+        "message": "now depends on src/git.rs"
+      }
+    }
+  ],
+  "unreadable": []
+}

@@ -1,6 +1,6 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 610
+assertion_line: 602
 expression: rendered
 ---
 ⬢ jabuti  42 files · 378 units
@@ -14,4 +14,4 @@ server/src/api/assistant.rs
 
   6 more not shown. Narrow the scope with a path argument.
 
-9 to fix · seal dc8a·c1da
+9 to fix · seal bcd5·ff7d

@@ -179,7 +179,7 @@ fn the_json_format_names_the_rule_the_way_configuration_does() {
         .arg("json")
         .assert()
         .code(1)
-        .stdout(contains("\"schema\": 4"))
+        .stdout(contains("\"schema\": 5"))
         .stdout(contains("\"rule\": \"parameters\""))
         .stdout(contains("\"findings\": 1,"));
 }
@@ -322,7 +322,7 @@ fn findings_are_listed_by_path_and_line_whichever_rule_produced_them() {
     write(
         &directory,
         "src/aa.rs",
-        "pub fn aa() -> String {\n    crate::git::run()\n}\n",
+        "pub fn aa() -> usize {\n    let value: Option<usize> = None;\n    value.unwrap()\n}\n",
     );
     write(&directory, "src/zz.rs", &function_of("zz", 70));
 
@@ -332,7 +332,7 @@ fn findings_are_listed_by_path_and_line_whichever_rule_produced_them() {
         .assert()
         .code(1)
         .stdout(contains(
-            "src/aa.rs:2  new-dependency  now depends on src/git.rs\nsrc/zz.rs:1  function-lines  zz  measured 72, limit 60\n",
+            "src/aa.rs:3  error-masking  unwrap  the failure becomes a panic\nsrc/zz.rs:1  function-lines  zz  measured 72, limit 60\n",
         ));
 }
 
@@ -351,7 +351,7 @@ fn the_human_format_asked_for_through_a_pipe_is_written_without_color() {
              src/lib.rs\n  \
              :1  wide  function-lines  ━━━━━━━━┃━━╌╌  72/60\n\
              \n\
-             1 to fix · seal 5b7d·a74e\n",
+             1 to fix · seal 980a·7004\n",
         );
 }
 

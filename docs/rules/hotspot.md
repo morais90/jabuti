@@ -1,6 +1,7 @@
 # `hotspot`
 
-Reports a file that is both complex and frequently changed.
+Notes a file that is both complex and frequently changed. This is context: it is shown beside the
+findings and never fails the run.
 
 **Default limit:** 90.
 
@@ -43,8 +44,8 @@ thing everywhere.
 
 ## What to do with one
 
-Unlike the other rules, this one does not point at a specific thing to fix. It points at a place
-worth spending attention on, which is a different kind of finding.
+A hotspot does not point at a specific thing to fix. It points at a place worth spending attention
+on, which is why it is reported as context.
 
 A useful next step is to look at the file's other findings. A hotspot that is also over the cognitive
 complexity limit tells you exactly which function to start with. A hotspot with no other findings is
@@ -56,9 +57,10 @@ change that pays.
 It needs a git repository. Outside one, jabuti says so on stderr and carries on without it rather
 than failing the run.
 
-It is evaluated only under `--all`. Ranking is a property of the whole repository, and a ranking
-computed over the three files you happened to change would be meaningless, so a check that judges a
-change does not evaluate it.
+The ranking always covers the whole repository, because a ranking computed over the three files you
+happened to change would be meaningless. A check that judges a change shows it for the files the
+change touched, which is when it is worth knowing: you are working in a place where time goes.
+`--all` shows it for every file that ranks above the limit.
 
 A repository with very few files cannot produce a meaningful ranking, and a single file never scores
 above zero.
@@ -66,8 +68,7 @@ above zero.
 ## It never fails a run
 
 A hotspot is not a defect, and failing a build because a file is in a busy part of the repository
-would punish people for working where the work is. `--all` lists the repository as a map and exits `0`
-whatever it finds, which is the only place this rule is reported.
+would punish people for working where the work is.
 
 ## Further reading
 

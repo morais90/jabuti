@@ -1,0 +1,78 @@
+---
+source: crates/jabuti-core/tests/report.rs
+assertion_line: 1108
+expression: "report::sarif(with_context(&findings, &context))"
+---
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "jabuti",
+          "semanticVersion": "0.1.0",
+          "informationUri": "https://github.com/morais90/jabuti",
+          "rules": [
+            {
+              "id": "function-lines"
+            },
+            {
+              "id": "new-dependency"
+            }
+          ]
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "toolExecutionNotifications": []
+        }
+      ],
+      "results": [
+        {
+          "ruleId": "function-lines",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "parse measured 71, limit 60"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/handler.rs"
+                },
+                "region": {
+                  "startLine": 12,
+                  "endLine": 22
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "new-dependency",
+          "ruleIndex": 1,
+          "level": "note",
+          "message": {
+            "text": "now depends on src/git.rs"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/report.rs"
+                },
+                "region": {
+                  "startLine": 2,
+                  "endLine": 2
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

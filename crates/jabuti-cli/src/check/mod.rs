@@ -57,9 +57,10 @@ pub(crate) fn verdict(
             })
         })
         .transpose()?;
-    let plan = Plan::of(&settings, changes.is_some(), matches!(scope, Scope::All));
+    let plan = Plan::of(&settings, changes.is_some());
 
-    let history = history::load(plan.reads(Input::History), notices);
+    let announced = changes.is_some() || matches!(scope, Scope::All);
+    let history = history::load(plan.reads(Input::History) && announced, notices);
     let paths = workspace::sources(roots, &settings.exclude, &root)?;
     let churn = history::commits(history.as_ref(), &paths);
     let touched = changes.as_ref().map(|changes| touched_by(changes, &paths));
@@ -79,6 +80,7 @@ pub(crate) fn verdict(
             .diff()
             .trim(&mut outcome.findings, &changes.placement(run.paths));
     }
+    outcome.set_context_apart();
     outcome.order();
 
     Ok(Verdict {

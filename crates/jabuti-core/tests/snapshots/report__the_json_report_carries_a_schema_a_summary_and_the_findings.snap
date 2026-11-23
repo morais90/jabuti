@@ -4,11 +4,12 @@ assertion_line: 108
 expression: rendered
 ---
 {
-  "schema": 4,
+  "schema": 5,
   "summary": {
     "files": 42,
     "units": 378,
     "findings": 1,
+    "context": 0,
     "unreadable": 0
   },
   "findings": [
@@ -26,5 +27,6 @@ expression: rendered
       }
     }
   ],
+  "context": [],
   "unreadable": []
 }

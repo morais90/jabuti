@@ -1,9 +1,9 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 587
+assertion_line: 595
 expression: rendered
 ---
-⬢ jabuti  nothing to fix · 42 files · 378 units · seal d872·f8ed
+⬢ jabuti  nothing to fix · 42 files · 378 units · seal 2820·8dac
 
 1 file was not measured, so nothing above accounts for it.
 src/broken.rs  unreadable syntax from line 1

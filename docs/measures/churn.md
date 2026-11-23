@@ -37,9 +37,9 @@ project three months old and unremarkable in one that has been running for a dec
 percentile we can quote here the way we can for the source measures, because the distribution
 depends on the age and activity of the repository rather than on the language.
 
-This is why the [`churn`](../rules/churn.md) rule is off in the catalog, and why the measure is more
-useful as one half of a comparison than as a threshold. A file being in the busiest tenth of *this*
-repository is meaningful. Twelve commits is not.
+This is why churn has no rule of its own, and why the measure is more useful as one half of a
+comparison than as a threshold. A file being in the busiest tenth of *this* repository is
+meaningful. Twelve commits is not.
 
 Two things would make it directly thresholdable, and both are on the roadmap: restricting the count
 to a window anchored to the latest commit, which normalises for repository age, and combining it with

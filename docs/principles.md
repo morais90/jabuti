@@ -50,20 +50,24 @@ as it is worked on.
 lists what it finds and fails nothing. It is where the work is, not a gate, which is also why there is
 no baseline file to keep: a gate scoped to the change has nothing to subtract.
 
-**History is context, not a finding.** How often a file changes, and whether it is complex and busy at
-once, describes the code's past. No change can fix it, so it is shown beside the findings rather than
-counted among them. The same goes for what the repository lacks rather than what a change did: new
-code a test never reaches is a finding, read from the coverage report the project already produces,
-and a project that produces none is told so on the map, because no single change can be the one that
-adds it.
+**History is context, not a finding.** How often a file changes, and whether it is complex and busy
+at once, describes the code's past. No change can fix it, so it is shown beside the findings rather
+than counted among them. The same goes for what the repository lacks rather than what a change did:
+new code a test never reaches is a finding, read from the coverage report the project already
+produces, and a project that produces none is told so on the map, because no single change can be
+the one that adds it.
+
+**A new dependency is context too.** It changes the shape of the system and a reviewer should see
+it, but it is not a defect by itself. A dependency is a defect when the project has declared it
+forbidden, and then `layer-violation` reports it and fails the run.
 
 **Where this stands today.** Every finding fails the check, and `jabuti.toml` no longer sets which
-rules run or their limits. A check judges a change by default and `--all` maps the repository without
-failing. The change reports what it made worse for the rules measured per file,
-while `duplicate-block` and the findings of orchestrated tools are still reported wherever they
-overlap a changed line, `hotspot` is still a finding rather than context,  and a project with no
-coverage report is not yet told so. This section is the model the next releases
-move to, and the documentation of each part changes with the release that ships it.
+rules run or their limits. A check judges a change by default and `--all` maps the repository
+without failing. The change reports what it made worse for the rules measured per file, while
+`duplicate-block` and the findings of orchestrated tools are still reported wherever they overlap a
+changed line, and a project with no coverage report is not yet told so. This section is the model
+the next releases move to, and the documentation of each part changes with the release that ships
+it.
 
 ## Every default is an opinion
 

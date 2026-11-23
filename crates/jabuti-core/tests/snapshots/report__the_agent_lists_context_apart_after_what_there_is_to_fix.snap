@@ -1,0 +1,12 @@
+---
+source: crates/jabuti-core/tests/report.rs
+assertion_line: 1086
+expression: "report::agent(with_context(&findings, &context), 40)"
+---
+1 finding to fix across 42 files and 378 units.
+
+src/handler.rs:12  function-lines  parse  measured 71, limit 60
+
+Context, which does not fail the run:
+src/report.rs:1  hotspot  measured 92, limit 90
+src/report.rs:2  new-dependency  now depends on src/git.rs

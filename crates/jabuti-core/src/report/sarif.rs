@@ -5,6 +5,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
+use super::Judgement;
 use crate::catalog::RuleId;
 use crate::model::{Detail, Finding, Unreadable};
 
@@ -109,7 +110,14 @@ struct Region {
     end_line: u32,
 }
 
-pub(super) fn render(findings: &[Finding], unreadable: &[Unreadable]) -> String {
+pub(super) fn render(judgement: Judgement<'_>) -> String {
+    let findings: Vec<Finding> = judgement
+        .findings
+        .iter()
+        .chain(judgement.context)
+        .cloned()
+        .collect();
+    let findings = findings.as_slice();
     let rules = identified_rules(findings);
     let rule_identifiers: BTreeMap<&RuleId, (&str, usize)> = rules
         .iter()
@@ -121,30 +129,7 @@ pub(super) fn render(findings: &[Finding], unreadable: &[Unreadable]) -> String 
             descriptors.push(RuleDescriptor { id: &rule.id });
         }
     }
-    let results = findings
-        .iter()
-        .map(|finding| {
-            let &(rule_id, rule_index) = rule_identifiers
-                .get(&finding.rule)
-                .expect("every finding rule is indexed");
-
-            SarifResult {
-                rule_id,
-                rule_index,
-                level: "error",
-                message: Message {
-                    text: result_message(finding),
-                },
-                locations: [location(
-                    &finding.path,
-                    Some(Region {
-                        start_line: finding.span.start_line,
-                        end_line: finding.span.end_line,
-                    }),
-                )],
-            }
-        })
-        .collect();
+    let results = results(findings, &rule_identifiers);
     let log = SarifLog {
         schema: SCHEMA,
         version: VERSION,
@@ -159,13 +144,47 @@ pub(super) fn render(findings: &[Finding], unreadable: &[Unreadable]) -> String 
             },
             invocations: [Invocation {
                 execution_successful: true,
-                tool_execution_notifications: notifications(unreadable),
+                tool_execution_notifications: notifications(judgement.unreadable),
             }],
             results,
         }],
     };
 
     super::rendered(&log)
+}
+
+fn results<'a>(
+    findings: &'a [Finding],
+    rule_identifiers: &BTreeMap<&RuleId, (&'a str, usize)>,
+) -> Vec<SarifResult<'a>> {
+    findings
+        .iter()
+        .map(|finding| {
+            let &(rule_id, rule_index) = rule_identifiers
+                .get(&finding.rule)
+                .expect("every finding rule is indexed");
+
+            SarifResult {
+                rule_id,
+                rule_index,
+                level: if finding.rule.fails() {
+                    "error"
+                } else {
+                    "note"
+                },
+                message: Message {
+                    text: result_message(finding),
+                },
+                locations: [location(
+                    &finding.path,
+                    Some(Region {
+                        start_line: finding.span.start_line,
+                        end_line: finding.span.end_line,
+                    }),
+                )],
+            }
+        })
+        .collect()
 }
 
 fn identified_rules(findings: &[Finding]) -> Vec<IdentifiedRule<'_>> {

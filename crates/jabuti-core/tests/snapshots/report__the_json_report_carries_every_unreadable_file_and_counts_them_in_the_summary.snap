@@ -1,17 +1,19 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 317
+assertion_line: 318
 expression: rendered
 ---
 {
-  "schema": 4,
+  "schema": 5,
   "summary": {
     "files": 42,
     "units": 378,
     "findings": 0,
+    "context": 0,
     "unreadable": 1
   },
   "findings": [],
+  "context": [],
   "unreadable": [
     {
       "path": "src/theme.kt",

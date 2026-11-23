@@ -55,18 +55,23 @@ by name.
 | [`suppression`](rules/suppression.md) | `silenced` | none | always |
 | [`assertion`](rules/assertion.md) | `completeness` | none | always |
 | [`layer-violation`](rules/layer-violation.md) | `structure` | none | when layers are declared |
-| [`new-dependency`](rules/new-dependency.md) | `structure` | none | on a change |
 | [`speculative-api`](rules/speculative-api.md) | `shape` | none | on a change |
 | [`uncovered-new-code`](rules/uncovered-new-code.md) | `completeness` | none | on a change, with a coverage report |
-| [`hotspot`](rules/hotspot.md) | `cost` | 90 | under `--all` |
 | [`file-lines`](rules/file-lines.md) | `shape` | 1000 | off |
 | [`cyclomatic-complexity`](rules/cyclomatic-complexity.md) | `shape` | 10 | off |
-| [`churn`](rules/churn.md) | `cost` | none | off |
 
 Every finding is something to fix, and any finding fails the run. Rules marked "on a change" compare
-against an earlier revision, so they skip `--all` and repositories without git. `hotspot` ranks the
-whole repository, so it runs only under `--all`, which never fails. The last three are off and cannot
-be turned on; their measures still appear in `--format measures`, and their pages explain why.
+against an earlier revision, so they skip `--all` and repositories without git. The last two are off
+and cannot be turned on; their measures still appear in `--format measures`, and their pages explain
+why.
+
+Two rules report context instead of findings. Context is shown beside the findings and never fails
+the run, because it describes something worth knowing that is not a defect on its own.
+
+| Rule | Family | Limit | Runs |
+|---|---|---|---|
+| [`hotspot`](rules/hotspot.md) | `cost` | 90 | with git; on a change, for the files it touched |
+| [`new-dependency`](rules/new-dependency.md) | `structure` | none | on a change |
 
 ## External tools
 

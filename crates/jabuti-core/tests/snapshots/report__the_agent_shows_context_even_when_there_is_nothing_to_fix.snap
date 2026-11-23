@@ -1,0 +1,9 @@
+---
+source: crates/jabuti-core/tests/report.rs
+assertion_line: 1093
+expression: "report::agent(with_context(&[], &context), 40)"
+---
+No findings across 42 files and 378 units.
+
+Context, which does not fail the run:
+src/report.rs:2  new-dependency  now depends on src/git.rs

@@ -36,7 +36,7 @@ fn a_dependency_this_change_introduced_is_reported_where_it_was_written() {
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .code(1)
+        .success()
         .stdout(contains(
             "src/report.rs:2  new-dependency  now depends on src/git.rs",
         ));
@@ -105,7 +105,7 @@ fn every_changed_file_is_compared_against_its_own_earlier_revision_even_around_a
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .code(1)
+        .success()
         .stdout(contains(
             "src/git.rs:2  new-dependency  now depends on src/report.rs",
         ))
@@ -152,7 +152,7 @@ fn a_path_that_was_a_directory_at_the_base_does_not_shift_the_next_file_off_its_
         .arg("--since")
         .arg("HEAD~1")
         .assert()
-        .code(1)
+        .success()
         .stdout(contains(
             "src/tally.rs:2  new-dependency  now depends on src/report.rs",
         ))
@@ -173,7 +173,7 @@ fn the_earlier_revision_is_still_read_when_only_this_rule_asks_for_it() {
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .code(1)
+        .success()
         .stdout(contains(
             "src/report.rs:2  new-dependency  now depends on src/git.rs",
         ));
@@ -207,7 +207,7 @@ fn a_dependency_on_a_file_outside_the_paths_given_on_the_command_line_is_still_r
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .code(1)
+        .success()
         .stdout(contains(
             "src/report/mod.rs:2  new-dependency  now depends on src/git.rs",
         ));
@@ -227,7 +227,7 @@ fn a_dependency_on_a_file_that_no_longer_parses_still_points_at_that_file() {
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .code(1)
+        .success()
         .stdout(contains(
             "src/report.rs:2  new-dependency  now depends on src/git.rs",
         ));
@@ -264,7 +264,7 @@ fn the_comparison_finds_the_earlier_file_when_run_from_a_subdirectory() {
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .code(1)
+        .success()
         .stdout(contains(
             "src/report.rs:2  new-dependency  now depends on src/git.rs",
         ));

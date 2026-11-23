@@ -146,8 +146,7 @@ fn every_rule_declares_when_it_runs_and_what_it_reads() {
     assert_eq!(
         declared,
         [
-            ("churn", Scoping::Any, [Input::History].as_slice()),
-            ("hotspot", Scoping::Repository, [Input::History].as_slice()),
+            ("hotspot", Scoping::Any, [Input::History].as_slice()),
             (
                 "layer-violation",
                 Scoping::Any,
@@ -170,13 +169,12 @@ fn every_rule_declares_when_it_runs_and_what_it_reads() {
 
 #[test]
 fn a_scoping_allows_the_runs_it_names() {
-    let runs = [(false, false), (true, false), (false, true)];
-    let allowed: Vec<(Scoping, [bool; 3])> = [Scoping::Any, Scoping::Change, Scoping::Repository]
+    let allowed: Vec<(Scoping, [bool; 2])> = [Scoping::Any, Scoping::Change]
         .into_iter()
         .map(|scoping| {
             (
                 scoping,
-                runs.map(|(compared, whole)| scoping.allows(compared, whole)),
+                [false, true].map(|compared| scoping.allows(compared)),
             )
         })
         .collect();
@@ -184,10 +182,29 @@ fn a_scoping_allows_the_runs_it_names() {
     assert_eq!(
         allowed,
         [
-            (Scoping::Any, [true, true, true]),
-            (Scoping::Change, [false, true, false]),
-            (Scoping::Repository, [false, false, true]),
+            (Scoping::Any, [true, true]),
+            (Scoping::Change, [false, true]),
         ]
+    );
+}
+
+#[test]
+fn only_hotspot_and_new_dependency_are_context_and_every_other_rule_fails_the_run() {
+    let context: Vec<&str> = Rule::ALL
+        .into_iter()
+        .filter(|rule| !rule.fails())
+        .map(Rule::id)
+        .collect();
+
+    assert_eq!(context, ["hotspot", "new-dependency"]);
+    assert!(RuleId::Native(Rule::FunctionLines).fails());
+    assert!(!RuleId::Native(Rule::Hotspot).fails());
+    assert!(
+        RuleId::External {
+            tool: "clippy".to_owned(),
+            lint: "unwrap_used".to_owned(),
+        }
+        .fails()
     );
 }
 
@@ -203,7 +220,6 @@ fn every_rule_with_a_limit_names_the_measure_and_the_unit_it_compares() {
     assert_eq!(
         thresholds,
         [
-            ("churn", on(Measure::Churn, UnitKind::File)),
             (
                 "cognitive-complexity",
                 on(Measure::CognitiveComplexity, UnitKind::Function),

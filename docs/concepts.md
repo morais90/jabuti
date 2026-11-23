@@ -69,7 +69,6 @@ flowchart LR
     cog["cognitive complexity"] --> cogr["cognitive-complexity"]
     cog --> hs["hotspot"]
     churn["churn"] --> hs
-    churn --> chr["churn"]
     dup["duplication"] --> db["duplicate-block"]
     mask["masked errors"] --> em["error-masking"]
 ```
@@ -86,7 +85,14 @@ rule is on; a project cannot change them. Every finding is something to fix, and
 the run.
 
 A rule that is off still has its measure calculated, so rules that combine several measures, such as
-`hotspot`, can read it.
+`hotspot`, can read it. Churn has no rule of its own and is still measured for the same reason.
+
+## Context
+
+Some rules report something worth knowing that is not a defect: a file that is both complex and busy,
+or a dependency between files that did not exist before. These are context. They are printed apart
+from the findings, beside the file they belong to, and they never fail the run. They tell an agent
+about the change and ask it to fix nothing.
 
 ## Finding
 
@@ -167,8 +173,7 @@ $ jabuti check --all
 
 `--all` reads the whole repository instead and lists everything it finds, without failing. It is a
 map of where the work is rather than a verdict on a change, and the exit code is `0` whatever it
-lists. `hotspot`, which ranks a whole repository, is evaluated only there, and the rules that compare
-against an earlier revision are not.
+lists. The rules that compare against an earlier revision are not evaluated there.
 
 ## What the graph sees
 
@@ -284,8 +289,8 @@ them without parsing text:
 
 ```json
 {
-  "schema": 4,
-  "summary": { "files": 42, "units": 378, "findings": 1, "unreadable": 0 },
+  "schema": 5,
+  "summary": { "files": 42, "units": 378, "findings": 1, "context": 0, "unreadable": 0 },
   "findings": [
     {
       "rule": "function-lines",
@@ -295,11 +300,14 @@ them without parsing text:
       "detail": { "measured": 71, "limit": 60 }
     }
   ],
+  "context": [],
   "unreadable": []
 }
 ```
 
-A rule is named the same way here as in every other format and on its page under `docs/rules/`.
+Context sits in its own array with the same shape as a finding, and SARIF marks it with the level
+`note` where a finding is an `error`. A rule is named the same way here as in every other format and
+on its page under `docs/rules/`.
 
 `--format sarif` emits one deterministic run conforming to SARIF 2.1.0 and names the
 [official errata schema](https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json):

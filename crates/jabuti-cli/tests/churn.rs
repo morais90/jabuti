@@ -79,7 +79,9 @@ fn history_outside_a_repository_is_said_to_be_missing_rather_than_failing_the_ma
         .assert()
         .success()
         .stdout(contains("No findings"))
-        .stderr(contains("need a git repository"));
+        .stderr(contains(
+            "jabuti: hotspot needs a git repository, so it was not evaluated (",
+        ));
 }
 
 fn tangled(name: &str) -> String {
@@ -116,10 +118,17 @@ fn a_file_both_busier_and_more_tangled_than_nine_in_ten_is_a_hotspot() {
         .assert()
         .success()
         .stdout(
-            "1 finding to fix across 12 files and 12 units.\n\n\
+            "No findings across 12 files and 12 units.\n\n\
+             Context, which does not fail the run:\n\
              src/tangled.rs:1  hotspot  measured 91, limit 90\n",
         )
         .stderr("");
+
+    write(&directory, "src/tangled.rs", &format!("{first}\n\n\n"));
+    jabuti(&directory).assert().success().stdout(contains(
+        "Context, which does not fail the run:\n\
+             src/tangled.rs:1  hotspot  measured 91, limit 90\n",
+    ));
 }
 
 #[test]

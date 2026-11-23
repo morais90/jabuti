@@ -45,7 +45,7 @@ pub(crate) fn load(needed: bool, notices: &mut Vec<String>) -> Option<Churn> {
         Err(_) if !needed => None,
         Err(reason) => {
             notices.push(format!(
-                "churn and hotspot need a git repository, so they were not evaluated ({reason})"
+                "hotspot needs a git repository, so it was not evaluated ({reason})"
             ));
             None
         }

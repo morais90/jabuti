@@ -4,7 +4,6 @@ assertion_line: 30
 expression: table
 ---
 kotlin     assertion              on      0
-kotlin     churn                  off     0
 kotlin     duplicate-block        on      120
 kotlin     error-masking          on      0
 kotlin     hotspot                on      90
@@ -19,7 +18,6 @@ kotlin     file-lines             off     1000
 kotlin     function-lines         on      47
 kotlin     parameters             on      4
 rust       assertion              on      0
-rust       churn                  off     0
 rust       duplicate-block        on      120
 rust       error-masking          on      0
 rust       hotspot                on      90
@@ -34,7 +32,6 @@ rust       file-lines             off     1000
 rust       function-lines         on      60
 rust       parameters             on      4
 typescript assertion              on      0
-typescript churn                  off     0
 typescript duplicate-block        on      120
 typescript error-masking          on      0
 typescript hotspot                on      90

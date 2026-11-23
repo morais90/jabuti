@@ -1,8 +1,9 @@
 # `new-dependency`
 
-Reports a file that now depends on another file it did not depend on before.
+Notes a file that now depends on another file it did not depend on before. This is context: it is
+shown beside the findings and never fails the run.
 
-Every new dependency is reported. "New" needs an earlier revision to compare against, so the rule
+Every new dependency is noted. "New" needs an earlier revision to compare against, so the rule
 runs only when a check judges a change, never under `--all` or outside git.
 
 ## The idea
@@ -12,7 +13,7 @@ between them. That web grows one edge at a time, and each edge on its own looks 
 decides to couple the payment code to the reporting code; someone needs a formatter, imports it, and
 the coupling arrives as a side effect of a five line change.
 
-A finding here is a fact you would otherwise have to go looking for:
+Each note is a fact you would otherwise have to go looking for:
 
 ```
 src/report.rs:2  new-dependency  now depends on src/git.rs
@@ -31,6 +32,15 @@ This matters more with a model writing the code. Reaching for what is available 
 resistance, and a model has no sense of which side of a boundary it is standing on. Passing a value
 in as an argument requires knowing that the boundary exists and is worth keeping. Importing does not.
 
+## Why it does not fail the run
+
+A new dependency is not a defect by itself. Sometimes it is the right design, and nothing in the
+code says which case this is. Failing the run on every new import would leave an agent one way out,
+which is not to write the dependency even when it is right.
+
+A dependency is a defect when the project has said so. Declare the layers, and a dependency that
+crosses one the wrong way is reported by [`layer-violation`](layer-violation.md), which fails the run.
+
 ## What counts as a dependency
 
 Whatever names something the other file declares, wherever it is written. That is more than one
@@ -39,7 +49,7 @@ from the same package, and TypeScript may spell a relative module without an ext
 `.js` extension it will have after compilation. [`docs/concepts.md`](../concepts.md) describes the
 graph this reads and, just as importantly, what it cannot see.
 
-## What is deliberately not reported
+## What is deliberately not noted
 
 **A file this change created.** Every one of its dependencies is new by definition, so reporting them
 would bury the signal under the noise of ordinary new code.
@@ -49,6 +59,6 @@ same dependency in another form is not a finding.
 
 ## Calibration
 
-The rule has no numerical threshold: any dependency added to an existing file is one finding. The
+The rule has no numerical threshold: any dependency added to an existing file is one note. The
 commit-history probe used to validate its noise level lives in
 [`CALIBRATION.md`](../../CALIBRATION.md).

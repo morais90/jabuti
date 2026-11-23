@@ -56,7 +56,6 @@ impl Concept {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum Rule {
     Assertion,
-    Churn,
     DuplicateBlock,
     ErrorMasking,
     Hotspot,
@@ -73,9 +72,8 @@ pub enum Rule {
 }
 
 impl Rule {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 14] = [
         Self::Assertion,
-        Self::Churn,
         Self::DuplicateBlock,
         Self::ErrorMasking,
         Self::Hotspot,
@@ -94,7 +92,6 @@ impl Rule {
     pub fn spec(self) -> RuleSpec {
         match self {
             Self::Assertion => ASSERTION,
-            Self::Churn => CHURN,
             Self::DuplicateBlock => DUPLICATE_BLOCK,
             Self::ErrorMasking => ERROR_MASKING,
             Self::Hotspot => HOTSPOT,
@@ -126,15 +123,13 @@ impl Rule {
     pub fn repository_wide(self) -> bool {
         self.spec().repository_wide
     }
+
+    pub fn fails(self) -> bool {
+        self.spec().role == Role::Finding
+    }
 }
 
 const ASSERTION: RuleSpec = concept_bound("assertion", &[Concept::Assertion]);
-
-const CHURN: RuleSpec = RuleSpec {
-    inputs: &[Input::History],
-    threshold: Some(on(Measure::Churn, UnitKind::File)),
-    ..universal("churn", false, 0)
-};
 
 const DUPLICATE_BLOCK: RuleSpec = RuleSpec {
     repository_wide: true,
@@ -152,7 +147,7 @@ const ERROR_MASKING: RuleSpec = concept_bound(
 
 const HOTSPOT: RuleSpec = RuleSpec {
     repository_wide: true,
-    scoping: Scoping::Repository,
+    role: Role::Context,
     inputs: &[Input::History],
     ..universal("hotspot", true, 90)
 };
@@ -163,7 +158,10 @@ const LAYER_VIOLATION: RuleSpec = RuleSpec {
     ..universal("layer-violation", true, 0)
 };
 
-const NEW_DEPENDENCY: RuleSpec = compared("new-dependency");
+const NEW_DEPENDENCY: RuleSpec = RuleSpec {
+    role: Role::Context,
+    ..compared("new-dependency")
+};
 
 const SPECULATIVE_API: RuleSpec = compared("speculative-api");
 
@@ -237,6 +235,8 @@ pub struct Threshold {
     pub unit: UnitKind,
 }
 
+pub const MEASURED_WITHOUT_LIMIT: [Threshold; 1] = [on(Measure::Churn, UnitKind::File)];
+
 const fn on(measure: Measure, unit: UnitKind) -> Threshold {
     Threshold { measure, unit }
 }
@@ -245,17 +245,21 @@ const fn on(measure: Measure, unit: UnitKind) -> Threshold {
 pub enum Scoping {
     Any,
     Change,
-    Repository,
 }
 
 impl Scoping {
-    pub fn allows(self, compared: bool, whole: bool) -> bool {
+    pub fn allows(self, compared: bool) -> bool {
         match self {
             Self::Any => true,
             Self::Change => compared,
-            Self::Repository => whole,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    Finding,
+    Context,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -272,6 +276,7 @@ pub struct RuleSpec {
     pub portability: Portability,
     pub repository_wide: bool,
     pub scoping: Scoping,
+    pub role: Role,
     pub inputs: &'static [Input],
     pub threshold: Option<Threshold>,
     pub enabled: bool,
@@ -286,6 +291,7 @@ const fn universal(id: &'static str, enabled: bool, limit: u32) -> RuleSpec {
         portability: Portability::Universal,
         repository_wide: false,
         scoping: Scoping::Any,
+        role: Role::Finding,
         inputs: &[],
         threshold: None,
         enabled,
@@ -319,6 +325,13 @@ pub enum RuleId {
 }
 
 impl RuleId {
+    pub fn fails(&self) -> bool {
+        match self {
+            Self::Native(rule) => rule.fails(),
+            Self::External { .. } => true,
+        }
+    }
+
     pub fn id(&self) -> String {
         match self {
             Self::Native(rule) => rule.id().to_owned(),

@@ -49,14 +49,14 @@ fn scanned() -> Scanned {
 
 #[test]
 fn a_clean_run_says_so_in_a_single_line() {
-    let rendered = report::agent(&[], &[], scanned(), 40);
+    let rendered = report::agent(judged(&[], &[]), 40);
 
     assert_eq!(rendered, "No findings across 42 files and 378 units.\n");
 }
 
 #[test]
 fn a_finding_names_its_rule_location_and_both_numbers() {
-    let rendered = report::agent(&[finding(120, Some("handle_request"))], &[], scanned(), 40);
+    let rendered = report::agent(judged(&[finding(120, Some("handle_request"))], &[]), 40);
 
     assert_eq!(
         rendered,
@@ -68,7 +68,7 @@ fn a_finding_names_its_rule_location_and_both_numbers() {
 
 #[test]
 fn a_finding_without_a_subject_leaves_no_gap_where_the_name_would_be() {
-    let rendered = report::agent(&[finding(1, None)], &[], scanned(), 40);
+    let rendered = report::agent(judged(&[finding(1, None)], &[]), 40);
 
     assert!(
         rendered.ends_with("src/handler.rs:1  function-lines  measured 71, limit 60\n"),
@@ -80,7 +80,7 @@ fn a_finding_without_a_subject_leaves_no_gap_where_the_name_would_be() {
 fn output_beyond_the_limit_is_replaced_by_a_count_of_what_was_withheld() {
     let findings: Vec<Finding> = (1..=10).map(|line| finding(line, Some("wide"))).collect();
 
-    let rendered = report::agent(&findings, &[], scanned(), 3);
+    let rendered = report::agent(judged(&findings, &[]), 3);
 
     assert_eq!(
         rendered
@@ -103,7 +103,7 @@ fn any_finding_fails_the_gate() {
 
 #[test]
 fn the_json_report_carries_a_schema_a_summary_and_the_findings() {
-    let rendered = report::json(&[finding(120, Some("handle_request"))], &[], scanned());
+    let rendered = report::json(judged(&[finding(120, Some("handle_request"))], &[]));
 
     insta::assert_snapshot!(rendered);
 }
@@ -112,7 +112,7 @@ fn the_json_report_carries_a_schema_a_summary_and_the_findings() {
 fn a_finding_from_a_tool_serialises_its_message_instead_of_a_threshold() {
     let reported = tool_finding();
 
-    let rendered = report::json(&[reported], &[], scanned());
+    let rendered = report::json(judged(&[reported], &[]));
 
     assert!(
         rendered.contains("\"rule\": \"clippy/needless_range_loop\""),
@@ -133,14 +133,14 @@ fn the_sarif_report_carries_every_finding_and_unreadable_file() {
         unreadable("src/nav.kt", 314),
     ];
 
-    let rendered = report::sarif(&findings, &unreadable);
+    let rendered = report::sarif(judged(&findings, &unreadable));
 
     insta::assert_snapshot!(rendered);
 }
 
 #[test]
 fn a_clean_sarif_report_keeps_the_complete_empty_envelope() {
-    let rendered = report::sarif(&[], &[]);
+    let rendered = report::sarif(judged(&[], &[]));
 
     let expected = r#"{
   "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
@@ -178,7 +178,7 @@ fn sarif_artifact_uris_encode_bytes_and_normalise_the_platform_separator() {
         std::path::MAIN_SEPARATOR
     );
 
-    let rendered = report::sarif(&[reported], &[]);
+    let rendered = report::sarif(judged(&[reported], &[]));
 
     insta::assert_snapshot!(rendered);
 }
@@ -186,7 +186,7 @@ fn sarif_artifact_uris_encode_bytes_and_normalise_the_platform_separator() {
 #[test]
 fn sarif_rule_indices_point_into_lexically_sorted_descriptors() {
     let findings = [finding(120, Some("handle_request")), tool_finding()];
-    let rendered = report::sarif(&findings, &[]);
+    let rendered = report::sarif(judged(&findings, &[]));
     let document: serde_json::Value = serde_json::from_str(&rendered).expect("valid JSON");
     let run = &document["runs"][0];
 
@@ -215,7 +215,7 @@ fn structurally_distinct_rules_with_the_same_public_id_share_one_descriptor() {
         tool: "a/b".to_owned(),
         lint: "c".to_owned(),
     };
-    let rendered = report::sarif(&[first, second], &[]);
+    let rendered = report::sarif(judged(&[first, second], &[]));
     let document: serde_json::Value = serde_json::from_str(&rendered).expect("valid JSON");
     let run = &document["runs"][0];
 
@@ -254,7 +254,7 @@ fn unreadable(path: &str, line: u32) -> Unreadable {
 
 #[test]
 fn a_clean_run_still_names_every_file_it_could_not_read() {
-    let rendered = report::agent(&[], &[unreadable("src/theme.kt", 51)], scanned(), 40);
+    let rendered = report::agent(judged(&[], &[unreadable("src/theme.kt", 51)]), 40);
 
     assert_eq!(
         rendered,
@@ -268,12 +268,13 @@ fn a_clean_run_still_names_every_file_it_could_not_read() {
 #[test]
 fn unreadable_files_are_listed_after_the_findings_they_are_not_part_of() {
     let rendered = report::agent(
-        &[finding(120, Some("handle_request"))],
-        &[
-            unreadable("src/theme.kt", 51),
-            unreadable("src/nav.kt", 314),
-        ],
-        scanned(),
+        judged(
+            &[finding(120, Some("handle_request"))],
+            &[
+                unreadable("src/theme.kt", 51),
+                unreadable("src/nav.kt", 314),
+            ],
+        ),
         40,
     );
 
@@ -295,7 +296,7 @@ fn the_list_of_unreadable_files_obeys_the_same_limit_the_findings_do() {
         .map(|line| unreadable("src/wide.kt", line))
         .collect();
 
-    let rendered = report::agent(&[], &skipped, scanned(), 3);
+    let rendered = report::agent(judged(&[], &skipped), 3);
 
     assert_eq!(
         rendered
@@ -312,7 +313,7 @@ fn the_list_of_unreadable_files_obeys_the_same_limit_the_findings_do() {
 
 #[test]
 fn the_json_report_carries_every_unreadable_file_and_counts_them_in_the_summary() {
-    let rendered = report::json(&[], &[unreadable("src/theme.kt", 51)], scanned());
+    let rendered = report::json(judged(&[], &[unreadable("src/theme.kt", 51)]));
 
     insta::assert_snapshot!(rendered);
 }
@@ -342,6 +343,7 @@ fn an_outcome_puts_its_findings_readings_and_unreadable_files_in_one_order() {
             tool_finding(),
             finding(12, Some("parse")),
         ],
+        context: vec![note("src/b.rs"), note("src/a.rs")],
         readings: vec![
             reading("app-b/c.rs", 1, UnitKind::File),
             reading("app/c.rs", 1, UnitKind::File),
@@ -365,6 +367,7 @@ fn an_outcome_puts_its_findings_readings_and_unreadable_files_in_one_order() {
                 finding(120, Some("handle_request")),
                 tool_finding(),
             ],
+            context: vec![note("src/a.rs"), note("src/b.rs")],
             readings: vec![
                 reading("app/c.rs", 1, UnitKind::File),
                 reading("app-b/c.rs", 1, UnitKind::File),
@@ -486,6 +489,15 @@ fn shown_escapes(rendered: &str) -> String {
     rendered.replace('\x1b', "␛")
 }
 
+fn judged<'a>(findings: &'a [Finding], unreadable: &'a [Unreadable]) -> report::Judgement<'a> {
+    report::Judgement {
+        findings,
+        context: &[],
+        unreadable,
+        scanned: scanned(),
+    }
+}
+
 fn view(since: Option<&str>, color: bool) -> report::View<'_> {
     report::View {
         since,
@@ -522,9 +534,7 @@ fn rhythms() -> BTreeMap<String, Rhythm> {
 #[test]
 fn a_human_report_groups_findings_by_file_with_one_aligned_line_each() {
     let rendered = report::human(
-        &change(),
-        &[unreadable("src/api/index.ts", 3)],
-        scanned(),
+        judged(&change(), &[unreadable("src/api/index.ts", 3)]),
         40,
         view(Some("main"), false),
     );
@@ -535,8 +545,8 @@ fn a_human_report_groups_findings_by_file_with_one_aligned_line_each() {
 #[test]
 fn a_colored_human_report_paints_and_links_what_the_plain_one_writes() {
     let findings = change();
-    let colored = report::human(&findings, &[], scanned(), 40, view(None, true));
-    let plain = report::human(&findings, &[], scanned(), 40, view(None, false));
+    let colored = report::human(judged(&findings, &[]), 40, view(None, true));
+    let plain = report::human(judged(&findings, &[]), 40, view(None, false));
 
     let stripped = strip_escapes(&colored);
     let (body, footer) = stripped.trim_end().rsplit_once('\n').expect("a footer");
@@ -566,20 +576,18 @@ fn strip_escapes(rendered: &str) -> String {
 
 #[test]
 fn a_clean_human_run_is_one_line_naming_the_scope_and_its_seal() {
-    let rendered = report::human(&[], &[], scanned(), 40, view(Some("main"), false));
+    let rendered = report::human(judged(&[], &[]), 40, view(Some("main"), false));
 
     assert_eq!(
         rendered,
-        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal d958·767d\n"
+        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal 40f3·adcd\n"
     );
 }
 
 #[test]
 fn a_clean_human_run_still_names_every_file_it_could_not_read() {
     let rendered = report::human(
-        &[],
-        &[unreadable("src/broken.rs", 1)],
-        scanned(),
+        judged(&[], &[unreadable("src/broken.rs", 1)]),
         40,
         view(None, false),
     );
@@ -589,7 +597,7 @@ fn a_clean_human_run_still_names_every_file_it_could_not_read() {
 
 #[test]
 fn a_human_report_beyond_the_limit_says_how_many_findings_it_withheld() {
-    let rendered = report::human(&change(), &[], scanned(), 3, view(None, false));
+    let rendered = report::human(judged(&change(), &[]), 3, view(None, false));
 
     insta::assert_snapshot!(rendered);
 }
@@ -598,7 +606,7 @@ fn a_human_report_beyond_the_limit_says_how_many_findings_it_withheld() {
 fn the_seal_changes_with_anything_the_verdict_contains() {
     let findings = change();
     let seal = |findings: &[Finding], unreadable: &[Unreadable]| {
-        let rendered = report::human(findings, unreadable, scanned(), 40, view(None, false));
+        let rendered = report::human(judged(findings, unreadable), 40, view(None, false));
         rendered
             .lines()
             .last()
@@ -649,7 +657,7 @@ fn text_taken_from_the_repository_cannot_drive_the_terminal() {
         "a linter diagnostic is suppressed instead of satisfied",
     )];
 
-    let rendered = report::human(&findings, &[], scanned(), 40, view(Some("\x1bmain"), true));
+    let rendered = report::human(judged(&findings, &[]), 40, view(Some("\x1bmain"), true));
 
     insta::assert_snapshot!(shown_escapes(&rendered));
 }
@@ -673,7 +681,7 @@ fn findings_without_a_subject_on_one_line_each_keep_their_line() {
         ),
     ];
 
-    let rendered = report::human(&findings, &[], scanned(), 40, view(None, false));
+    let rendered = report::human(judged(&findings, &[]), 40, view(None, false));
 
     assert_eq!(rendered.matches("\n  :1  ").count(), 2, "{rendered}");
 }
@@ -685,7 +693,7 @@ fn two_units_sharing_a_name_each_keep_their_own_line_and_name() {
         measured(Rule::Parameters, "src/lib.rs", 48, "new", (5, 4)),
     ];
 
-    let rendered = report::human(&findings, &[], scanned(), 40, view(None, false));
+    let rendered = report::human(judged(&findings, &[]), 40, view(None, false));
 
     insta::assert_snapshot!(rendered);
 }
@@ -700,7 +708,7 @@ fn a_human_report_ends_with_how_many_findings_there_are_to_fix() {
         (22, 5),
     )];
 
-    let rendered = report::human(&findings, &[], scanned(), 40, view(None, false));
+    let rendered = report::human(judged(&findings, &[]), 40, view(None, false));
 
     assert!(rendered.contains("\n1 to fix · seal "), "{rendered}");
 }
@@ -713,7 +721,7 @@ fn each_file_leads_with_its_weekly_commits_and_the_busiest_comes_first() {
         ..view(None, false)
     };
 
-    let rendered = report::human(&change(), &[], scanned(), 40, view);
+    let rendered = report::human(judged(&change(), &[]), 40, view);
 
     insta::assert_snapshot!(rendered);
 }
@@ -733,7 +741,7 @@ fn quiet_weeks_are_dimmed_and_busy_ones_painted() {
         (5, 4),
     )];
 
-    let rendered = report::human(&findings, &[], scanned(), 40, view);
+    let rendered = report::human(judged(&findings, &[]), 40, view);
 
     insta::assert_snapshot!(shown_escapes(&rendered));
 }
@@ -743,7 +751,7 @@ fn the_files_shown_are_those_of_the_findings_within_the_limit_each_once() {
     let findings = change();
 
     assert_eq!(
-        report::shown_files(&findings, 5),
+        report::shown_files(&judged(&findings, &[]), 5),
         ["registry/src/ai.rs", "server/src/api/assistant.rs"]
     );
 }
@@ -756,7 +764,7 @@ fn the_note_of_what_was_withheld_lines_up_with_the_rows_under_a_rhythm() {
         ..view(None, false)
     };
 
-    let rendered = report::human(&change(), &[], scanned(), 2, view);
+    let rendered = report::human(judged(&change(), &[]), 2, view);
 
     assert!(
         rendered.contains("\n              7 more not shown."),
@@ -817,7 +825,7 @@ fn a_verbose_report_opens_with_the_commits_and_shows_the_code_of_each_unit() {
         ..view(Some("main"), false)
     };
 
-    let rendered = report::human(&change(), &[], scanned(), 40, view);
+    let rendered = report::human(judged(&change(), &[]), 40, view);
 
     insta::assert_snapshot!(rendered);
 }
@@ -830,7 +838,7 @@ fn a_verbose_report_paints_changed_lines_apart_from_their_context() {
         ..view(Some("main"), true)
     };
 
-    let rendered = report::human(&change(), &[], scanned(), 40, view);
+    let rendered = report::human(judged(&change(), &[]), 40, view);
 
     insta::assert_snapshot!(shown_escapes(&rendered));
 }
@@ -849,7 +857,7 @@ fn the_timeline_shows_five_commits_and_counts_the_rest() {
             trail: Some(&trail),
             ..view(None, false)
         };
-        let rendered = report::human(&change(), &[], scanned(), 40, view);
+        let rendered = report::human(judged(&change(), &[]), 40, view);
         let lines: Vec<&str> = rendered
             .lines()
             .skip(1)
@@ -871,7 +879,7 @@ fn without_commits_in_the_change_there_is_no_timeline() {
         ..view(None, false)
     };
 
-    let rendered = report::human(&change(), &[], scanned(), 40, view);
+    let rendered = report::human(judged(&change(), &[]), 40, view);
 
     assert!(
         rendered.starts_with("⬢ jabuti  42 files · 378 units\n\n"),
@@ -895,7 +903,7 @@ fn a_long_line_of_code_is_clipped_to_seventy_two_columns() {
         ..view(None, false)
     };
 
-    let rendered = report::human(&change(), &[], scanned(), 40, view);
+    let rendered = report::human(judged(&change(), &[]), 40, view);
 
     assert!(
         rendered.contains(&format!(" 469 │ {exact}\n")),
@@ -921,7 +929,7 @@ fn code_and_commit_subjects_cannot_reach_the_terminal_as_control_sequences() {
         ..view(None, false)
     };
 
-    let rendered = report::human(&change(), &[], scanned(), 40, view);
+    let rendered = report::human(judged(&change(), &[]), 40, view);
 
     assert!(
         rendered.contains(" 469 ┃ let bell = \"\u{fffd}\u{fffd}[2J\";\n"),
@@ -951,7 +959,7 @@ fn code_cannot_reorder_itself_on_screen_with_bidirectional_controls() {
         ..view(None, false)
     };
 
-    let rendered = report::human(&change(), &[], scanned(), 40, view);
+    let rendered = report::human(judged(&change(), &[]), 40, view);
 
     assert!(
         rendered.contains(" 469 │ /*\u{fffd} } if admin {\u{fffd} */ \u{fffd}x\u{fffd}\n"),
@@ -970,11 +978,11 @@ fn a_clean_verbose_report_still_shows_the_commits_of_the_change() {
         ..view(Some("main"), false)
     };
 
-    let rendered = report::human(&[], &[], scanned(), 40, view);
+    let rendered = report::human(judged(&[], &[]), 40, view);
 
     assert_eq!(
         rendered,
-        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal d958·767d\n  ┬ 7f893ac  feat: a clean change\n  ┴\n"
+        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal 40f3·adcd\n  ┬ 7f893ac  feat: a clean change\n  ┴\n"
     );
 }
 
@@ -989,7 +997,195 @@ fn a_unit_whose_code_could_not_be_read_leaves_no_gap_behind_it() {
         ..view(None, false)
     };
 
-    let rendered = report::human(&change(), &[], scanned(), 40, view);
+    let rendered = report::human(judged(&change(), &[]), 40, view);
 
     assert!(rendered.contains("8/7\n  :525  chat"), "{rendered}");
+}
+
+fn note(path: &str) -> Finding {
+    Finding {
+        rule: RuleId::Native(Rule::NewDependency),
+        path: path.to_owned(),
+        span: Span {
+            start_line: 2,
+            end_line: 2,
+        },
+        subject: None,
+        detail: Detail::Message {
+            message: "now depends on src/git.rs".to_owned(),
+        },
+    }
+}
+
+fn hotspot(path: &str) -> Finding {
+    Finding {
+        rule: RuleId::Native(Rule::Hotspot),
+        path: path.to_owned(),
+        span: Span {
+            start_line: 1,
+            end_line: 40,
+        },
+        subject: None,
+        detail: Detail::Threshold {
+            measured: 92,
+            limit: 90,
+        },
+    }
+}
+
+fn with_context<'a>(findings: &'a [Finding], context: &'a [Finding]) -> report::Judgement<'a> {
+    report::Judgement {
+        context,
+        ..judged(findings, &[])
+    }
+}
+
+#[test]
+fn an_outcome_sets_what_does_not_fail_the_run_apart_from_its_findings() {
+    let mut outcome = Outcome {
+        findings: vec![
+            note("src/a.rs"),
+            finding(12, Some("parse")),
+            hotspot("src/a.rs"),
+        ],
+        ..Outcome::default()
+    };
+
+    outcome.set_context_apart();
+
+    assert_eq!(
+        outcome,
+        Outcome {
+            findings: vec![finding(12, Some("parse"))],
+            context: vec![note("src/a.rs"), hotspot("src/a.rs")],
+            ..Outcome::default()
+        }
+    );
+}
+
+#[test]
+fn the_files_shown_include_those_with_only_context_each_once_in_path_order() {
+    let findings = [finding(12, Some("parse"))];
+    let context = [
+        note("src/report.rs"),
+        hotspot("src/report.rs"),
+        note("src/a.rs"),
+    ];
+
+    assert_eq!(
+        report::shown_files(&with_context(&findings, &context), 40),
+        ["src/a.rs", "src/handler.rs", "src/report.rs"]
+    );
+}
+
+#[test]
+fn the_agent_lists_context_apart_after_what_there_is_to_fix() {
+    let findings = [finding(12, Some("parse"))];
+    let context = [hotspot("src/report.rs"), note("src/report.rs")];
+
+    insta::assert_snapshot!(report::agent(with_context(&findings, &context), 40));
+}
+
+#[test]
+fn the_agent_shows_context_even_when_there_is_nothing_to_fix() {
+    let context = [note("src/report.rs")];
+
+    insta::assert_snapshot!(report::agent(with_context(&[], &context), 40));
+}
+
+#[test]
+fn json_carries_the_context_beside_the_findings() {
+    let context = [note("src/report.rs")];
+
+    insta::assert_snapshot!(report::json(with_context(&[], &context)));
+}
+
+#[test]
+fn sarif_marks_context_as_a_note_and_findings_as_errors() {
+    let findings = [finding(12, Some("parse"))];
+    let context = [note("src/report.rs")];
+
+    insta::assert_snapshot!(report::sarif(with_context(&findings, &context)));
+}
+
+#[test]
+fn the_human_report_shows_context_under_its_file_and_counts_it_apart() {
+    let findings = [finding(12, Some("parse"))];
+    let context = [
+        hotspot("src/report.rs"),
+        note("src/report.rs"),
+        note("src/server/api.rs"),
+    ];
+
+    insta::assert_snapshot!(report::human(
+        with_context(&findings, &context),
+        40,
+        view(None, false)
+    ));
+}
+
+#[test]
+fn the_human_report_with_only_context_says_there_is_nothing_to_fix() {
+    let context = [note("src/report.rs")];
+
+    insta::assert_snapshot!(report::human(
+        with_context(&[], &context),
+        40,
+        view(None, false)
+    ));
+}
+
+#[test]
+fn the_agent_says_how_many_notes_of_context_it_withheld() {
+    let context = [note("src/a.rs"), note("src/b.rs"), note("src/c.rs")];
+
+    assert_eq!(
+        report::agent(with_context(&[], &context), 2),
+        "No findings across 42 files and 378 units.\n\n\
+         Context, which does not fail the run:\n\
+         src/a.rs:2  new-dependency  now depends on src/git.rs\n\
+         src/b.rs:2  new-dependency  now depends on src/git.rs\n\
+         1 further note not shown.\n"
+    );
+}
+
+#[test]
+fn an_outcome_is_judged_on_exactly_what_it_holds() {
+    let outcome = Outcome {
+        findings: vec![finding(12, Some("parse"))],
+        context: vec![note("src/a.rs")],
+        unreadable: vec![unreadable("src/theme.kt", 51)],
+        scanned: scanned(),
+        ..Outcome::default()
+    };
+
+    let judgement = outcome.judgement();
+
+    assert_eq!(
+        (
+            judgement.findings,
+            judgement.context,
+            judgement.unreadable,
+            judgement.scanned
+        ),
+        (
+            &[finding(12, Some("parse"))][..],
+            &[note("src/a.rs")][..],
+            &[unreadable("src/theme.kt", 51)][..],
+            scanned()
+        )
+    );
+}
+
+#[test]
+fn the_human_report_counts_withheld_notes_of_context_too() {
+    let findings = [finding(12, Some("parse"))];
+    let context = [note("src/a.rs"), note("src/b.rs"), note("src/c.rs")];
+
+    let rendered = report::human(with_context(&findings, &context), 1, view(None, false));
+
+    assert!(
+        rendered.contains("  2 more not shown. Narrow the scope with a path argument.\n"),
+        "{rendered}"
+    );
 }
