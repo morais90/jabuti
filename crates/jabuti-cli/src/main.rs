@@ -2,6 +2,7 @@ mod check;
 mod config;
 mod inputs;
 
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -39,8 +40,8 @@ enum Command {
         #[arg(long, value_name = "REF")]
         since: Option<String>,
 
-        #[arg(long, value_enum, default_value_t = Format::Agent)]
-        format: Format,
+        #[arg(long, value_enum)]
+        format: Option<Format>,
 
         #[arg(long, default_value_t = report::DEFAULT_LIMIT)]
         limit: usize,
@@ -54,6 +55,7 @@ enum ToolsAction {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum Format {
+    Human,
     Agent,
     Json,
     Measures,
@@ -145,13 +147,34 @@ fn install_tools() -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn check(roots: &[PathBuf], since: Option<&str>, format: Format, limit: usize) -> Result<ExitCode> {
+fn check(
+    roots: &[PathBuf],
+    since: Option<&str>,
+    format: Option<Format>,
+    limit: usize,
+) -> Result<ExitCode> {
     let mut notices = Vec::new();
     let verdict = check::verdict(roots, since, &mut notices);
     announce(notices);
 
-    let outcome = verdict?;
-    print!("{}", rendered(format, &outcome, limit));
+    let (root, outcome) = verdict?;
+    let term = std::env::var_os("TERM");
+    let interactive = report::interactive(std::io::stdout().is_terminal(), term.as_deref());
+    let no_color = std::env::var_os("NO_COLOR");
+    let request = Request {
+        format: format.unwrap_or(if interactive {
+            Format::Human
+        } else {
+            Format::Agent
+        }),
+        limit,
+        view: report::View {
+            since,
+            color: report::colored(interactive, no_color.as_deref()),
+            links: Some(&root),
+        },
+    };
+    print!("{}", rendered(&request, &outcome));
 
     if report::has_errors(&outcome.findings) {
         return Ok(ExitCode::from(1));
@@ -169,13 +192,26 @@ fn announce(mut notices: Vec<String>) {
     }
 }
 
-fn rendered(format: Format, outcome: &report::Outcome, limit: usize) -> String {
-    match format {
+struct Request<'a> {
+    format: Format,
+    limit: usize,
+    view: report::View<'a>,
+}
+
+fn rendered(request: &Request<'_>, outcome: &report::Outcome) -> String {
+    match request.format {
+        Format::Human => report::human(
+            &outcome.findings,
+            &outcome.unreadable,
+            outcome.scanned,
+            request.limit,
+            request.view,
+        ),
         Format::Agent => report::agent(
             &outcome.findings,
             &outcome.unreadable,
             outcome.scanned,
-            limit,
+            request.limit,
         ),
         Format::Json => report::json(&outcome.findings, &outcome.unreadable, outcome.scanned),
         Format::Measures => report::measures(&outcome.readings, &outcome.unreadable),

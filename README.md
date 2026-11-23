@@ -49,6 +49,10 @@ which is enough to act on without asking a follow-up question. Nothing in the ou
 your situation: jabuti will not read your function and tell you how to restructure it, because that
 answer is not reproducible and deciding it is the caller's job.
 
+That is what an agent reads. In a terminal the same verdict is grouped by file, colored, and draws
+each measurement against its limit; [the output documentation](docs/concepts.md#other-shapes-of-output)
+shows it.
+
 For CI and code-scanning consumers, `jabuti check --format sarif` emits deterministic SARIF 2.1.0
 without changing the exit codes. [The output documentation](docs/concepts.md#other-shapes-of-output)
 describes the contract and the parts GitHub does not display.

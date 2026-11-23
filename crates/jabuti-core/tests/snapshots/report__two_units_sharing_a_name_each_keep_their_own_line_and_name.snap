@@ -1,0 +1,12 @@
+---
+source: crates/jabuti-core/tests/report.rs
+assertion_line: 637
+expression: rendered
+---
+⬢ jabuti  42 files · 378 units
+
+src/lib.rs
+  :12  new  parameters  ━━━━━━┃━━━━╌╌  6/4
+  :48  new  parameters  ━━━━━━━━━┃━━━  5/4
+
+2 to fix · seal 6a4c·f75b

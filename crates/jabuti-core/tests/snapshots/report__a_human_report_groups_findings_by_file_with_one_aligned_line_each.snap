@@ -1,0 +1,28 @@
+---
+source: crates/jabuti-core/tests/report.rs
+assertion_line: 481
+expression: rendered
+---
+⬢ jabuti  since main · 42 files · 378 units
+
+registry/src/ai.rs
+  :469  remembered                cognitive-complexity        ━━━━━━━━━┃━╌╌    8/7
+  :525  chat                      function-lines              ━━━━━┃━━━━━╌╌  108/60
+
+server/src/api/assistant.rs
+  :564  turn                      cognitive-complexity        ━━┃━━━━━━━━╌╌   31/7
+                                  function-lines              ━━━┃━━━━━━━╌╌  167/60
+  :762  store                     parameters                  ━━━━━━━━━┃━━━    5/4
+
+server/src/api/policy.rs
+  :161  clippy::struct_excessiv…  suppression                 a linter diagnostic is suppressed instead of satisfied
+  :456                            duplicate-block             157 nodes repeated at server/src/storage.rs:115 (limit 120)
+  :897  updates                   function-lines              ━━━━━━━━━━┃━╌   61/60
+
+src/lib.rs
+  :3                              clippy/needless_range_loop  the loop variable is only used to index
+
+6 to fix · 3 warnings · 1 unreadable · seal 2535·298e
+
+1 file was not measured, so nothing above accounts for it.
+src/api/index.ts  unreadable syntax from line 3

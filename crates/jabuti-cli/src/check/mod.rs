@@ -22,7 +22,7 @@ pub(crate) fn verdict(
     roots: &[PathBuf],
     since: Option<&str>,
     notices: &mut Vec<String>,
-) -> Result<Outcome> {
+) -> Result<(PathBuf, Outcome)> {
     let (root, settings) = workspace::discover()?;
     tools::known(&settings)?;
     let changes = since
@@ -53,7 +53,7 @@ pub(crate) fn verdict(
     }
     outcome.order();
 
-    Ok(outcome)
+    Ok((root, outcome))
 }
 
 struct Run<'a> {

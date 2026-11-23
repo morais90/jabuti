@@ -215,7 +215,33 @@ pattern mistake that leaves a layer silently empty and how the rule guards again
 
 ## Other shapes of output
 
-`--format agent` is the default and the one built for reading. Three others exist for programs.
+Which format you get without asking depends on who is reading. Written to a terminal, `jabuti check`
+uses `--format human`. Written anywhere else, which is where an agent or a script reads it, it uses
+`--format agent`. A terminal whose `TERM` is `dumb`, which is how a program that drives a terminal
+usually says no person is reading it, gets the agent format too. `--format` names either one
+explicitly.
+
+`--format human` groups the findings by file, one line each, and draws every measured finding as a
+bar against its limit:
+
+```console
+$ jabuti check
+⬢ jabuti  1 file · 2 units
+
+src/lib.rs
+  :1  turn  cognitive-complexity  ━━━━┃━━━━━━╌╌  18/7
+            parameters            ━━━━━━━━━┃━━━   5/4
+
+2 warnings · seal 2d40·014d
+```
+
+It is colored and each file name links to the file, unless the `NO_COLOR` environment variable is set
+to a non-empty value. The seal is a short digest of the whole verdict: two runs that print different
+seals reported different things, and two that print the same one almost certainly reported the same
+thing. Nothing in it depends on the clock, so the same input prints the same bytes, as in every other
+format.
+
+`--format agent` is the one built for an agent to read. Three others exist for programs.
 
 `--format json` carries the same findings with a schema version, so a build or a bot can consume
 them without parsing text:
@@ -310,7 +336,7 @@ not pretend to know columns. Artifact URIs are RFC 3986 percent-encoded paths re
 root. Absolute checkout paths and URI bases never enter the report.
 
 A clean run keeps the run metadata and carries `"results": []`. SARIF always contains every result
-and every execution notification; `--limit` truncates only the agent format. `partialFingerprints`
+and every execution notification; `--limit` truncates only the human and agent formats. `partialFingerprints`
 are deliberately absent because the reporting model does not carry source-line content from which
 to calculate them. [GitHub's `upload-sarif` action](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/integrate-with-existing-tools/upload-sarif-file)
 synthesizes them when it can read the source. A direct REST upload without them is accepted, but

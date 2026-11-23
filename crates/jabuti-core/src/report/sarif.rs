@@ -263,7 +263,7 @@ fn artifact_uri(path: &str) -> String {
     uri
 }
 
-fn encode_component(uri: &mut String, component: &str) {
+pub(super) fn encode_component(uri: &mut String, component: &str) {
     for byte in component.bytes() {
         if uri_byte(byte) {
             uri.push(char::from(byte));

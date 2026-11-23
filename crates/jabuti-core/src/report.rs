@@ -1,3 +1,4 @@
+mod human;
 mod sarif;
 
 use std::fmt::Write;
@@ -5,6 +6,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
+pub use self::human::{View, colored, interactive};
 use crate::catalog::Severity;
 use crate::model::{Detail, Finding, Reading, Unreadable};
 
@@ -207,6 +209,16 @@ pub fn json(findings: &[Finding], unreadable: &[Unreadable], scanned: Scanned) -
     };
 
     rendered(&report)
+}
+
+pub fn human(
+    findings: &[Finding],
+    unreadable: &[Unreadable],
+    scanned: Scanned,
+    limit: usize,
+    view: View<'_>,
+) -> String {
+    human::render(findings, unreadable, scanned, limit, view)
 }
 
 pub fn sarif(findings: &[Finding], unreadable: &[Unreadable]) -> String {

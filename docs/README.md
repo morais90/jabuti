@@ -14,8 +14,9 @@ default limit was drawn from, and says what a percentile in it does and does not
 
 ## Output formats
 
-`jabuti check` defaults to compact agent output. [Other output shapes](concepts.md#other-shapes-of-output)
-cover JSON findings, raw measures and SARIF for programmatic consumers.
+`jabuti check` writes a grouped, colored report to a terminal and compact agent output anywhere else.
+[Other output shapes](concepts.md#other-shapes-of-output) cover both, and the JSON findings, raw
+measures and SARIF for programmatic consumers.
 
 ## Measures
 

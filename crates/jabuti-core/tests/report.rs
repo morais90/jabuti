@@ -1,3 +1,5 @@
+use std::ffi::OsStr;
+
 use jabuti_core::catalog::{Rule, RuleId, Severity, UnitKind};
 use jabuti_core::model::{Detail, Finding, Reading, Span, Unreadable};
 use jabuti_core::report::{self, Outcome, Scanned};
@@ -393,4 +395,315 @@ fn an_outcome_puts_its_findings_readings_and_unreadable_files_in_one_order() {
             unreadable: vec![unreadable("src/app.ts", 3), unreadable("src/theme.kt", 51)],
         }
     );
+}
+
+fn measured(rule: Rule, path: &str, line: u32, subject: &str, values: (u32, u32)) -> Finding {
+    Finding {
+        rule: RuleId::Native(rule),
+        severity: Severity::Error,
+        path: path.to_owned(),
+        span: Span {
+            start_line: line,
+            end_line: line + 20,
+        },
+        subject: Some(subject.to_owned()),
+        detail: Detail::Threshold {
+            measured: values.0,
+            limit: values.1,
+        },
+    }
+}
+
+fn told(rule: Rule, path: &str, line: u32, subject: Option<&str>, message: &str) -> Finding {
+    Finding {
+        rule: RuleId::Native(rule),
+        severity: Severity::Warning,
+        path: path.to_owned(),
+        span: Span {
+            start_line: line,
+            end_line: line,
+        },
+        subject: subject.map(str::to_owned),
+        detail: Detail::Message {
+            message: message.to_owned(),
+        },
+    }
+}
+
+fn change() -> Vec<Finding> {
+    let mut findings = vec![
+        measured(
+            Rule::CognitiveComplexity,
+            "registry/src/ai.rs",
+            469,
+            "remembered",
+            (8, 7),
+        ),
+        measured(
+            Rule::FunctionLines,
+            "registry/src/ai.rs",
+            525,
+            "chat",
+            (108, 60),
+        ),
+        measured(
+            Rule::FunctionLines,
+            "server/src/api/assistant.rs",
+            564,
+            "turn",
+            (167, 60),
+        ),
+        measured(
+            Rule::CognitiveComplexity,
+            "server/src/api/assistant.rs",
+            564,
+            "turn",
+            (31, 7),
+        ),
+        measured(
+            Rule::Parameters,
+            "server/src/api/assistant.rs",
+            762,
+            "store",
+            (5, 4),
+        ),
+        measured(
+            Rule::FunctionLines,
+            "server/src/api/policy.rs",
+            897,
+            "updates",
+            (61, 60),
+        ),
+        told(
+            Rule::Suppression,
+            "server/src/api/policy.rs",
+            161,
+            Some("clippy::struct_excessive_bools, reason = \"one switch per device\""),
+            "a linter diagnostic is suppressed instead of satisfied",
+        ),
+        told(
+            Rule::DuplicateBlock,
+            "server/src/api/policy.rs",
+            456,
+            None,
+            "157 nodes repeated at server/src/storage.rs:115 (limit 120)",
+        ),
+        tool_finding(),
+    ];
+    findings.sort();
+    findings
+}
+
+fn shown_escapes(rendered: &str) -> String {
+    rendered.replace('\x1b', "␛")
+}
+
+fn view(since: Option<&str>, color: bool) -> report::View<'_> {
+    report::View {
+        since,
+        color,
+        links: Some(std::path::Path::new("/work/ünïcode project")),
+    }
+}
+
+#[test]
+fn a_human_report_groups_findings_by_file_with_one_aligned_line_each() {
+    let rendered = report::human(
+        &change(),
+        &[unreadable("src/api/index.ts", 3)],
+        scanned(),
+        40,
+        view(Some("main"), false),
+    );
+
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn a_colored_human_report_paints_and_links_what_the_plain_one_writes() {
+    let findings = change();
+    let colored = report::human(&findings, &[], scanned(), 40, view(None, true));
+    let plain = report::human(&findings, &[], scanned(), 40, view(None, false));
+
+    let stripped = strip_escapes(&colored);
+    let (body, footer) = stripped.trim_end().rsplit_once('\n').expect("a footer");
+    let (plain_body, plain_footer) = plain.trim_end().rsplit_once('\n').expect("a footer");
+
+    assert_eq!(body, plain_body);
+    assert_eq!(footer.replacen("   ", " · ", 1).trim_start(), plain_footer);
+    insta::assert_snapshot!(shown_escapes(&colored));
+}
+
+fn strip_escapes(rendered: &str) -> String {
+    let mut plain = String::new();
+    let mut rest = rendered;
+    while let Some(start) = rest.find('\x1b') {
+        plain.push_str(&rest[..start]);
+        let escape = &rest[start..];
+        let end = if escape.starts_with("\x1b]") {
+            escape.find("\x1b\\").map(|close| close + 2)
+        } else {
+            escape.find('m').map(|close| close + 1)
+        };
+        rest = &escape[end.expect("every escape is closed")..];
+    }
+    plain.push_str(rest);
+    plain
+}
+
+#[test]
+fn a_clean_human_run_is_one_line_naming_the_scope_and_its_seal() {
+    let rendered = report::human(&[], &[], scanned(), 40, view(Some("main"), false));
+
+    assert_eq!(
+        rendered,
+        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal 517b·f003\n"
+    );
+}
+
+#[test]
+fn a_clean_human_run_still_names_every_file_it_could_not_read() {
+    let rendered = report::human(
+        &[],
+        &[unreadable("src/broken.rs", 1)],
+        scanned(),
+        40,
+        view(None, false),
+    );
+
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn a_human_report_of_warnings_alone_counts_them_instead_of_what_to_fix() {
+    let findings = [told(
+        Rule::ErrorMasking,
+        "src/lib.rs",
+        4,
+        Some("ok"),
+        "the failure is dropped",
+    )];
+
+    let rendered = report::human(&findings, &[], scanned(), 40, view(None, false));
+
+    assert!(rendered.contains("\n1 warning · seal "), "{rendered}");
+    assert!(!rendered.contains("to fix"), "{rendered}");
+}
+
+#[test]
+fn a_human_report_beyond_the_limit_says_how_many_findings_it_withheld() {
+    let rendered = report::human(&change(), &[], scanned(), 3, view(None, false));
+
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn the_seal_changes_with_anything_the_verdict_contains() {
+    let findings = change();
+    let seal = |findings: &[Finding], unreadable: &[Unreadable]| {
+        let rendered = report::human(findings, unreadable, scanned(), 40, view(None, false));
+        rendered
+            .lines()
+            .last()
+            .map(str::to_owned)
+            .expect("a footer")
+    };
+
+    let whole = seal(&findings, &[]);
+
+    assert_eq!(whole, seal(&findings, &[]));
+    assert_ne!(whole, seal(&findings[1..], &[]));
+    assert_ne!(
+        whole,
+        seal(&findings, &[unreadable("src/broken.rs", 1)]).replace("1 unreadable · ", "")
+    );
+}
+
+#[test]
+fn color_is_used_on_a_terminal_unless_no_color_is_set_to_something() {
+    let unset: Option<&OsStr> = None;
+
+    assert!(report::colored(true, unset));
+    assert!(report::colored(true, Some(OsStr::new(""))));
+    assert!(!report::colored(true, Some(OsStr::new("1"))));
+    assert!(!report::colored(false, unset));
+}
+
+#[test]
+fn a_terminal_that_declares_itself_dumb_is_not_read_by_a_person() {
+    let unset: Option<&OsStr> = None;
+
+    assert!(report::interactive(true, unset));
+    assert!(report::interactive(true, Some(OsStr::new("xterm-ghostty"))));
+    assert!(!report::interactive(true, Some(OsStr::new("dumb"))));
+    assert!(!report::interactive(
+        false,
+        Some(OsStr::new("xterm-ghostty"))
+    ));
+}
+
+#[test]
+fn text_taken_from_the_repository_cannot_drive_the_terminal() {
+    let findings = [told(
+        Rule::Suppression,
+        "src/\x1b[2Jlib.rs",
+        3,
+        Some("dead_code, reason = \"\x1b]52;c;aGk=\x07\""),
+        "a linter diagnostic is suppressed instead of satisfied",
+    )];
+
+    let rendered = report::human(&findings, &[], scanned(), 40, view(Some("\x1bmain"), true));
+
+    insta::assert_snapshot!(shown_escapes(&rendered));
+}
+
+#[test]
+fn findings_without_a_subject_on_one_line_each_keep_their_line() {
+    let findings = [
+        told(
+            Rule::DuplicateBlock,
+            "src/lib.rs",
+            1,
+            None,
+            "157 nodes repeated at src/main.rs:4",
+        ),
+        told(
+            Rule::Assertion,
+            "src/lib.rs",
+            1,
+            None,
+            "the test runs and asserts nothing",
+        ),
+    ];
+
+    let rendered = report::human(&findings, &[], scanned(), 40, view(None, false));
+
+    assert_eq!(rendered.matches("\n  :1  ").count(), 2, "{rendered}");
+}
+
+#[test]
+fn two_units_sharing_a_name_each_keep_their_own_line_and_name() {
+    let findings = [
+        measured(Rule::Parameters, "src/lib.rs", 12, "new", (6, 4)),
+        measured(Rule::Parameters, "src/lib.rs", 48, "new", (5, 4)),
+    ];
+
+    let rendered = report::human(&findings, &[], scanned(), 40, view(None, false));
+
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn a_human_report_of_errors_alone_mentions_no_warnings() {
+    let findings = [measured(
+        Rule::FunctionLines,
+        "src/lib.rs",
+        1,
+        "wide",
+        (22, 5),
+    )];
+
+    let rendered = report::human(&findings, &[], scanned(), 40, view(None, false));
+
+    assert!(rendered.contains("\n1 to fix · seal "), "{rendered}");
 }

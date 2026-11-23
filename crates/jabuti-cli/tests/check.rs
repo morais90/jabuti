@@ -441,3 +441,25 @@ fn findings_are_listed_by_path_and_line_whichever_rule_produced_them() {
             "src/aa.rs:2  warning  new-dependency  now depends on src/git.rs\nsrc/zz.rs:1  warning  function-lines",
         ));
 }
+
+#[test]
+fn the_human_format_asked_for_through_a_pipe_is_written_without_color() {
+    let directory = project(&[
+        ("jabuti.toml", &error_on_long_functions(5)),
+        ("src/lib.rs", &function_of("wide", 20)),
+    ]);
+
+    jabuti(&directory)
+        .args(["--format", "human"])
+        .env_remove("NO_COLOR")
+        .assert()
+        .code(1)
+        .stdout(
+            "⬢ jabuti  1 file · 1 unit\n\
+             \n\
+             src/lib.rs\n  \
+             :1  wide  function-lines  ━━┃━━━━━━━━╌╌  22/5\n\
+             \n\
+             1 to fix · seal aa9c·5128\n",
+        );
+}

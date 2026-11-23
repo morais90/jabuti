@@ -1,0 +1,17 @@
+---
+source: crates/jabuti-core/tests/report.rs
+assertion_line: 553
+expression: rendered
+---
+⬢ jabuti  42 files · 378 units
+
+registry/src/ai.rs
+  :469  remembered  cognitive-complexity  ━━━━━━━━━┃━╌╌    8/7
+  :525  chat        function-lines        ━━━━━┃━━━━━╌╌  108/60
+
+server/src/api/assistant.rs
+  :564  turn        cognitive-complexity  ━━┃━━━━━━━━╌╌   31/7
+
+  6 more not shown. Narrow the scope with a path argument.
+
+6 to fix · 3 warnings · seal 74d4·3192
