@@ -7,9 +7,6 @@
 [![CI](https://github.com/morais90/jabuti/actions/workflows/ci.yml/badge.svg)](https://github.com/morais90/jabuti/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-In Brazilian politics a *jabuti*, a tortoise, is a provision slipped into a bill about something
-else, hoping nobody reads that far. This tool reads that far.
-
 </div>
 
 > **Status: early but usable.** `jabuti check` reads Rust, Kotlin and TypeScript, reports nine rules
