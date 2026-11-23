@@ -7,9 +7,8 @@
 [![CI](https://github.com/morais90/jabuti/actions/workflows/ci.yml/badge.svg)](https://github.com/morais90/jabuti/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-*Jabuti não sobe em árvore.* A tortoise does not climb trees. If one is up there, somebody put it
-there. In Brazil the word became shorthand for whatever got slipped in where it does not belong,
-which is exactly what this tool goes looking for.
+In Brazilian politics a *jabuti*, a tortoise, is a provision slipped into a bill about something
+else, hoping nobody reads that far. This tool reads that far.
 
 </div>
 
