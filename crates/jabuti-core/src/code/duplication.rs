@@ -5,7 +5,7 @@ use std::path::Path;
 use tree_sitter::Node;
 
 use super::lang;
-use crate::catalog::{Rule, RuleId, Severity};
+use crate::catalog::{Rule, RuleId};
 use crate::model::{Detail, Finding, Span};
 use crate::policy::Policy;
 use crate::syntax::{self, Parsed};
@@ -102,7 +102,7 @@ pub fn duplicates(files: &[FileFragments], policy: &Policy) -> Vec<Finding> {
 
     let mut findings: Vec<Finding> = widest(repeated)
         .into_iter()
-        .map(|(occurrence, twins)| finding(&occurrence, &twins, config.severity, config.limit))
+        .map(|(occurrence, twins)| finding(&occurrence, &twins, config.limit))
         .collect();
 
     findings.sort_by(|left, right| {
@@ -191,10 +191,9 @@ fn twins_of(class: &[Occurrence], index: usize) -> Twins {
     }
 }
 
-fn finding(occurrence: &Occurrence, twins: &Twins, severity: Severity, limit: u32) -> Finding {
+fn finding(occurrence: &Occurrence, twins: &Twins, limit: u32) -> Finding {
     Finding {
         rule: RuleId::Native(Rule::DuplicateBlock),
-        severity,
         path: occurrence.path.clone(),
         span: occurrence.fragment.span,
         subject: None,

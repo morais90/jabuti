@@ -8,7 +8,6 @@ use std::path::Path;
 use serde::Serialize;
 
 pub use self::human::{View, colored, interactive};
-use crate::catalog::Severity;
 use crate::model::{Detail, Finding, Reading, Unreadable};
 
 pub const DEFAULT_LIMIT: usize = 40;
@@ -24,7 +23,7 @@ impl Rhythm {
         self.weeks.iter().sum()
     }
 }
-pub const SCHEMA: u32 = 3;
+pub const SCHEMA: u32 = 4;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Scanned {
@@ -57,9 +56,6 @@ pub fn agent(
     limit: usize,
 ) -> String {
     let mut rendered = String::new();
-    let errors = count(findings, Severity::Error);
-    let warnings = count(findings, Severity::Warning);
-
     if findings.is_empty() {
         writeln!(rendered, "No findings across {}.", files_and_units(scanned))
             .expect("writing to a string never fails");
@@ -70,9 +66,8 @@ pub fn agent(
 
     writeln!(
         rendered,
-        "{} and {} across {}.",
-        plural(errors, "error"),
-        plural(warnings, "warning"),
+        "{} to fix across {}.",
+        plural(findings.len(), "finding"),
         files_and_units(scanned)
     )
     .expect("writing to a string never fails");
@@ -130,10 +125,9 @@ fn not_measured(count: usize) -> String {
 fn write_finding(rendered: &mut String, finding: &Finding) {
     write!(
         rendered,
-        "{}:{}  {}  {}  ",
+        "{}:{}  {}  ",
         finding.path,
         finding.span.start_line,
-        finding.severity.label(),
         finding.rule.id(),
     )
     .expect("writing to a string never fails");
@@ -170,13 +164,6 @@ fn plural(count: usize, noun: &str) -> String {
     }
 }
 
-fn count(findings: &[Finding], severity: Severity) -> usize {
-    findings
-        .iter()
-        .filter(|finding| finding.severity == severity)
-        .count()
-}
-
 pub fn shown_files(findings: &[Finding], limit: usize) -> Vec<&str> {
     let mut paths: Vec<&str> = findings
         .iter()
@@ -187,10 +174,8 @@ pub fn shown_files(findings: &[Finding], limit: usize) -> Vec<&str> {
     paths
 }
 
-pub fn has_errors(findings: &[Finding]) -> bool {
-    findings
-        .iter()
-        .any(|finding| finding.severity == Severity::Error)
+pub fn fails(findings: &[Finding]) -> bool {
+    !findings.is_empty()
 }
 
 #[derive(Debug, Serialize)]
@@ -205,8 +190,7 @@ struct Report<'a> {
 struct Summary {
     files: usize,
     units: usize,
-    errors: usize,
-    warnings: usize,
+    findings: usize,
     unreadable: usize,
 }
 
@@ -223,8 +207,7 @@ pub fn json(findings: &[Finding], unreadable: &[Unreadable], scanned: Scanned) -
         summary: Summary {
             files: scanned.files,
             units: scanned.units,
-            errors: count(findings, Severity::Error),
-            warnings: count(findings, Severity::Warning),
+            findings: findings.len(),
             unreadable: unreadable.len(),
         },
         findings,

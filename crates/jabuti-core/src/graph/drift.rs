@@ -10,10 +10,9 @@ pub(crate) fn findings(scan: &Scan<'_>, index: &Index) -> Vec<Finding> {
 
     let mut found = Vec::new();
     for now in scan.sources {
-        let Some(severity) = super::reporting(scan.policy, now.language, Rule::NewDependency)
-        else {
+        if !super::reports(scan.policy, now.language, Rule::NewDependency) {
             continue;
-        };
+        }
         let Some(Some(then)) = scan.base.get(&now.path) else {
             continue;
         };
@@ -21,7 +20,6 @@ pub(crate) fn findings(scan: &Scan<'_>, index: &Index) -> Vec<Finding> {
         for (target, at) in added(index, now, then) {
             found.push(Finding {
                 rule: rule.clone(),
-                severity,
                 path: now.path.display().to_string(),
                 span: at,
                 subject: None,

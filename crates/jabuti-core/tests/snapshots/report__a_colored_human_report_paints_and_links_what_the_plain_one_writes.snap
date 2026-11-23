@@ -1,6 +1,6 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 496
+assertion_line: 547
 expression: shown_escapes(&colored)
 ---
 ␛[1;38;2;232;179;58m⬢␛[0m ␛[1;38;2;217;207;189mjabuti␛[0m  ␛[38;2;125;115;102m42 files · 378 units␛[0m
@@ -15,11 +15,11 @@ expression: shown_escapes(&colored)
   ␛[38;2;125;115;102m:762␛[0m  ␛[38;2;232;179;58mstore                   ␛[0m  ␛[38;2;125;115;102mparameters                ␛[0m  ␛[38;2;125;115;102m━━━━━━━━━␛[0m␛[38;2;232;179;58m┃␛[0m␛[38;2;226;85;42m━━━␛[0m  ␛[1;38;2;226;85;42m  5␛[0m␛[38;2;125;115;102m/4␛[0m
 
 ␛]8;;file:///work/%C3%BCn%C3%AFcode%20project/server/src/api/policy.rs␛\␛[1;38;2;217;207;189mserver/src/api/policy.rs␛[0m␛]8;;␛\
-  ␛[38;2;125;115;102m:161␛[0m  ␛[38;2;232;179;58mclippy::struct_excessiv…␛[0m  ␛[38;2;125;115;102msuppression               ␛[0m  ␛[38;2;232;179;58ma linter diagnostic is suppressed instead of satisfied␛[0m
-  ␛[38;2;125;115;102m:456␛[0m  ␛[38;2;232;179;58m                        ␛[0m  ␛[38;2;125;115;102mduplicate-block           ␛[0m  ␛[38;2;232;179;58m157 nodes repeated at server/src/storage.rs:115 (limit 120)␛[0m
+  ␛[38;2;125;115;102m:161␛[0m  ␛[38;2;232;179;58mclippy::struct_excessiv…␛[0m  ␛[38;2;125;115;102msuppression               ␛[0m  ␛[38;2;226;85;42ma linter diagnostic is suppressed instead of satisfied␛[0m
+  ␛[38;2;125;115;102m:456␛[0m  ␛[38;2;232;179;58m                        ␛[0m  ␛[38;2;125;115;102mduplicate-block           ␛[0m  ␛[38;2;226;85;42m157 nodes repeated at server/src/storage.rs:115 (limit 120)␛[0m
   ␛[38;2;125;115;102m:897␛[0m  ␛[38;2;232;179;58mupdates                 ␛[0m  ␛[38;2;125;115;102mfunction-lines            ␛[0m  ␛[38;2;125;115;102m━━━━━━━━━━␛[0m␛[38;2;232;179;58m┃␛[0m␛[38;2;226;85;42m━␛[0m␛[38;2;125;115;102m╌␛[0m  ␛[1;38;2;226;85;42m 61␛[0m␛[38;2;125;115;102m/60␛[0m
 
 ␛]8;;file:///work/%C3%BCn%C3%AFcode%20project/src/lib.rs␛\␛[1;38;2;217;207;189msrc/lib.rs␛[0m␛]8;;␛\
-  ␛[38;2;125;115;102m:3  ␛[0m  ␛[38;2;232;179;58m                        ␛[0m  ␛[38;2;125;115;102mclippy/needless_range_loop␛[0m  ␛[38;2;232;179;58mthe loop variable is only used to index␛[0m
+  ␛[38;2;125;115;102m:3  ␛[0m  ␛[38;2;232;179;58m                        ␛[0m  ␛[38;2;125;115;102mclippy/needless_range_loop␛[0m  ␛[38;2;226;85;42mthe loop variable is only used to index␛[0m
 
-␛[1;38;2;26;20;16;48;2;226;85;42m 6 to fix ␛[0m  ␛[38;2;125;115;102m3 warnings · seal 74d4·3192␛[0m
+␛[1;38;2;26;20;16;48;2;226;85;42m 9 to fix ␛[0m  ␛[38;2;125;115;102mseal dc8a·c1da␛[0m

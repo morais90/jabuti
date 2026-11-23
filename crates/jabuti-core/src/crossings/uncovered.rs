@@ -8,6 +8,7 @@ use crate::tools::coverage::FileCoverage;
 pub struct FileUnderCoverage<'a> {
     pub path: &'a str,
     pub language: LanguageId,
+    pub compile_time: &'a [Span],
 }
 
 pub fn findings(
@@ -16,15 +17,29 @@ pub fn findings(
     added: impl Fn(u32) -> bool,
     policy: &Policy,
 ) -> Vec<Finding> {
-    let Some(config) = policy.active_for(file.language, Rule::UncoveredNewCode) else {
+    if policy
+        .active_for(file.language, Rule::UncoveredNewCode)
+        .is_none()
+    {
         return Vec::new();
-    };
+    }
 
-    stretches(coverage, added)
+    let never_run: Vec<Span> = file
+        .compile_time
+        .iter()
+        .copied()
+        .filter(|span| {
+            coverage
+                .lines()
+                .all(|(line, hits)| hits == 0 || !within(line, *span))
+        })
+        .collect();
+    let only_compiled = |line: u32| never_run.iter().any(|span| within(line, *span));
+
+    stretches(coverage, |line| added(line) && !only_compiled(line))
         .into_iter()
         .map(|stretch| Finding {
             rule: RuleId::Native(Rule::UncoveredNewCode),
-            severity: config.severity,
             path: file.path.to_owned(),
             span: stretch.span,
             subject: None,
@@ -33,6 +48,10 @@ pub fn findings(
             },
         })
         .collect()
+}
+
+fn within(line: u32, span: Span) -> bool {
+    span.start_line <= line && line <= span.end_line
 }
 
 struct Stretch {

@@ -2,7 +2,7 @@
 
 jabuti does not reimplement linters. It runs the ones your project already has and folds their
 output into the same shape as everything else: one line per finding, one exit code, the same
-`--since` scoping.
+scoping to a change.
 
 ## Seeing what is available
 
@@ -34,17 +34,13 @@ Findings then appear alongside the rest:
 
 ```console
 $ jabuti check
-1 error and 0 warnings across 28 files and 387 units.
+1 finding to fix across 28 files and 387 units.
 
-src/external.rs:65  error  clippy/struct_field_names  field name starts with the struct's name
+src/external.rs:65  clippy/struct_field_names  field name starts with the struct's name
 ```
 
-The identifier is `<tool>/<lint>`, which is what you use to adjust or silence it:
-
-```toml
-[rules]
-"clippy/struct_field_names" = { severity = "off" }
-```
+The identifier is `<tool>/<lint>`. A diagnostic the tool reports at warning or error level is a
+finding to fix like any other, and fails the run. Notes and help the tool attaches are not reported.
 
 ## Installing missing tools
 
@@ -80,18 +76,10 @@ jabuti runs the tool in your project directory, so it reads your `clippy.toml`, 
 section and your `#![allow]` attributes exactly as it would if you ran it yourself. A lint your
 project has deliberately allowed stays allowed.
 
-Severity comes from the tool. If clippy calls something an error in your project, jabuti reports an
-error. jabuti never passes `-D warnings`, because doing so would replace your project's judgement
-with ours.
-
-Not configuring something and configuring it weakly are different acts, and only the second is a
-decision. What your project never decided is jabuti's to ask, and where it asks, the answer arrives at
-warning under its own rule id rather than at whatever severity the tool would have given it. Today
-that distinction costs you nothing, because clippy runs with your configuration and nothing added.
-[Principles](principles.md#tools-are-curated-not-piped) says what the distinction is for.
-
-You can still override any individual lint through `[rules]`, which is the same mechanism that
-adjusts jabuti's own rules.
+Which lints fire comes from your configuration, and jabuti adds none today: clippy runs with your
+configuration and nothing added. What it reports at warning or error level is a finding to fix, and
+there is no per-lint override in `jabuti.toml`. [Principles](principles.md#tools-are-curated-not-piped)
+says how this is meant to grow.
 
 ## Why they are off by default
 
@@ -108,8 +96,8 @@ A tool produces one of two things.
 
 **Diagnostics.** Clippy prints findings, and jabuti folds each one into the report as
 `clippy/<lint>`, next to its own rules. This is the shape of a linter: the tool already knows what
-is wrong, and jabuti's job is to carry that verdict in the same line format, with the same `--since`
-scoping and the same `[rules]` overrides.
+is wrong, and jabuti's job is to carry that verdict in the same line format, with the same scoping
+to a change.
 
 **A file a rule reads.** `cargo-llvm-cov` prints nothing you see. It runs the project's tests under
 instrumentation and writes an LCOV report to `target/jabuti/coverage.lcov`, and the native rule

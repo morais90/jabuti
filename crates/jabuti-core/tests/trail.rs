@@ -1,4 +1,4 @@
-use jabuti_core::catalog::{Rule, RuleId, Severity};
+use jabuti_core::catalog::{Rule, RuleId};
 use jabuti_core::model::{Detail, Finding, Span};
 use jabuti_core::report::trail::{self, Commit, Line};
 
@@ -15,7 +15,6 @@ fn line(number: u32, text: &str, changed: bool) -> Line {
 fn finding(path: &str, start_line: u32, rule: Rule) -> Finding {
     Finding {
         rule: RuleId::Native(rule),
-        severity: Severity::Warning,
         path: path.to_owned(),
         span: Span {
             start_line,

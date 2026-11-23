@@ -1,19 +1,19 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::catalog::{Concept, Rule, RuleId, RuleSpec, Severity};
+use crate::catalog::{Concept, Rule, RuleId, RuleSpec};
 use crate::lang::{self, LanguageId};
 use crate::model::Finding;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuleConfig {
     pub limit: u32,
-    pub severity: Severity,
+    pub enabled: bool,
 }
 
 impl RuleConfig {
     fn reports(self) -> bool {
-        self.severity != Severity::Off
+        self.enabled
     }
 }
 
@@ -61,7 +61,7 @@ fn language_defaults() -> BTreeMap<(LanguageId, RuleId), RuleConfig> {
 fn default_config(spec: RuleSpec, limit: u32) -> RuleConfig {
     RuleConfig {
         limit,
-        severity: spec.severity,
+        enabled: spec.enabled,
     }
 }
 
@@ -96,32 +96,10 @@ impl Policy {
             .filter(|config| config.reports())
     }
 
-    pub fn adjust_per_language(
-        &mut self,
-        rule: impl Into<RuleId>,
-        adjust: impl Fn(RuleConfig) -> RuleConfig,
-    ) {
-        let rule = rule.into();
-
-        for ((_, configured), config) in &mut self.by_language {
-            if *configured == rule {
-                *config = adjust(*config);
-            }
-        }
-    }
-
     pub fn enabled(&self, rule: Rule) -> bool {
-        self.anywhere(rule, |severity| severity != Severity::Off)
-    }
-
-    pub fn gates(&self, rule: Rule) -> bool {
-        self.anywhere(rule, |severity| severity == Severity::Error)
-    }
-
-    fn anywhere(&self, rule: Rule, holds: fn(Severity) -> bool) -> bool {
         lang::ALL.iter().any(|spec| {
             self.config_for(spec.id, rule)
-                .is_some_and(|config| holds(config.severity))
+                .is_some_and(RuleConfig::reports)
         })
     }
 
@@ -133,11 +111,7 @@ impl Policy {
 
         match configured {
             Some(config) if !config.reports() => None,
-            Some(config) => Some(Finding {
-                severity: config.severity,
-                ..finding
-            }),
-            None => Some(finding),
+            Some(_) | None => Some(finding),
         }
     }
 }

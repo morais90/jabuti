@@ -30,26 +30,14 @@ per language where the measured distributions differ.
 | `function-lines` | 60 | 47 | 71 |
 | `cognitive-complexity` | 7 | 7 | 18 |
 | `parameters` | 4 | 4 | 4 |
-| `cyclomatic-complexity` (off by default) | 10 | 10 | 13 |
+| `cyclomatic-complexity` (off) | 10 | 10 | 13 |
 
 [`CALIBRATION.md`](../CALIBRATION.md) records the benchmark populations, distributions and dates
 behind those defaults.
 
-## Setting a limit for one language
-
-Anything under `[rules]` applies everywhere. A `[languages.<name>.rules]` section overrides it for
-that language alone:
-
-```toml
-[rules]
-cognitive-complexity = { limit = 10 }
-
-[languages.kotlin.rules]
-function-lines = { limit = 80 }
-```
-
-That configuration relaxes cognitive complexity for the whole project and function length for Kotlin
-only, leaving Rust on its own default.
+These limits are fixed by jabuti. A `[languages.<name>.rules]` table in `jabuti.toml` stops the run
+with exit `2` rather than changing them. What a language section can still carry is
+`[languages.<name>.concepts]`, which binds the project's own wrappers to the concepts a rule reads.
 
 ## Rule availability
 

@@ -57,11 +57,12 @@ code a test never reaches is a finding, read from the coverage report the projec
 and a project that produces none is told so on the map, because no single change can be the one that
 adds it.
 
-**Where this stands today.** Native rules still report at warning, and a project can still change
-their severity and limits in `jabuti.toml`. A check judges a change by default and `--all` maps the
-repository without failing. The change reports what it made worse for the rules measured per file,
+**Where this stands today.** Every finding fails the check, and `jabuti.toml` no longer sets which
+rules run or their limits. A check judges a change by default and `--all` maps the repository without
+failing. The change reports what it made worse for the rules measured per file,
 while `duplicate-block` and the findings of orchestrated tools are still reported wherever they
-overlap a changed line, and `hotspot` is still a finding rather than context. This section is the model the next releases
+overlap a changed line, `hotspot` is still a finding rather than context,  and a project with no
+coverage report is not yet told so. This section is the model the next releases
 move to, and the documentation of each part changes with the release that ships it.
 
 ## Every default is an opinion
@@ -75,11 +76,12 @@ None of them is a setting. A project does not choose which rules run or where th
 more than it chooses how jabuti counts lines: those are what jabuti is, and part of what it offers is
 the judgement of which measures and checks actually make code better.
 
-**Which rules run.** All of them, always. A rule that is not worth running on every project is not in
-the catalog. `cyclomatic-complexity` is not there, because `cognitive-complexity` measures the same
-code better and two rules firing on one function is noise. `file-lines` is, because an agent extends
-the file it is in rather than opening a new one, and a file of small functions can still be too large
-to hold in mind. Each rule page carries the reason it exists.
+**Which rules run.** All of them, always. A rule that is not worth running on every project is not
+in the catalog. `cyclomatic-complexity` is not there, because `cognitive-complexity` measures the
+same code better and two rules firing on one function is noise. `file-lines` belongs there, because
+an agent extends the file it is in rather than opening a new one, and a file of small functions can
+still be too large to hold in mind. It stays off until its limit is calibrated against real code.
+Each rule page carries the reason it exists.
 
 **What limit each rule carries.** A number placed at a percentile of a named population, with the
 population named, because the same limit means different things in different languages and in
@@ -120,12 +122,12 @@ a list a project keeps is an exception by another name.
 **A suppression is a finding.** The same holds for the tools jabuti runs. Switching off one of their
 checks for a line is reported as a finding of its own, whatever reason is written next to it.
 
-**A project can tell jabuti more, never ask it to look less.** Some checks need a fact only the project
-holds. `layer-violation` has nothing to enforce until the project declares which parts of it may depend
-on which, and that declaration adds a constraint rather than lifting one. That is what `jabuti.toml` is
-for, and the only thing it is for. A key that would change a rule's severity or limit is rejected with
-an error that says why, rather than ignored, because a setting that silently does nothing is worse than
-one that is refused.
+**A project can tell jabuti more, never ask it to look less.** Some checks need a fact only the
+project holds. `layer-violation` has nothing to enforce until the project declares which parts of it
+may depend on which, and that declaration adds a constraint rather than lifting one. That is what
+`jabuti.toml` is for, and the only thing it is for. A `[rules]` table, which would change which
+rules run or their limits, is rejected with an error that says why, rather than ignored, because a
+setting that silently does nothing is worse than one that is refused.
 
 ## Tools are curated, not piped
 
@@ -160,7 +162,8 @@ changes what is asked says so, and a verdict on unchanged code can move between 
 reason and no other.
 
 **Where this stands today.** clippy is the only orchestrated linter, and it runs with your project's
-configuration and nothing added. The curated sets described here are the standard this project holds
+configuration and nothing added. Every diagnostic it reports at warning or error level is a finding
+to fix. The curated sets described here are the standard this project holds
 itself to when it integrates a tool, not a description of what ships, and each one arrives with the
 release that adds it.
 

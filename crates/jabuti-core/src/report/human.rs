@@ -6,8 +6,7 @@ use std::path::{Component, Path};
 
 use super::sarif::encode_component;
 use super::trail::{Line, Trail};
-use super::{Rhythm, Scanned, WEEKS, count, json, plural};
-use crate::catalog::Severity;
+use super::{Rhythm, Scanned, WEEKS, json, plural};
 use crate::model::{Detail, Finding, Unreadable};
 
 const BAR_WIDTH: u32 = 12;
@@ -53,14 +52,6 @@ impl Tone {
             Self::Bone => (0xd9, 0xcf, 0xbd),
             Self::Dim => (0x7d, 0x73, 0x66),
             Self::Moss => (0x9b, 0xb0, 0x68),
-        }
-    }
-
-    fn of(severity: Severity) -> Self {
-        match severity {
-            Severity::Error => Self::Scale,
-            Severity::Warning => Self::Amber,
-            Severity::Off => Self::Dim,
         }
     }
 }
@@ -371,7 +362,7 @@ fn write_row(
     )
     .expect("writing to a string never fails");
 
-    let tone = Tone::of(finding.severity);
+    let tone = Tone::Scale;
     match &finding.detail {
         Detail::Threshold { measured, limit } => {
             let value = format!("{measured:>width$}", width = columns.measured);
@@ -413,18 +404,9 @@ fn footer(
     unreadable: &[Unreadable],
     seal: &str,
 ) -> String {
-    let errors = count(findings, Severity::Error);
-    let warnings = count(findings, Severity::Warning);
     let mut notes = Vec::new();
 
-    let badge = if errors > 0 {
-        if warnings > 0 {
-            notes.push(plural(warnings, "warning"));
-        }
-        paint.badge(Tone::Scale, &format!("{errors} to fix"))
-    } else {
-        paint.badge(Tone::Amber, &plural(warnings, "warning"))
-    };
+    let badge = paint.badge(Tone::Scale, &format!("{} to fix", findings.len()));
     if !unreadable.is_empty() {
         notes.push(format!("{} unreadable", unreadable.len()));
     }

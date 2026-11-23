@@ -4,17 +4,14 @@ use common::{function_of, project, shaped_like};
 use tempfile::TempDir;
 
 fn busy_project() -> TempDir {
-    let mut files: Vec<(String, String)> = vec![(
-        "jabuti.toml".to_owned(),
-        "[rules]\nfunction-lines = { limit = 3 }\nduplicate-block = { limit = 40 }\n".to_owned(),
-    )];
+    let mut files: Vec<(String, String)> = Vec::new();
 
-    for index in 0..24 {
+    for index in 0..48 {
         files.push((
             format!("src/module_{index:02}.rs"),
             format!(
                 "{}\n{}\nfn read(value: Option<u32>) -> u32 {{\n    value.unwrap()\n}}\n",
-                function_of(&format!("long_{index}"), 6),
+                function_of(&format!("long_{index}"), 70),
                 shaped_like(&format!("parse_{index}"), "parts", "key"),
             ),
         ));

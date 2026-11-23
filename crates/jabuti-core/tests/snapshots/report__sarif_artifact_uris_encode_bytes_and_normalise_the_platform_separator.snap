@@ -1,5 +1,6 @@
 ---
 source: crates/jabuti-core/tests/report.rs
+assertion_line: 183
 expression: rendered
 ---
 {
@@ -29,7 +30,7 @@ expression: rendered
         {
           "ruleId": "function-lines",
           "ruleIndex": 0,
-          "level": "warning",
+          "level": "error",
           "message": {
             "text": "measured 71, limit 60"
           },

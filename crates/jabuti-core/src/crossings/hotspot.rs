@@ -24,7 +24,6 @@ pub fn hotspots(files: &[FileSummary], policy: &Policy) -> Vec<Finding> {
             let measured = churn.rank(file.churn).min(complexity.rank(file.complexity));
             (measured > config.limit).then(|| Finding {
                 rule: RuleId::Native(Rule::Hotspot),
-                severity: config.severity,
                 path: file.path.clone(),
                 span: file.span,
                 subject: None,

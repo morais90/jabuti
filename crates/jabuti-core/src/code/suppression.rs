@@ -11,9 +11,9 @@ pub fn findings(
     occurrences: &[Occurrence],
     policy: &Policy,
 ) -> Vec<Finding> {
-    let Some(config) = policy.active_for(language, Rule::Suppression) else {
+    if policy.active_for(language, Rule::Suppression).is_none() {
         return Vec::new();
-    };
+    }
 
     let concepts = Rule::Suppression.spec().concepts;
 
@@ -24,7 +24,6 @@ pub fn findings(
             let subject = subject_of(&occurrence.subject);
             Finding {
                 rule: RuleId::Native(Rule::Suppression),
-                severity: config.severity,
                 path: path.to_owned(),
                 span: occurrence.span,
                 subject: Some(subject.clone()),

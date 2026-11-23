@@ -2,28 +2,44 @@ mod common;
 
 use common::{commit, jabuti, project, repository, write};
 use predicates::str::contains;
+use serde_json::Value;
 
-const ONLY_CHURN: &str = "[rules]\n\
-churn = { limit = 1, severity = \"error\" }\n\
-function-lines = { severity = \"off\" }\n\
-cognitive-complexity = { severity = \"off\" }\n\
-parameters = { severity = \"off\" }\n";
+fn churn_of(directory: &tempfile::TempDir) -> Vec<(String, String, Option<u64>)> {
+    let output = jabuti(directory)
+        .args(["--all", "--format", "measures"])
+        .output()
+        .expect("jabuti runs");
+    let document: Value = serde_json::from_slice(&output.stdout).expect("measures are JSON");
+
+    document["measures"]
+        .as_array()
+        .expect("a list of measures")
+        .iter()
+        .map(|reading| {
+            (
+                reading["path"].as_str().unwrap_or_default().to_owned(),
+                reading["kind"].as_str().unwrap_or_default().to_owned(),
+                reading["values"]["churn"].as_u64(),
+            )
+        })
+        .collect()
+}
 
 fn every_commit_is_counted_against(name: &str) {
-    let directory = repository(&[("jabuti.toml", ONLY_CHURN), (name, "fn busy() {}\n")]);
+    let directory = repository(&[(name, "fn busy() {}\n")]);
 
     write(&directory, name, "fn busy() { }\n");
     commit(&directory, "second");
     write(&directory, name, "fn busy() {  }\n");
     commit(&directory, "third");
 
-    jabuti(&directory)
-        .arg("--all")
-        .assert()
-        .success()
-        .stdout(contains(format!(
-            "{name}:1  error  churn  measured 3, limit 1"
-        )));
+    assert_eq!(
+        churn_of(&directory),
+        [
+            (name.to_owned(), "file".to_owned(), Some(3)),
+            (name.to_owned(), "function".to_owned(), None),
+        ]
+    );
 }
 
 #[test]
@@ -37,168 +53,85 @@ fn a_file_named_with_an_accent_has_every_commit_counted() {
 }
 
 #[test]
-fn a_file_committed_once_stays_within_a_limit_of_one() {
-    let directory = repository(&[
-        ("jabuti.toml", ONLY_CHURN),
-        ("src/stable.rs", "fn stable() {}\n"),
-    ]);
-
-    jabuti(&directory)
-        .assert()
-        .success()
-        .stdout(contains("No findings"));
-}
-
-#[test]
-fn churn_is_reported_against_the_file_and_not_its_functions() {
-    let directory = repository(&[
-        ("jabuti.toml", ONLY_CHURN),
-        ("src/busy.rs", "fn one() {}\nfn two() {}\n"),
-    ]);
-
-    write(
-        &directory,
-        "src/busy.rs",
-        "fn one() {}\nfn two() {}\nfn three() {}\n",
-    );
-    commit(&directory, "second");
-
-    jabuti(&directory)
-        .arg("--all")
-        .assert()
-        .success()
-        .stdout(contains("1 error and 0 warnings"));
-}
-
-#[test]
-fn asking_for_churn_outside_a_repository_says_so_rather_than_failing() {
-    let directory = project(&[
-        ("jabuti.toml", ONLY_CHURN),
-        ("src/lib.rs", "fn small() {}\n"),
-    ]);
-
-    jabuti(&directory)
-        .assert()
-        .success()
-        .stderr(contains("need a git repository"));
-}
-
-#[test]
-fn history_is_not_read_when_no_rule_asks_for_it() {
-    let directory = project(&[
-        (
-            "jabuti.toml",
-            "[rules]\nchurn = { severity = \"off\" }\nhotspot = { severity = \"off\" }\n",
-        ),
-        ("src/lib.rs", "fn small() {}\n"),
-    ]);
-
-    jabuti(&directory)
-        .assert()
-        .success()
-        .stdout(contains("No findings"))
-        .stderr("");
-}
-
-const ONLY_HOTSPOT: &str = "[rules]\n\
-hotspot = { limit = 50, severity = \"warning\" }\n\
-churn = { severity = \"off\" }\n\
-function-lines = { severity = \"off\" }\n\
-cognitive-complexity = { severity = \"off\" }\n\
-parameters = { severity = \"off\" }\n";
-
-fn tangled(name: &str) -> String {
-    format!(
-        "fn {name}(a: bool, b: bool) {{\n    if a {{\n        if b {{\n            if a && b {{\n                let _ = 1;\n            }}\n        }}\n    }}\n}}\n"
-    )
-}
-
-fn repository_with_a_hotspot() -> tempfile::TempDir {
-    let directory = repository(&[
-        ("jabuti.toml", ONLY_HOTSPOT),
-        ("src/calm.rs", "fn calm() {}\n"),
-        (
-            "src/middling.rs",
-            "fn middling(a: bool) {\n    if a {}\n}\n",
-        ),
-        ("src/tangled.rs", &tangled("tangled")),
-    ]);
-
-    write(
-        &directory,
-        "src/middling.rs",
-        "fn middling(a: bool) {\n    if a {}\n    \n}\n",
-    );
-    write(
-        &directory,
-        "src/tangled.rs",
-        &format!("{}\n", tangled("tangled")),
-    );
-    commit(&directory, "second");
-    write(
-        &directory,
-        "src/tangled.rs",
-        &format!("{}\n\n", tangled("tangled")),
-    );
-    commit(&directory, "third");
-
-    directory
-}
-
-#[test]
-fn hotspot_is_evaluated_even_when_churn_reporting_is_off() {
-    let directory = repository_with_a_hotspot();
-
-    jabuti(&directory)
-        .arg("--all")
-        .assert()
-        .success()
-        .stdout(contains("src/tangled.rs:1  warning  hotspot"))
-        .stderr("");
-}
-
-#[test]
-fn hotspot_is_skipped_on_a_change_and_says_so_only_when_it_gates() {
-    let directory = repository_with_a_hotspot();
-
-    jabuti(&directory)
-        .arg("--since")
-        .arg("HEAD")
-        .assert()
-        .success()
-        .stdout(contains("No findings"))
-        .stderr("");
-
-    write(
-        &directory,
-        "jabuti.toml",
-        &ONLY_HOTSPOT.replace("severity = \"warning\"", "severity = \"error\""),
-    );
-    jabuti(&directory)
-        .arg("--since")
-        .arg("HEAD")
-        .assert()
-        .success()
-        .stderr(contains(
-            "hotspot ranks a whole repository, so it is evaluated only with --all",
-        ));
-}
-
-#[test]
 fn the_commit_that_renamed_a_file_counts_against_its_new_name() {
-    let directory = repository(&[
-        ("jabuti.toml", ONLY_CHURN),
-        ("src/old.rs", "fn busy() {}\n"),
-    ]);
+    let directory = repository(&[("src/old.rs", "fn busy() {}\n")]);
 
     common::git(&directory, &["mv", "src/old.rs", "src/new.rs"]);
     commit(&directory, "rename");
     write(&directory, "src/new.rs", "fn busy() { }\n");
     commit(&directory, "edit");
 
+    assert_eq!(
+        churn_of(&directory),
+        [
+            ("src/new.rs".to_owned(), "file".to_owned(), Some(2)),
+            ("src/new.rs".to_owned(), "function".to_owned(), None),
+        ]
+    );
+}
+
+#[test]
+fn history_outside_a_repository_is_said_to_be_missing_rather_than_failing_the_map() {
+    let directory = project(&[("src/lib.rs", "fn small() {}\n")]);
+
     jabuti(&directory)
         .arg("--all")
         .assert()
         .success()
-        .stdout(contains("src/new.rs:1  error  churn  measured 2, limit 1"));
+        .stdout(contains("No findings"))
+        .stderr(contains("need a git repository"));
+}
+
+fn tangled(name: &str) -> String {
+    format!(
+        "fn {name}(a: bool, b: bool) {{\n    if a {{\n        if b {{\n            if a && b {{\n                return;\n            }}\n        }}\n    }}\n}}\n"
+    )
+}
+
+#[test]
+fn a_file_both_busier_and_more_tangled_than_nine_in_ten_is_a_hotspot() {
+    let calm: Vec<(String, String)> = (0..11)
+        .map(|index| {
+            (
+                format!("src/calm_{index:02}.rs"),
+                "fn calm() {}\n".to_owned(),
+            )
+        })
+        .collect();
+    let mut files: Vec<(&str, &str)> = calm
+        .iter()
+        .map(|(path, text)| (path.as_str(), text.as_str()))
+        .collect();
+    let first = tangled("tangled");
+    files.push(("src/tangled.rs", &first));
+    let directory = repository(&files);
+
+    write(&directory, "src/tangled.rs", &format!("{first}\n"));
+    commit(&directory, "second");
+    write(&directory, "src/tangled.rs", &format!("{first}\n\n"));
+    commit(&directory, "third");
+
+    jabuti(&directory)
+        .arg("--all")
+        .assert()
+        .success()
+        .stdout(
+            "1 finding to fix across 12 files and 12 units.\n\n\
+             src/tangled.rs:1  hotspot  measured 91, limit 90\n",
+        )
+        .stderr("");
+}
+
+#[test]
+fn the_measures_of_a_change_still_carry_how_often_each_file_changed() {
+    let directory = repository(&[("src/busy.rs", "fn busy() {}\n")]);
+    write(&directory, "src/busy.rs", "fn busy() { }\n");
+    commit(&directory, "second");
+    write(&directory, "src/busy.rs", "fn busy() {  }\n");
+
+    jabuti(&directory)
+        .args(["--format", "measures"])
+        .assert()
+        .success()
+        .stdout(contains("\"churn\": 2"));
 }

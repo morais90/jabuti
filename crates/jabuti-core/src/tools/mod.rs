@@ -2,7 +2,7 @@ pub mod coverage;
 
 use serde::Deserialize;
 
-use crate::catalog::{RuleId, Severity};
+use crate::catalog::RuleId;
 use crate::model::{Detail, Finding, Span};
 
 pub fn cargo_diagnostics(tool: &str, output: &str) -> Vec<Finding> {
@@ -24,7 +24,9 @@ pub fn cargo_diagnostics(tool: &str, output: &str) -> Vec<Finding> {
 }
 
 fn finding(tool: &str, message: &Message) -> Option<Finding> {
-    let severity = severity(&message.level)?;
+    if !reported(&message.level) {
+        return None;
+    }
     let lint = message.code.as_ref().map(|code| lint_name(&code.id))?;
     let span = message.spans.iter().find(|span| span.is_primary)?;
 
@@ -33,7 +35,6 @@ fn finding(tool: &str, message: &Message) -> Option<Finding> {
             tool: tool.to_owned(),
             lint,
         },
-        severity,
         path: span.file_name.clone(),
         span: Span {
             start_line: span.line_start,
@@ -46,12 +47,8 @@ fn finding(tool: &str, message: &Message) -> Option<Finding> {
     })
 }
 
-fn severity(level: &str) -> Option<Severity> {
-    match level {
-        "error" => Some(Severity::Error),
-        "warning" => Some(Severity::Warning),
-        _ => None,
-    }
+fn reported(level: &str) -> bool {
+    matches!(level, "error" | "warning")
 }
 
 fn lint_name(code: &str) -> String {

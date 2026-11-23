@@ -1,6 +1,6 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 753
+assertion_line: 734
 expression: rendered
 ---
 ⬢ jabuti  42 files · 378 units
@@ -22,4 +22,4 @@ expression: rendered
 ▁▁▁▁▁▁▁▁▁▁▁▁  src/lib.rs  0 commits in 12 weeks
               :3                              clippy/needless_range_loop  the loop variable is only used to index
 
-6 to fix · 3 warnings · seal 74d4·3192
+9 to fix · seal dc8a·c1da

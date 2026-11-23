@@ -2,11 +2,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use jabuti_core::catalog::Input;
 use jabuti_core::history::{churn, rhythm};
 use jabuti_core::report::Rhythm;
-
-use crate::config::Settings;
 
 #[derive(Debug)]
 pub(crate) struct Churn {
@@ -42,13 +39,10 @@ impl Churn {
     }
 }
 
-pub(crate) fn load(settings: &Settings, notices: &mut Vec<String>) -> Option<Churn> {
-    if !settings.needs(Input::History) {
-        return None;
-    }
-
+pub(crate) fn load(needed: bool, notices: &mut Vec<String>) -> Option<Churn> {
     match Churn::of_repository() {
         Ok(history) => Some(history),
+        Err(_) if !needed => None,
         Err(reason) => {
             notices.push(format!(
                 "churn and hotspot need a git repository, so they were not evaluated ({reason})"

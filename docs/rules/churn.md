@@ -2,7 +2,8 @@
 
 Reports a file that has been touched by more commits than the limit.
 
-**Default limit:** none useful. **Default severity:** off.
+This rule is off in the catalog and cannot be turned on from `jabuti.toml`. Churn is still measured:
+it appears in `--format measures` and feeds [`hotspot`](hotspot.md).
 
 See [the measure](../measures/churn.md) for what is counted and why history is worth reading.
 
@@ -16,25 +17,9 @@ lot in a young project and nothing in an old one, and no single limit is right f
 default here would mean shipping a number nobody can defend, which is the thing we have avoided
 everywhere else.
 
-## Using it anyway
-
-Within one repository the measure is perfectly meaningful, and if you know your own history a limit
-is easy to pick. Look at your busiest files first:
-
-```console
-$ git log --format= --numstat | awk -F'\t' 'NF==3 {c[$3]++} END {for (f in c) print c[f], f}' | sort -rn | head
-```
-
-Then set the limit somewhere past the bulk of that list:
-
-```toml
-[rules]
-churn = { limit = 40, severity = "warning" }
-```
-
-Reported on its own, this tells you which files are moving. That is genuinely useful when you are new
-to a codebase and want to know where the action is, and much less useful as a gate, since a file
-changing often is not a defect.
+Reported on its own, the count would tell you which files are moving. That is useful when you are new
+to a codebase and want to know where the action is, and no use as a gate, since a file changing often
+is not a defect and no change can fix it.
 
 ## What it is really for
 
@@ -42,8 +27,8 @@ Change frequency earns its place when it is combined with something else. A file
 rarely touched costs nobody anything. The same file changing every week is where time and mistakes
 accumulate, and that combination is a much sharper signal than either half.
 
-That composite is the next thing being built. Until it exists, this rule is here so the number is
-available and so its definition is settled.
+That composite is [`hotspot`](hotspot.md), which ranks change frequency against complexity across the
+whole repository under `--all`.
 
 ## Further reading
 

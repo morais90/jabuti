@@ -13,24 +13,6 @@ pub enum UnitKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Severity {
-    Off,
-    Warning,
-    Error,
-}
-
-impl Severity {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Off => "off",
-            Self::Warning => "warning",
-            Self::Error => "error",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Portability {
     Universal,
@@ -151,12 +133,12 @@ const ASSERTION: RuleSpec = concept_bound("assertion", &[Concept::Assertion]);
 const CHURN: RuleSpec = RuleSpec {
     inputs: &[Input::History],
     threshold: Some(on(Measure::Churn, UnitKind::File)),
-    ..universal("churn", Severity::Off, 0)
+    ..universal("churn", false, 0)
 };
 
 const DUPLICATE_BLOCK: RuleSpec = RuleSpec {
     repository_wide: true,
-    ..universal("duplicate-block", Severity::Warning, 120)
+    ..universal("duplicate-block", true, 120)
 };
 
 const ERROR_MASKING: RuleSpec = concept_bound(
@@ -172,13 +154,13 @@ const HOTSPOT: RuleSpec = RuleSpec {
     repository_wide: true,
     scoping: Scoping::Repository,
     inputs: &[Input::History],
-    ..universal("hotspot", Severity::Warning, 90)
+    ..universal("hotspot", true, 90)
 };
 
 const LAYER_VIOLATION: RuleSpec = RuleSpec {
     repository_wide: true,
     inputs: &[Input::Graph, Input::Layers],
-    ..universal("layer-violation", Severity::Warning, 0)
+    ..universal("layer-violation", true, 0)
 };
 
 const NEW_DEPENDENCY: RuleSpec = compared("new-dependency");
@@ -189,35 +171,35 @@ const SUPPRESSION: RuleSpec = concept_bound("suppression", &[Concept::Suppressio
 
 const UNCOVERED_NEW_CODE: RuleSpec = RuleSpec {
     scoping: Scoping::Change,
-    ..universal("uncovered-new-code", Severity::Off, 0)
+    ..universal("uncovered-new-code", true, 0)
 };
 
 const COGNITIVE_COMPLEXITY: RuleSpec = RuleSpec {
     language_limits: &[(LanguageId::TypeScript, 18)],
     threshold: Some(on(Measure::CognitiveComplexity, UnitKind::Function)),
-    ..universal("cognitive-complexity", Severity::Warning, 7)
+    ..universal("cognitive-complexity", true, 7)
 };
 
 const CYCLOMATIC_COMPLEXITY: RuleSpec = RuleSpec {
     language_limits: &[(LanguageId::TypeScript, 13)],
     threshold: Some(on(Measure::CyclomaticComplexity, UnitKind::Function)),
-    ..universal("cyclomatic-complexity", Severity::Off, 10)
+    ..universal("cyclomatic-complexity", false, 10)
 };
 
 const FILE_LINES: RuleSpec = RuleSpec {
     threshold: Some(on(Measure::Lines, UnitKind::File)),
-    ..universal("file-lines", Severity::Off, 1000)
+    ..universal("file-lines", false, 1000)
 };
 
 const FUNCTION_LINES: RuleSpec = RuleSpec {
     language_limits: &[(LanguageId::Kotlin, 47), (LanguageId::TypeScript, 71)],
     threshold: Some(on(Measure::Lines, UnitKind::Function)),
-    ..universal("function-lines", Severity::Warning, 60)
+    ..universal("function-lines", true, 60)
 };
 
 const PARAMETERS: RuleSpec = RuleSpec {
     threshold: Some(on(Measure::Parameters, UnitKind::Function)),
-    ..universal("parameters", Severity::Warning, 4)
+    ..universal("parameters", true, 4)
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -267,11 +249,11 @@ pub enum Scoping {
 }
 
 impl Scoping {
-    pub fn allows(self, scoped: bool) -> bool {
+    pub fn allows(self, compared: bool, whole: bool) -> bool {
         match self {
             Self::Any => true,
-            Self::Change => scoped,
-            Self::Repository => !scoped,
+            Self::Change => compared,
+            Self::Repository => whole,
         }
     }
 }
@@ -292,13 +274,13 @@ pub struct RuleSpec {
     pub scoping: Scoping,
     pub inputs: &'static [Input],
     pub threshold: Option<Threshold>,
-    pub severity: Severity,
+    pub enabled: bool,
     pub limit: u32,
     pub language_limits: &'static [(LanguageId, u32)],
     pub concepts: &'static [Concept],
 }
 
-const fn universal(id: &'static str, severity: Severity, limit: u32) -> RuleSpec {
+const fn universal(id: &'static str, enabled: bool, limit: u32) -> RuleSpec {
     RuleSpec {
         id,
         portability: Portability::Universal,
@@ -306,7 +288,7 @@ const fn universal(id: &'static str, severity: Severity, limit: u32) -> RuleSpec
         scoping: Scoping::Any,
         inputs: &[],
         threshold: None,
-        severity,
+        enabled,
         limit,
         language_limits: &[],
         concepts: &[],
@@ -317,7 +299,7 @@ const fn compared(id: &'static str) -> RuleSpec {
     RuleSpec {
         scoping: Scoping::Change,
         inputs: &[Input::BaseRevision, Input::Graph],
-        ..universal(id, Severity::Warning, 0)
+        ..universal(id, true, 0)
     }
 }
 
@@ -325,7 +307,7 @@ const fn concept_bound(id: &'static str, concepts: &'static [Concept]) -> RuleSp
     RuleSpec {
         portability: Portability::ConceptBound,
         concepts,
-        ..universal(id, Severity::Warning, 0)
+        ..universal(id, true, 0)
     }
 }
 

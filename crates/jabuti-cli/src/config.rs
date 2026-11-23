@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use jabuti_core::catalog::{Concept, Input, Rule, RuleId, Severity};
+use jabuti_core::catalog::Concept;
 use jabuti_core::lang::LanguageId;
-use jabuti_core::policy::{ConceptBindings, Policy, RuleConfig};
+use jabuti_core::policy::{ConceptBindings, Policy};
 use serde::Deserialize;
 
 pub(crate) const FILE_NAME: &str = "jabuti.toml";
@@ -19,14 +19,6 @@ pub(crate) struct Settings {
     pub(crate) coverage: Option<PathBuf>,
 }
 
-impl Settings {
-    pub(crate) fn needs(&self, input: Input) -> bool {
-        Rule::ALL
-            .into_iter()
-            .any(|rule| self.policy.enabled(rule) && rule.spec().inputs.contains(&input))
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Layer {
     pub(crate) name: String,
@@ -35,11 +27,11 @@ pub(crate) struct Layer {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Document {
     #[serde(default)]
     exclude: Vec<String>,
-    #[serde(default)]
-    rules: BTreeMap<String, Entry>,
+    rules: Option<toml::Value>,
     #[serde(default)]
     tools: BTreeMap<String, ToolEntry>,
     #[serde(default)]
@@ -50,11 +42,13 @@ struct Document {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct CoverageEntry {
     report: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct LayerEntry {
     paths: Vec<String>,
     #[serde(default)]
@@ -62,23 +56,18 @@ struct LayerEntry {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct LanguageEntry {
-    #[serde(default)]
-    rules: BTreeMap<String, Entry>,
+    rules: Option<toml::Value>,
     #[serde(default)]
     concepts: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ToolEntry {
     #[serde(default)]
     enabled: bool,
-}
-
-#[derive(Debug, Deserialize)]
-struct Entry {
-    limit: Option<u32>,
-    severity: Option<String>,
 }
 
 pub(crate) fn load(directory: &Path) -> Result<Settings> {
@@ -95,29 +84,17 @@ pub(crate) fn load(directory: &Path) -> Result<Settings> {
     settings(document)
 }
 
+const FIXED: &str = "jabuti fixes which rules run and their limits, and every finding it reports is one to fix, so there is nothing to set there. Remove the table";
+
 fn language_settings(
-    policy: &mut Policy,
     bindings: &mut ConceptBindings,
     name: &str,
     entry: LanguageEntry,
 ) -> Result<()> {
     let language =
         LanguageId::from_name(name).with_context(|| format!("unknown language {name}"))?;
-
-    for (id, rule) in entry.rules {
-        let target = RuleId::parse(&id).with_context(|| format!("unknown rule {id}"))?;
-        if matches!(&target, RuleId::Native(native) if native.repository_wide()) {
-            bail!("{id} is measured across the whole repository, so it cannot be set per language");
-        }
-
-        let current = policy
-            .config_for(language, target.clone())
-            .unwrap_or(RuleConfig {
-                limit: 0,
-                severity: Severity::Warning,
-            });
-
-        policy.set_for(language, target, Override::of(&rule)?.applied_to(current));
+    if entry.rules.is_some() {
+        bail!("[languages.{name}.rules] is not read: {FIXED}");
     }
 
     for (id, paths) in entry.concepts {
@@ -132,27 +109,17 @@ fn language_settings(
 }
 
 fn settings(document: Document) -> Result<Settings> {
-    let mut policy = Policy::default();
+    if document.rules.is_some() {
+        bail!("[rules] is not read: {FIXED}");
+    }
     let mut concepts = ConceptBindings::default();
 
-    for (id, entry) in document.rules {
-        let rule = RuleId::parse(&id).with_context(|| format!("unknown rule {id}"))?;
-        let set = Override::of(&entry)?;
-        let current = policy.config(rule.clone()).unwrap_or(RuleConfig {
-            limit: 0,
-            severity: Severity::Warning,
-        });
-
-        policy.set(rule.clone(), set.applied_to(current));
-        policy.adjust_per_language(rule, |config| set.applied_to(config));
-    }
-
     for (name, entry) in document.languages {
-        language_settings(&mut policy, &mut concepts, &name, entry)?;
+        language_settings(&mut concepts, &name, entry)?;
     }
 
     Ok(Settings {
-        policy,
+        policy: Policy::default(),
         concepts,
         exclude: document.exclude,
         tools: document
@@ -197,35 +164,4 @@ fn checked(name: &str, entry: &LayerEntry, names: &[&str]) -> Result<()> {
     }
 
     Ok(())
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Override {
-    limit: Option<u32>,
-    severity: Option<Severity>,
-}
-
-impl Override {
-    fn of(entry: &Entry) -> Result<Self> {
-        Ok(Self {
-            limit: entry.limit,
-            severity: entry.severity.as_deref().map(severity).transpose()?,
-        })
-    }
-
-    fn applied_to(self, current: RuleConfig) -> RuleConfig {
-        RuleConfig {
-            limit: self.limit.unwrap_or(current.limit),
-            severity: self.severity.unwrap_or(current.severity),
-        }
-    }
-}
-
-fn severity(name: &str) -> Result<Severity> {
-    match name {
-        "off" => Ok(Severity::Off),
-        "warning" => Ok(Severity::Warning),
-        "error" => Ok(Severity::Error),
-        other => bail!("unknown severity {other}, expected off, warning or error"),
-    }
 }

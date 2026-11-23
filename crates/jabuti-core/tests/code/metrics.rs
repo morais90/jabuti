@@ -268,6 +268,7 @@ fn unit_over(bytes: Range<usize>) -> Unit {
         parameters: 0,
         is_test: false,
         should_panic: false,
+        compile_time: false,
         children: Vec::new(),
     }
 }

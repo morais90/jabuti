@@ -1,4 +1,4 @@
-use jabuti_core::catalog::{Rule, Severity};
+use jabuti_core::catalog::Rule;
 use jabuti_core::crossings::hotspot::{self, FileSummary};
 use jabuti_core::model::{Detail, Finding, Span};
 use jabuti_core::policy::{Policy, RuleConfig};
@@ -28,7 +28,7 @@ fn reporting_above(limit: u32) -> Policy {
         Rule::Hotspot,
         RuleConfig {
             limit,
-            severity: Severity::Warning,
+            enabled: true,
         },
     );
     policy
@@ -95,7 +95,7 @@ fn a_rule_switched_off_ranks_nothing() {
         Rule::Hotspot,
         RuleConfig {
             limit: 0,
-            severity: Severity::Off,
+            enabled: false,
         },
     );
 

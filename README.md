@@ -9,9 +9,9 @@
 
 </div>
 
-> **Status: early but usable.** `jabuti check` reads Rust, Kotlin and TypeScript, reports nine rules
-> and holds back four more, one of which reads the test coverage a project produces, and can fold in
-> the linters a project already runs.
+> **Status: early but usable.** `jabuti check` reads Rust, Kotlin and TypeScript, reports twelve
+> rules, one of which reads the test coverage a project produces, and can fold in the linters a
+> project already runs.
 
 ## Why this exists
 
@@ -32,9 +32,9 @@ second, in a form small enough to read.
 
 ```console
 $ jabuti check
-1 error and 0 warnings across 42 files and 378 units.
+1 finding to fix across 42 files and 378 units.
 
-src/handler.rs:120  error  function-lines  handle_request  measured 71, limit 60
+src/handler.rs:120  function-lines  handle_request  measured 71, limit 60
 ```
 
 A clean run costs one line:
@@ -44,7 +44,7 @@ $ jabuti check
 No findings across 42 files and 378 units.
 ```
 
-Every finding names its severity, the rule, where it is, what was measured and what the limit was,
+Every finding names the rule, where it is, what was measured and what the limit was,
 which is enough to act on without asking a follow-up question. Nothing in the output is advice about
 your situation: jabuti will not read your function and tell you how to restructure it, because that
 answer is not reproducible and deciding it is the caller's job.
@@ -57,8 +57,9 @@ For CI and code-scanning consumers, `jabuti check --format sarif` emits determin
 without changing the exit codes. [The output documentation](docs/concepts.md#other-shapes-of-output)
 describes the contract and the parts GitHub does not display.
 
-Exit codes separate the two failures an agent must never confuse: `0` passed, `1` a gate was
-violated, `2` the tool itself broke. Output is byte-identical across runs, so the same input on the same
+Every finding is something to fix, and any finding fails the run. Exit codes separate the two
+failures an agent must never confuse: `0` passed, `1` there is something to fix, `2` the tool itself
+broke. Output is byte-identical across runs, so the same input on the same
 version produces the same bytes and the result can be diffed, cached and trusted.
 
 ## Scoping to a change
@@ -88,7 +89,7 @@ project can turn the gate on today rather than after a cleanup it will never sch
 
 Two of the rules read the dependencies between files rather than the files themselves. Declare the
 layers of a project and what each may depend on, and a crossing is reported at the line that made
-it; under `--since`, a dependency the change introduced is reported the same way.
+it, and a dependency the change introduced is reported the same way.
 
 The dependencies are found wherever they are written, not only in the import list. This repository
 is its own example: no file contains `use crate::git`, yet two of them call `crate::git::run` on the
@@ -105,7 +106,7 @@ function-length limits; TypeScript differs for both function length and cognitiv
 [`CALIBRATION.md`](CALIBRATION.md) records the benchmark populations, revisions, distributions and
 report rates behind those choices.
 
-Cyclomatic complexity and file length remain available but off by default because neither is a
+Cyclomatic complexity and file length are measured but their rules are off, because neither is a
 reliable verdict alone. Their technical behavior is documented under [`docs/`](docs); their measured
 validation is kept separately in [`CALIBRATION.md`](CALIBRATION.md).
 
@@ -117,22 +118,19 @@ $ just install
 
 Configuration is optional. jabuti looks for a `jabuti.toml` in the working directory and then in
 each directory above it, the way git finds its repository, and the directory holding it becomes the
-project root that paths are shown relative to. When one is found it adjusts limits and severities:
+project root that paths are shown relative to. It tells jabuti what only the project knows: paths to
+leave out, which tools to run, where the coverage report is, the layers of the code and the project's
+own wrappers around error handling:
 
 ```toml
 exclude = ["generated/**"]
 
-[rules]
-function-lines = { limit = 60, severity = "error" }
+[tools.cargo-llvm-cov]
+enabled = true
 ```
 
-A rule set under `[rules]` applies to every language, over the limit each language is calibrated to
-by default; a field left out keeps that language's default. A rule set under
-`[languages.<name>.rules]` applies to that language alone and wins over both.
-
-Severity is `error` (fails the gate), `warning` (reported, exit 0) or `off`. Nothing defaults to
-`error`, because without diff scoping an absolute gate fails on the first legacy file it meets.
-Opting in is the project's decision, not ours.
+It does not choose which rules run or where their limits sit. Those are fixed by jabuti, and a
+`[rules]` or `[languages.<name>.rules]` table stops the run with exit `2` and says why.
 
 ## How it works
 

@@ -1,10 +1,9 @@
-use jabuti_core::catalog::{Rule, RuleId, Severity};
+use jabuti_core::catalog::{Rule, RuleId};
 use jabuti_core::model::{Detail, Finding, Span};
 
 fn at(path: &str, lines: (u32, u32), rule: RuleId, subject: Option<&str>) -> Finding {
     Finding {
         rule,
-        severity: Severity::Warning,
         path: path.to_owned(),
         span: Span {
             start_line: lines.0,
@@ -24,9 +23,8 @@ fn clippy(lint: &str) -> RuleId {
     }
 }
 
-fn threshold(finding: Finding, measured: u32, severity: Severity) -> Finding {
+fn threshold(finding: Finding, measured: u32) -> Finding {
     Finding {
-        severity,
         detail: Detail::Threshold {
             measured,
             limit: 60,
@@ -49,10 +47,9 @@ fn tied_on_one_line() -> Vec<Finding> {
     vec![
         at("src/lib.rs", (4, 4), clippy("unwrap_used"), None),
         at("src/lib.rs", (4, 4), clippy("expect_used"), None),
-        threshold(function(Rule::FunctionLines), 71, Severity::Error),
-        threshold(function(Rule::FunctionLines), 71, Severity::Warning),
-        threshold(function(Rule::FunctionLines), 64, Severity::Warning),
-        threshold(function(Rule::CognitiveComplexity), 9, Severity::Warning),
+        threshold(function(Rule::FunctionLines), 71),
+        threshold(function(Rule::FunctionLines), 64),
+        threshold(function(Rule::CognitiveComplexity), 9),
         masking("unwrap"),
         masking("expect"),
         at(
@@ -92,10 +89,9 @@ fn findings_settle_into_one_order_whatever_order_they_arrive_in() {
         masking("unwrap"),
         at("src/lib.rs", (4, 4), clippy("expect_used"), None),
         at("src/lib.rs", (4, 4), clippy("unwrap_used"), None),
-        threshold(function(Rule::CognitiveComplexity), 9, Severity::Warning),
-        threshold(function(Rule::FunctionLines), 64, Severity::Warning),
-        threshold(function(Rule::FunctionLines), 71, Severity::Warning),
-        threshold(function(Rule::FunctionLines), 71, Severity::Error),
+        threshold(function(Rule::CognitiveComplexity), 9),
+        threshold(function(Rule::FunctionLines), 64),
+        threshold(function(Rule::FunctionLines), 71),
     ];
     assert_eq!(forward, expected);
     assert_eq!(reversed, expected);

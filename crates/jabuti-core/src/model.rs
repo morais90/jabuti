@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-use crate::catalog::{RuleId, Severity, UnitKind};
+use crate::catalog::{RuleId, UnitKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct Span {
@@ -21,7 +21,6 @@ pub enum Detail {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Finding {
     pub rule: RuleId,
-    pub severity: Severity,
     pub path: String,
     pub span: Span,
     pub subject: Option<String>,
@@ -36,7 +35,6 @@ impl Ord for Finding {
             .then(self.rule.cmp(&other.rule))
             .then(self.subject.cmp(&other.subject))
             .then(self.detail.cmp(&other.detail))
-            .then(self.severity.cmp(&other.severity))
     }
 }
 

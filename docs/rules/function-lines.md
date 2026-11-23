@@ -2,7 +2,7 @@
 
 Reports a function that spans more lines than the limit.
 
-**Default limit:** 60 in Rust, 47 in Kotlin, 71 in TypeScript. **Default severity:** warning.
+**Default limit:** 60 in Rust, 47 in Kotlin, 71 in TypeScript.
 
 All three numbers are the same claim measured in each language; [Languages](../languages.md) explains
 why they differ.
@@ -10,7 +10,7 @@ why they differ.
 ## What it means when it fires
 
 ```
-src/handler.rs:120  warning  function-lines  handle_request  measured 71, limit 60
+src/handler.rs:120  function-lines  handle_request  measured 71, limit 60
 ```
 
 The function `handle_request` starts on line 120 and covers 71 lines, counting blanks and comments
@@ -34,31 +34,17 @@ Part of the gap is not quality. A function dispatching over thirty payment conne
 reason that a six line accessor never has to answer for. The rule tells you where to look; it does
 not tell you that what you find is wrong.
 
-## Changing it
+## Failing a change
 
-```toml
-[rules]
-function-lines = { limit = 80, severity = "error" }
-```
-
-Raising it is reasonable if your project has a house style that produces longer functions, or if you
-want to start further out and tighten later. Lowering it increases the finding volume.
-
-Turning it into an `error` is safe once you are running with `--since`, because a function that was
-already long stays quiet until someone edits it.
+A finding fails the run, and that is safe on a codebase that already has long functions, because a
+check judges the change: a function that was already long stays quiet until a change makes it longer.
 
 ## A caveat about tests
 
 Integration tests legitimately run longer than production functions. They set up a scenario, do one
 thing, and assert. The rule does not currently know the difference, so on a project with substantial
-test suites the first findings tend to be there. Excluding them is one option:
-
-```toml
-exclude = ["tests/**"]
-```
-
-Though it is worth reading the findings before you silence them. A test that needs 90 lines of setup
-is sometimes telling you about the code under test.
+test suites the first findings tend to be there. A test that needs 90 lines of setup is often telling
+you about the code under test, and shared setup can move into a helper the test calls.
 
 ## Further reading
 

@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use crate::catalog::{RuleId, Severity};
+use crate::catalog::RuleId;
 use crate::model::{Detail, Finding, Unreadable};
 
 const INFORMATION_URI: &str = "https://github.com/morais90/jabuti";
@@ -131,7 +131,7 @@ pub(super) fn render(findings: &[Finding], unreadable: &[Unreadable]) -> String 
             SarifResult {
                 rule_id,
                 rule_index,
-                level: level(finding.severity),
+                level: "error",
                 message: Message {
                     text: result_message(finding),
                 },
@@ -226,14 +226,6 @@ fn result_message(finding: &Finding) -> Cow<'_, str> {
     super::write_detail(&mut message, &finding.detail);
 
     Cow::Owned(message)
-}
-
-fn level(severity: Severity) -> &'static str {
-    match severity {
-        Severity::Warning => "warning",
-        Severity::Error => "error",
-        Severity::Off => unreachable!("off findings are not reported"),
-    }
 }
 
 fn location(path: &str, region: Option<Region>) -> Location {

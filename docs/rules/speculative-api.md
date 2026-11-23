@@ -2,9 +2,8 @@
 
 Reports a public declaration that this change added and that nothing in the project references.
 
-**Default severity:** warning. This rule has no limit; every unreferenced new public item is
-reported. It compares against an earlier revision, so it is evaluated on a change and not under
-`--all`, and it says so rather than staying quiet when it would have gated.
+Every unreferenced new public item is reported. "New" needs an earlier revision to compare against,
+so the rule runs only when a check judges a change, never under `--all` or outside git.
 
 ## The idea
 
@@ -17,7 +16,7 @@ function looks exactly like a used one.
 A finding here is the moment to ask whether the item should exist:
 
 ```
-src/tasks.rs:14  warning  speculative-api  pause  public, and nothing references it
+src/tasks.rs:14  speculative-api  pause  public, and nothing references it
 ```
 
 Either something should call `pause`, or `pause` should go, or it is meant for callers outside this
@@ -77,13 +76,8 @@ line. When the base revision of a file cannot be parsed, the file is skipped rat
 
 Neither language has a `lib.rs` root that distinguishes an application from a library. Kotlin is
 public by default; TypeScript marks exports explicitly, but an exported item may still be internal to
-a monorepo. In a library, new public API is the point and the rule may report it. Switch it off for
-that language:
-
-```toml
-[languages.typescript.rules]
-speculative-api = { severity = "off" }
-```
+a monorepo. In a library, new public API is the point and the rule may report it, because in these two
+languages it cannot yet tell a library from an application.
 
 ## Calibration
 
@@ -96,19 +90,4 @@ The limits of the graph in [`docs/concepts.md`](../concepts.md) apply. A call re
 type the rule does not resolve, through a trait, or through code a macro generates is not a reference,
 and an item reached only that way is reported. In practice those items are almost always also named
 somewhere plainly, which is why the measured count is zero rather than a stream of false positives,
-but a project that relies heavily on generated call sites should expect some and can turn the rule
-off.
-
-## Changing it
-
-```toml
-[rules]
-speculative-api = { severity = "off" }
-```
-
-Turning it off makes sense for a Kotlin or TypeScript library, or during a phase where a module is
-being built ahead of its callers on purpose.
-
-Promoting it to `error` fits an agent harness where the agent is expected to wire what it declares in
-the same change. A human team will usually want the warning, since scaffolding ahead of use is a
-legitimate way to work for a day.
+but a project that relies heavily on generated call sites should expect some.

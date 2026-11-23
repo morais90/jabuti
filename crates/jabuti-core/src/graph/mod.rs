@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use self::index::{Index, Source};
-use crate::catalog::{Rule, Severity};
+use crate::catalog::Rule;
 use crate::lang::LanguageId;
 use crate::model::Finding;
 use crate::policy::{ConceptBindings, Layers, Policy};
@@ -57,8 +57,6 @@ pub fn aliases(
     facts::aliases(parsed)
 }
 
-fn reporting(policy: &Policy, language: LanguageId, rule: Rule) -> Option<Severity> {
-    policy
-        .active_for(language, rule)
-        .map(|config| config.severity)
+fn reports(policy: &Policy, language: LanguageId, rule: Rule) -> bool {
+    policy.active_for(language, rule).is_some()
 }

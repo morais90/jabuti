@@ -29,6 +29,7 @@ pub struct Measured {
     pub span: Span,
     pub churn: u32,
     pub complexity: u32,
+    pub compile_time: Vec<Span>,
 }
 
 #[derive(Debug)]
@@ -87,6 +88,7 @@ pub fn reviewed(
         span: file.units.span,
         churn: file.churn,
         complexity: cognitive.total(&file.units),
+        compile_time: compile_time(&file.units),
     };
 
     let mut findings = review::evaluate(request.policy, &file);
@@ -109,6 +111,14 @@ pub fn reviewed(
         units: counted,
         measured,
     }
+}
+
+fn compile_time(unit: &Unit) -> Vec<Span> {
+    if unit.compile_time {
+        return vec![unit.span];
+    }
+
+    unit.children.iter().flat_map(compile_time).collect()
 }
 
 impl Reviewed {

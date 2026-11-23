@@ -1,6 +1,6 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 481
+assertion_line: 532
 expression: rendered
 ---
 ⬢ jabuti  since main · 42 files · 378 units
@@ -22,7 +22,7 @@ server/src/api/policy.rs
 src/lib.rs
   :3                              clippy/needless_range_loop  the loop variable is only used to index
 
-6 to fix · 3 warnings · 1 unreadable · seal 2535·298e
+9 to fix · 1 unreadable · seal f43d·5e89
 
 1 file was not measured, so nothing above accounts for it.
 src/api/index.ts  unreadable syntax from line 3

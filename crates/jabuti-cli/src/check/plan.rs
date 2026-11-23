@@ -1,23 +1,28 @@
-use jabuti_core::catalog::{Input, Rule, Scoping};
+use jabuti_core::catalog::{Input, Rule};
 
 use crate::config::Settings;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Plan<'a> {
     settings: &'a Settings,
-    scoped: bool,
+    compared: bool,
+    whole: bool,
 }
 
 impl<'a> Plan<'a> {
-    pub(crate) fn of(settings: &'a Settings, scoped: bool) -> Self {
-        Self { settings, scoped }
+    pub(crate) fn of(settings: &'a Settings, compared: bool, whole: bool) -> Self {
+        Self {
+            settings,
+            compared,
+            whole,
+        }
     }
 
     pub(crate) fn runs(self, rule: Rule) -> bool {
         let spec = rule.spec();
 
         self.settings.policy.enabled(rule)
-            && spec.scoping.allows(self.scoped)
+            && spec.scoping.allows(self.compared, self.whole)
             && spec.inputs.iter().all(|input| self.available(*input))
     }
 
@@ -25,29 +30,6 @@ impl<'a> Plan<'a> {
         Rule::ALL
             .into_iter()
             .any(|rule| self.runs(rule) && rule.spec().inputs.contains(&input))
-    }
-
-    pub(crate) fn notices(self) -> Vec<String> {
-        let policy = &self.settings.policy;
-        let mut notices = Vec::new();
-
-        for rule in Rule::ALL {
-            match rule.spec().scoping {
-                Scoping::Repository if self.scoped && policy.gates(rule) => {
-                    notices.push(format!(
-                        "{} ranks a whole repository, so it is evaluated only with --all",
-                        rule.id()
-                    ));
-                }
-                Scoping::Change if !self.scoped && policy.gates(rule) => notices.push(format!(
-                    "{} compares against an earlier revision, and this check has none to compare against",
-                    rule.id()
-                )),
-                Scoping::Any | Scoping::Change | Scoping::Repository => {}
-            }
-        }
-
-        notices
     }
 
     fn available(self, input: Input) -> bool {

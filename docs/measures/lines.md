@@ -43,7 +43,7 @@ dereference.
 Two rules read this measure:
 
 - [`function-lines`](../rules/function-lines.md) counts every line a function spans
-- [`file-lines`](../rules/file-lines.md) counts every line in a file
+- [`file-lines`](../rules/file-lines.md), which is off in the catalog, counts every line in a file
 
 Both include blanks and comments inside the span, because the question they ask is how much there is
 to scroll past, not how many statements there are.

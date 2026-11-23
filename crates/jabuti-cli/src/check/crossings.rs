@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use jabuti_core::catalog::Rule;
@@ -40,9 +41,15 @@ struct Candidate<'a> {
     spec: &'static LangSpec,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Judged<'a> {
+    pub(crate) changes: &'a Changes,
+    pub(crate) measured: &'a [Measured],
+}
+
 pub(crate) fn uncovered(
     scan: &Scan<'_>,
-    changes: &Changes,
+    judged: Judged<'_>,
     produced: Option<PathBuf>,
     notices: &mut Vec<String>,
 ) -> Vec<Finding> {
@@ -55,14 +62,10 @@ pub(crate) fn uncovered(
         .as_ref()
         .map(|report| scan.project.join(report));
     let Some(report) = configured.or(produced) else {
-        notices.push(format!(
-            "{} needs a coverage report; set [coverage] report or enable a tool that produces one",
-            Rule::UncoveredNewCode.id()
-        ));
         return Vec::new();
     };
 
-    let candidates = candidates(scan, changes);
+    let candidates = candidates(scan, judged.changes);
     let sources: Vec<(&Path, &str)> = candidates
         .iter()
         .map(|candidate| (candidate.path, candidate.shown.as_str()))
@@ -75,22 +78,27 @@ pub(crate) fn uncovered(
         }
     };
 
-    stretches_in(&candidates, &coverage, changes, &scan.settings.policy)
+    stretches_in(&candidates, &coverage, judged, &scan.settings.policy)
 }
 
 fn stretches_in(
     candidates: &[Candidate<'_>],
     coverage: &Coverage,
-    changes: &Changes,
+    judged: Judged<'_>,
     policy: &Policy,
 ) -> Vec<Finding> {
+    let compile_times: BTreeMap<&str, &[Span]> = judged
+        .measured
+        .iter()
+        .map(|file| (file.path.as_str(), file.compile_time.as_slice()))
+        .collect();
     let mut found = Vec::new();
     for candidate in candidates {
         let Some(file) = coverage.file(candidate.path) else {
             continue;
         };
         let added = |line: u32| {
-            changes.touches(
+            judged.changes.touches(
                 candidate.path,
                 Span {
                     start_line: line,
@@ -98,9 +106,14 @@ fn stretches_in(
                 },
             )
         };
+        let compile_time = compile_times
+            .get(candidate.shown.as_str())
+            .copied()
+            .unwrap_or_default();
         let under_coverage = FileUnderCoverage {
             path: &candidate.shown,
             language: candidate.spec.id,
+            compile_time,
         };
         found.extend(uncovered::findings(&under_coverage, file, added, policy));
     }

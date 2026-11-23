@@ -1,6 +1,6 @@
 use super::concepts::{self, CallSite, Occurrence};
 use super::units::Unit;
-use crate::catalog::{Rule, RuleId, Severity, UnitKind};
+use crate::catalog::{Rule, RuleId, UnitKind};
 use crate::model::{Detail, Finding, Span};
 use crate::policy::Policy;
 use crate::syntax::Parsed;
@@ -14,9 +14,12 @@ pub struct Input<'a> {
 }
 
 pub fn findings(input: &Input<'_>, policy: &Policy) -> Vec<Finding> {
-    let Some(config) = policy.active_for(input.parsed.language(), Rule::Assertion) else {
+    if policy
+        .active_for(input.parsed.language(), Rule::Assertion)
+        .is_none()
+    {
         return Vec::new();
-    };
+    }
 
     let concepts = Rule::Assertion.spec().concepts;
     let assertions: Vec<&Occurrence> = input
@@ -27,7 +30,6 @@ pub fn findings(input: &Input<'_>, policy: &Policy) -> Vec<Finding> {
 
     let lookup = Lookup {
         path: input.path,
-        severity: config.severity,
         assertions,
         calls: concepts::call_sites(input.parsed),
     };
@@ -39,7 +41,6 @@ pub fn findings(input: &Input<'_>, policy: &Policy) -> Vec<Finding> {
 
 struct Lookup<'a> {
     path: &'a str,
-    severity: Severity,
     assertions: Vec<&'a Occurrence>,
     calls: Vec<CallSite>,
 }
@@ -54,7 +55,6 @@ impl Lookup<'_> {
         if unit.is_test && !self.asserts(unit, ancestor_scopes) {
             findings.push(Finding {
                 rule: RuleId::Native(Rule::Assertion),
-                severity: self.severity,
                 path: self.path.to_owned(),
                 span: unit.span,
                 subject: unit.name.clone(),

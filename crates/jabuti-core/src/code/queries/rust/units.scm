@@ -7,6 +7,7 @@
 (impl_item type: (_) @name) @unit.type
 
 (function_item
+  (function_modifiers)? @modifiers
   name: (identifier) @name
   parameters: (parameters) @parameters) @unit.function
 

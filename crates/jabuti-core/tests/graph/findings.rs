@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use jabuti_core::catalog::{Concept, Rule, RuleId, Severity};
+use jabuti_core::catalog::{Concept, Rule, RuleId};
 use jabuti_core::graph::index::Source;
 use jabuti_core::graph::{self, Scan, facts};
 use jabuti_core::lang::{self, LanguageId};
@@ -47,7 +47,7 @@ fn switched_off(rule: Rule) -> Policy {
         rule,
         RuleConfig {
             limit: 0,
-            severity: Severity::Off,
+            enabled: false,
         },
     );
     policy
@@ -58,7 +58,6 @@ fn at(rule: Rule, place: (&str, u32), subject: Option<&str>, message: &str) -> F
 
     Finding {
         rule: RuleId::Native(rule),
-        severity: Severity::Warning,
         path: path.to_owned(),
         span: Span {
             start_line: line,

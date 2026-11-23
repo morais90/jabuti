@@ -1,6 +1,6 @@
 mod coverage;
 
-use jabuti_core::catalog::{RuleId, Severity};
+use jabuti_core::catalog::RuleId;
 use jabuti_core::model::{Detail, Finding, Span};
 use jabuti_core::tools;
 
@@ -29,7 +29,6 @@ fn a_diagnostic_becomes_a_finding_carrying_the_tools_own_message() {
                 tool: "clippy".to_owned(),
                 lint: "needless_range_loop".to_owned(),
             },
-            severity: Severity::Warning,
             path: "src/lib.rs".to_owned(),
             span: Span {
                 start_line: 3,
@@ -41,16 +40,6 @@ fn a_diagnostic_becomes_a_finding_carrying_the_tools_own_message() {
             },
         })
     );
-}
-
-#[test]
-fn the_severity_is_the_one_the_tool_reported() {
-    let levels: Vec<Severity> = diagnostics()
-        .iter()
-        .map(|finding| finding.severity)
-        .collect();
-
-    assert_eq!(levels, [Severity::Warning, Severity::Error]);
 }
 
 #[test]

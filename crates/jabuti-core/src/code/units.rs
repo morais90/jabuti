@@ -16,6 +16,7 @@ pub struct Unit {
     pub parameters: u32,
     pub is_test: bool,
     pub should_panic: bool,
+    pub compile_time: bool,
     pub children: Vec<Unit>,
 }
 
@@ -53,6 +54,7 @@ fn file_unit(source: &str) -> Unit {
         parameters: 0,
         is_test: false,
         should_panic: false,
+        compile_time: false,
         children: Vec::new(),
     }
 }
@@ -67,6 +69,7 @@ fn captured_unit(
     let mut node = None;
     let mut name = None;
     let mut parameters = 0;
+    let mut compile_time = false;
 
     for capture in matched.captures {
         let label = query.capture_names()[capture.index as usize];
@@ -81,6 +84,8 @@ fn captured_unit(
                 .map(str::to_owned);
         } else if label == "parameters" {
             parameters = declared_parameters(capture.node, table);
+        } else if label == "modifiers" {
+            compile_time = has_token(capture.node, "const");
         }
     }
 
@@ -94,8 +99,14 @@ fn captured_unit(
         is_test: is_test_unit(node, source, table),
         should_panic: table.test_detection == TestDetection::Attribute
             && rust_attribute_names(node, source, table).any(|name| name == "should_panic"),
+        compile_time,
         children: Vec::new(),
     })
+}
+
+fn has_token(node: Node<'_>, kind: &str) -> bool {
+    let mut cursor = node.walk();
+    node.children(&mut cursor).any(|child| child.kind() == kind)
 }
 
 fn is_test_unit(node: Node<'_>, source: &str, table: &Table) -> bool {

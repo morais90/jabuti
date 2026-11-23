@@ -2,11 +2,10 @@
 
 Reports a stretch of consecutive lines that this change added and that no test executed.
 
-**Default severity:** off. This rule has no limit; every uncovered stretch of new code is reported,
-once, at its first line. It ships switched off because it cannot run without a coverage report, and
-producing one costs a full instrumented test run. It is evaluated on a change and not under `--all`,
-because "added" only means anything against an earlier revision, and when it is set to `error` under
-`--all` it says so rather than staying quiet.
+Each uncovered stretch of new code is reported once, at its first line. The rule needs two things: a
+coverage report, either named under `[coverage] report` or produced by an enabled tool such as
+`cargo-llvm-cov`, and a change to judge. Without a report it stays quiet; under `--all` or outside git
+it does not run.
 
 ## The idea
 
@@ -18,7 +17,7 @@ to fix is the change that added it, while the author still knows what the code i
 A finding here names the lines and nothing else:
 
 ```
-src/tasks.rs:41  warning  uncovered-new-code  5 lines run by no test
+src/tasks.rs:41  uncovered-new-code  5 lines run by no test
 ```
 
 Five consecutive new lines, starting at line 41, that the tests never executed. Either a test should
@@ -86,9 +85,16 @@ stays quiet rather than reporting every line of a file it knows nothing about.
 
 **Test code.** A file under a test directory is what runs the tests, not what they test.
 
-**A line that existed before the change.** The rule compares the file against `--since`, and only a
-line the change added can be reported. Editing a function with poor coverage reports nothing about
-the lines that were already there.
+**A line that existed before the change.** The rule compares the file against the base of the
+change, and only a line the change added can be reported. Editing a function with poor coverage
+reports nothing about the lines that were already there.
+
+**Code that ran only inside the compiler.** Some languages let a function be evaluated while the
+program is built, to compute a constant. A coverage report records what ran under the tests, so it
+marks that function as never run even when a test depends on its result. When a function the language
+can evaluate at build time shows no execution at all, the rule leaves it out. If any of its lines
+ran, it is ordinary code and judged like any other. The cost is a function of this kind that no test
+calls and nothing evaluates at build time: it goes unreported too.
 
 ## A stale or malformed report is not read
 
@@ -106,45 +112,9 @@ unknown coverage into a clean result. The skip notice names the report and the i
 field or JaCoCo attribute. Optional LCOV checksum fields remain valid.
 
 Regenerate the report, or enable the tool that produces it, and the rule runs on the next check.
-When the rule is on and no report is named or produced at all, it says that too:
-
-```
-jabuti: uncovered-new-code needs a coverage report; set [coverage] report or enable a tool that produces one
-```
-
-## Changing it
-
-Turning it on with a report the build already produces:
-
-```toml
-[coverage]
-report = "target/coverage/lcov.info"
-
-[rules]
-uncovered-new-code = { severity = "warning" }
-```
-
 A Kotlin project using Kover points at the XML report Kover writes:
 
 ```toml
 [coverage]
 report = "build/reports/kover/report.xml"
-
-[rules]
-uncovered-new-code = { severity = "warning" }
 ```
-
-A Rust project with nothing producing coverage yet turns on the tool instead of naming a report:
-
-```toml
-[tools.cargo-llvm-cov]
-enabled = true
-
-[rules]
-uncovered-new-code = { severity = "warning" }
-```
-
-Promoting it to `error` fits an agent harness where every change is expected to arrive with the test
-that exercises it, and where a build already produces a fresh report on every run. A human team will
-usually want the warning, since a change that lands its test in the next commit is a legitimate way
-to work for an afternoon.

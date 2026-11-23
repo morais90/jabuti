@@ -1,4 +1,4 @@
-use jabuti_core::catalog::{Rule, RuleId, Severity, UnitKind};
+use jabuti_core::catalog::{Rule, RuleId, UnitKind};
 use jabuti_core::code::metrics::{self, CognitiveIndex, DecisionIndex, LineIndex};
 use jabuti_core::code::review::{self, FileUnderReview};
 use jabuti_core::code::units;
@@ -46,7 +46,7 @@ fn only(rule: Rule, config: RuleConfig) -> Policy {
             other,
             RuleConfig {
                 limit: 0,
-                severity: Severity::Off,
+                enabled: false,
             },
         );
     }
@@ -60,7 +60,7 @@ fn a_unit_over_the_limit_is_reported_with_what_it_measured() {
         Rule::FunctionLines,
         RuleConfig {
             limit: 10,
-            severity: Severity::Warning,
+            enabled: true,
         },
     );
 
@@ -76,7 +76,7 @@ fn a_unit_exactly_on_the_limit_is_not_reported() {
         Rule::FunctionLines,
         RuleConfig {
             limit: 22,
-            severity: Severity::Warning,
+            enabled: true,
         },
     );
 
@@ -89,7 +89,7 @@ fn a_rule_switched_off_reports_nothing_however_far_over_the_limit() {
         Rule::FunctionLines,
         RuleConfig {
             limit: 1,
-            severity: Severity::Off,
+            enabled: false,
         },
     );
 
@@ -102,7 +102,7 @@ fn length_is_measured_on_functions_and_not_on_the_types_that_hold_them() {
         Rule::FunctionLines,
         RuleConfig {
             limit: 5,
-            severity: Severity::Warning,
+            enabled: true,
         },
     );
     let source = format!("impl Wide {{\n{}}}\n", "    fn tiny() {}\n".repeat(20));
@@ -111,13 +111,13 @@ fn length_is_measured_on_functions_and_not_on_the_types_that_hold_them() {
 }
 
 #[test]
-fn the_default_policy_reports_eleven_of_the_fifteen_rules() {
+fn the_default_policy_reports_twelve_of_the_fifteen_rules() {
     let reported: Vec<Rule> = Rule::ALL
         .into_iter()
         .filter(|rule| {
             Policy::default()
                 .config(*rule)
-                .is_some_and(|config| config.severity != Severity::Off)
+                .is_some_and(|config| config.enabled)
         })
         .collect();
 
@@ -132,6 +132,7 @@ fn the_default_policy_reports_eleven_of_the_fifteen_rules() {
             Rule::NewDependency,
             Rule::SpeculativeApi,
             Rule::Suppression,
+            Rule::UncoveredNewCode,
             Rule::CognitiveComplexity,
             Rule::FunctionLines,
             Rule::Parameters
@@ -139,24 +140,12 @@ fn the_default_policy_reports_eleven_of_the_fifteen_rules() {
     );
 }
 
-#[test]
-fn no_rule_defaults_to_failing_the_run() {
-    let severities: Vec<Severity> = Rule::ALL
-        .into_iter()
-        .filter_map(|rule| Policy::default().config(rule))
-        .map(|config| config.severity)
-        .collect();
-
-    assert!(!severities.contains(&Severity::Error), "{severities:?}");
-}
-
-fn reported_by(tool: &str, lint: &str, severity: Severity) -> Finding {
+fn reported_by(tool: &str, lint: &str) -> Finding {
     Finding {
         rule: RuleId::External {
             tool: tool.to_owned(),
             lint: lint.to_owned(),
         },
-        severity,
         path: "src/lib.rs".to_owned(),
         span: Span {
             start_line: 3,
@@ -170,8 +159,8 @@ fn reported_by(tool: &str, lint: &str, severity: Severity) -> Finding {
 }
 
 #[test]
-fn a_finding_no_rule_mentions_keeps_the_severity_it_arrived_with() {
-    let reported = reported_by("clippy", "needless_range_loop", Severity::Error);
+fn a_finding_no_rule_mentions_is_admitted_as_it_arrived() {
+    let reported = reported_by("clippy", "needless_range_loop");
 
     assert_eq!(
         Policy::default().admit(reported.clone()),
@@ -181,40 +170,17 @@ fn a_finding_no_rule_mentions_keeps_the_severity_it_arrived_with() {
 
 #[test]
 fn a_finding_the_configuration_switches_off_is_dropped() {
-    let reported = reported_by("clippy", "needless_range_loop", Severity::Error);
+    let reported = reported_by("clippy", "needless_range_loop");
     let mut policy = Policy::default();
     policy.set(
         reported.rule.clone(),
         RuleConfig {
             limit: 0,
-            severity: Severity::Off,
+            enabled: false,
         },
     );
 
     assert_eq!(policy.admit(reported), None);
-}
-
-#[test]
-fn the_configuration_can_soften_a_severity_the_tool_chose() {
-    let reported = reported_by("clippy", "needless_range_loop", Severity::Error);
-    let mut policy = Policy::default();
-    policy.set(
-        reported.rule.clone(),
-        RuleConfig {
-            limit: 0,
-            severity: Severity::Warning,
-        },
-    );
-
-    let admitted = policy.admit(reported).expect("still reported");
-
-    assert_eq!(admitted.severity, Severity::Warning);
-    assert_eq!(
-        admitted.detail,
-        Detail::Message {
-            message: "the loop variable is only used to index".to_owned()
-        }
-    );
 }
 
 #[test]
@@ -275,7 +241,7 @@ fn setting_a_limit_for_one_language_leaves_the_others_alone() {
         Rule::Parameters,
         RuleConfig {
             limit: 9,
-            severity: Severity::Warning,
+            enabled: true,
         },
     );
 
@@ -351,8 +317,8 @@ fn a_measure_is_reported_even_when_its_rule_is_switched_off() {
     assert_eq!(
         Policy::default()
             .config(Rule::CyclomaticComplexity)
-            .map(|config| config.severity),
-        Some(Severity::Off)
+            .map(|config| config.enabled),
+        Some(false)
     );
     assert_eq!(readings[1].values.get("cyclomatic-complexity"), Some(&2));
 }

@@ -2,7 +2,7 @@
 
 Reports a file that is both complex and frequently changed.
 
-**Default limit:** 90. **Default severity:** warning.
+**Default limit:** 90.
 
 ## The idea
 
@@ -24,7 +24,7 @@ Both halves are ranked within your repository rather than measured against an ab
 the score is the **lower of the two rankings**.
 
 ```
-src/syntax.rs:1  warning  hotspot  measured 92, limit 90
+src/syntax.rs:1  hotspot  measured 92, limit 90
 ```
 
 That reads as: this file is above the 92nd percentile on both change frequency and complexity,
@@ -57,25 +57,17 @@ It needs a git repository. Outside one, jabuti says so on stderr and carries on 
 than failing the run.
 
 It is evaluated only under `--all`. Ranking is a property of the whole repository, and a ranking
-computed over the three files you happened to change would be meaningless. When it is set to `error`
-and a check judges a change, jabuti says the rule was skipped rather than quietly returning nothing.
+computed over the three files you happened to change would be meaningless, so a check that judges a
+change does not evaluate it.
 
 A repository with very few files cannot produce a meaningful ranking, and a single file never scores
 above zero.
 
-## Changing it
+## It never fails a run
 
-```toml
-[rules]
-hotspot = { limit = 80, severity = "warning" }
-```
-
-Lowering it widens the net. At 80 you are looking at roughly the top fifth on both axes, which is
-useful when you are new to a codebase and want a map of where the difficulty lives. Raising it past
-95 leaves only the few files that genuinely dominate.
-
-Promoting it to `error` is not recommended. A hotspot is not a defect, and failing a build because a
-file is in a busy part of the repository would punish people for working where the work is.
+A hotspot is not a defect, and failing a build because a file is in a busy part of the repository
+would punish people for working where the work is. `--all` lists the repository as a map and exits `0`
+whatever it finds, which is the only place this rule is reported.
 
 ## Further reading
 

@@ -1,6 +1,6 @@
 mod common;
 
-use common::{error_on_long_functions, function_of, git, jabuti, project, repository, write};
+use common::{function_of, git, jabuti, project, repository, write};
 use predicates::str::contains;
 
 #[test]
@@ -15,34 +15,15 @@ fn a_tree_within_the_limits_reports_nothing_and_passes() {
 
 #[test]
 fn a_finding_configured_as_an_error_fails_the_gate() {
-    let directory = project(&[
-        ("jabuti.toml", &error_on_long_functions(5)),
-        ("src/lib.rs", &function_of("wide", 20)),
-    ]);
+    let directory = project(&[("src/lib.rs", &function_of("wide", 70))]);
 
     jabuti(&directory)
         .assert()
         .code(1)
         .stdout(contains(
-            "src/lib.rs:1  error  function-lines  wide  measured 22, limit 5",
+            "src/lib.rs:1  function-lines  wide  measured 72, limit 60",
         ))
-        .stdout(contains("1 error and 0 warnings across 1 file and 1 unit."));
-}
-
-#[test]
-fn a_finding_left_as_a_warning_is_reported_without_failing_the_gate() {
-    let directory = project(&[
-        (
-            "jabuti.toml",
-            "[rules]\nfunction-lines = { limit = 5, severity = \"warning\" }\n",
-        ),
-        ("src/lib.rs", &function_of("wide", 20)),
-    ]);
-
-    jabuti(&directory)
-        .assert()
-        .success()
-        .stdout(contains("0 errors and 1 warning"));
+        .stdout(contains("1 finding to fix across 1 file and 1 unit."));
 }
 
 #[test]
@@ -105,27 +86,23 @@ fn a_file_of_another_language_is_not_analysed() {
 }
 
 #[test]
-fn an_unknown_rule_in_the_configuration_stops_the_run() {
+fn a_rules_table_stops_the_run_and_says_why() {
     let directory = project(&[
-        (
-            "jabuti.toml",
-            "[rules]\nspline-reticulation = { limit = 3 }\n",
-        ),
+        ("jabuti.toml", "[rules]\nfunction-lines = { limit = 80 }\n"),
         ("src/lib.rs", "fn small() {}\n"),
     ]);
 
-    jabuti(&directory)
-        .assert()
-        .code(2)
-        .stderr(contains("unknown rule spline-reticulation"));
+    jabuti(&directory).assert().code(2).stderr(
+        "jabuti: [rules] is not read: jabuti fixes which rules run and their limits, and every finding it reports is one to fix, so there is nothing to set there. Remove the table\n",
+    );
 }
 
 #[test]
-fn an_unknown_severity_in_the_configuration_stops_the_run() {
+fn a_rules_table_for_one_language_stops_the_run_too() {
     let directory = project(&[
         (
             "jabuti.toml",
-            "[rules]\nfunction-lines = { severity = \"catastrophic\" }\n",
+            "[languages.rust.rules]\nduplicate-block = { severity = \"off\" }\n",
         ),
         ("src/lib.rs", "fn small() {}\n"),
     ]);
@@ -133,15 +110,14 @@ fn an_unknown_severity_in_the_configuration_stops_the_run() {
     jabuti(&directory)
         .assert()
         .code(2)
-        .stderr(contains("unknown severity catastrophic"));
+        .stderr(contains("[languages.rust.rules] is not read: jabuti fixes"));
 }
 
 #[test]
 fn findings_are_reported_in_path_then_line_order() {
     let directory = project(&[
-        ("jabuti.toml", &error_on_long_functions(5)),
-        ("src/b.rs", &function_of("second", 20)),
-        ("src/a.rs", &function_of("first", 20)),
+        ("src/b.rs", &function_of("second", 70)),
+        ("src/a.rs", &function_of("first", 70)),
     ]);
 
     let output = jabuti(&directory)
@@ -162,8 +138,8 @@ fn a_kotlin_file_is_measured_against_kotlins_own_limit() {
     let body = "    val value = 1\n".repeat(50);
     let directory = project(&[("src/Main.kt", &format!("fun wide() {{\n{body}}}\n"))]);
 
-    jabuti(&directory).assert().success().stdout(contains(
-        "src/Main.kt:1  warning  function-lines  wide  measured 52, limit 47",
+    jabuti(&directory).assert().code(1).stdout(contains(
+        "src/Main.kt:1  function-lines  wide  measured 52, limit 47",
     ));
 }
 
@@ -173,83 +149,15 @@ fn a_typescript_file_is_measured_against_typescripts_own_limit() {
     let source = format!("export function wide(value: number): void {{\n{body}}}\n");
     let directory = project(&[("src/live.ts", &source)]);
 
-    jabuti(&directory).assert().success().stdout(contains(
-        "src/live.ts:1  warning  function-lines  wide  measured 73, limit 71",
-    ));
-}
-
-#[test]
-fn a_language_limit_written_in_the_configuration_wins() {
-    let body = "    val value = 1\n".repeat(50);
-    let directory = project(&[
-        (
-            "jabuti.toml",
-            "[languages.kotlin.rules]\nfunction-lines = { limit = 80 }\n",
-        ),
-        ("src/Main.kt", &format!("fun wide() {{\n{body}}}\n")),
-    ]);
-
-    jabuti(&directory)
-        .assert()
-        .success()
-        .stdout(contains("No findings"));
-}
-
-#[test]
-fn a_severity_the_project_set_for_every_language_keeps_each_languages_own_limit() {
-    let body = "    consume(value);\n".repeat(71);
-    let source = format!("export function wide(value: number): void {{\n{body}}}\n");
-    let directory = project(&[
-        (
-            "jabuti.toml",
-            "[rules]\nfunction-lines = { severity = \"error\" }\n",
-        ),
-        ("src/live.ts", &source),
-    ]);
-
     jabuti(&directory).assert().code(1).stdout(contains(
-        "src/live.ts:1  error  function-lines  wide  measured 73, limit 71",
+        "src/live.ts:1  function-lines  wide  measured 73, limit 71",
     ));
-}
-
-#[test]
-fn a_limit_the_project_set_for_every_language_replaces_each_languages_default() {
-    let body = "    val value = 1\n".repeat(50);
-    let directory = project(&[
-        ("jabuti.toml", "[rules]\nfunction-lines = { limit = 60 }\n"),
-        ("src/Main.kt", &format!("fun wide() {{\n{body}}}\n")),
-    ]);
-
-    jabuti(&directory)
-        .assert()
-        .success()
-        .stdout(contains("No findings"));
-}
-
-#[test]
-fn a_limit_the_project_set_for_one_language_wins_over_the_one_it_set_for_all() {
-    let body = "    val value = 1\n".repeat(50);
-    let directory = project(&[
-        (
-            "jabuti.toml",
-            "[languages.kotlin.rules]\nfunction-lines = { limit = 80 }\n\n[rules]\nfunction-lines = { limit = 30 }\n",
-        ),
-        ("src/Main.kt", &format!("fun wide() {{\n{body}}}\n")),
-    ]);
-
-    jabuti(&directory)
-        .assert()
-        .success()
-        .stdout(contains("No findings"));
 }
 
 #[test]
 fn a_language_nobody_supports_stops_the_run() {
     let directory = project(&[
-        (
-            "jabuti.toml",
-            "[languages.cobol.rules]\nfunction-lines = { limit = 80 }\n",
-        ),
+        ("jabuti.toml", "[languages.cobol]\n"),
         ("src/lib.rs", "fn small() {}\n"),
     ]);
 
@@ -270,18 +178,15 @@ fn the_json_format_names_the_rule_the_way_configuration_does() {
         .arg("--format")
         .arg("json")
         .assert()
-        .success()
-        .stdout(contains("\"schema\": 3"))
+        .code(1)
+        .stdout(contains("\"schema\": 4"))
         .stdout(contains("\"rule\": \"parameters\""))
-        .stdout(contains("\"warnings\": 1"));
+        .stdout(contains("\"findings\": 1,"));
 }
 
 #[test]
 fn the_sarif_format_keeps_the_gate_result_when_the_agent_limit_is_zero() {
-    let directory = project(&[
-        ("jabuti.toml", &error_on_long_functions(5)),
-        ("src/lib.rs", &function_of("wide", 20)),
-    ]);
+    let directory = project(&[("src/lib.rs", &function_of("wide", 70))]);
 
     let output = jabuti(&directory)
         .arg("--format")
@@ -303,12 +208,12 @@ fn the_sarif_format_keeps_the_gate_result_when_the_agent_limit_is_zero() {
                 "ruleId": "function-lines",
                 "ruleIndex": 0,
                 "level": "error",
-                "message": { "text": "wide measured 22, limit 5" },
+                "message": { "text": "wide measured 72, limit 60" },
                 "locations": [
                     {
                         "physicalLocation": {
                             "artifactLocation": { "uri": "src/lib.rs" },
-                            "region": { "startLine": 1, "endLine": 22 }
+                            "region": { "startLine": 1, "endLine": 72 }
                         }
                     }
                 ]
@@ -323,16 +228,10 @@ fn the_sarif_format_keeps_the_gate_result_when_the_agent_limit_is_zero() {
 
 #[test]
 fn the_measures_format_reports_a_rule_that_is_switched_off() {
-    let directory = project(&[
-        (
-            "jabuti.toml",
-            "[rules]\ncyclomatic-complexity = { severity = \"off\" }\n",
-        ),
-        (
-            "src/lib.rs",
-            "fn a(v: i32) -> i32 {\n    if v > 0 { 1 } else { 0 }\n}\n",
-        ),
-    ]);
+    let directory = project(&[(
+        "src/lib.rs",
+        "fn a(v: i32) -> i32 {\n    if v > 0 { 1 } else { 0 }\n}\n",
+    )]);
 
     jabuti(&directory)
         .arg("--format")
@@ -382,7 +281,7 @@ fn a_symlink_to_a_source_file_does_not_replace_the_file_it_points_at() {
         .arg("--all")
         .assert()
         .success()
-        .stdout(contains("src/lib.rs:3  warning  error-masking"))
+        .stdout(contains("src/lib.rs:3  error-masking"))
         .stdout(contains("1 file and 1 unit"));
 }
 
@@ -410,10 +309,6 @@ fn every_rule_has_a_page_explaining_it_in_the_repository() {
 fn findings_are_listed_by_path_and_line_whichever_rule_produced_them() {
     let directory = repository(&[
         (
-            "jabuti.toml",
-            "[rules]\nfunction-lines = { limit = 2, severity = \"warning\" }\n",
-        ),
-        (
             "src/main.rs",
             "mod aa;\nmod git;\nmod zz;\n\nfn main() {}\n",
         ),
@@ -429,28 +324,21 @@ fn findings_are_listed_by_path_and_line_whichever_rule_produced_them() {
         "src/aa.rs",
         "pub fn aa() -> String {\n    crate::git::run()\n}\n",
     );
-    write(
-        &directory,
-        "src/zz.rs",
-        "fn zz() -> u32 {\n    let a = 1;\n    a\n}\n",
-    );
+    write(&directory, "src/zz.rs", &function_of("zz", 70));
 
     jabuti(&directory)
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/aa.rs:2  warning  new-dependency  now depends on src/git.rs\nsrc/zz.rs:1  warning  function-lines",
+            "src/aa.rs:2  new-dependency  now depends on src/git.rs\nsrc/zz.rs:1  function-lines  zz  measured 72, limit 60\n",
         ));
 }
 
 #[test]
 fn the_human_format_asked_for_through_a_pipe_is_written_without_color() {
-    let directory = project(&[
-        ("jabuti.toml", &error_on_long_functions(5)),
-        ("src/lib.rs", &function_of("wide", 20)),
-    ]);
+    let directory = project(&[("src/lib.rs", &function_of("wide", 70))]);
 
     jabuti(&directory)
         .args(["--format", "human"])
@@ -461,9 +349,9 @@ fn the_human_format_asked_for_through_a_pipe_is_written_without_color() {
             "⬢ jabuti  1 file · 1 unit\n\
              \n\
              src/lib.rs\n  \
-             :1  wide  function-lines  ━━┃━━━━━━━━╌╌  22/5\n\
+             :1  wide  function-lines  ━━━━━━━━┃━━╌╌  72/60\n\
              \n\
-             1 to fix · seal aa9c·5128\n",
+             1 to fix · seal 5b7d·a74e\n",
         );
 }
 
@@ -481,16 +369,13 @@ fn commit_dated(directory: &tempfile::TempDir, date: &str) {
 
 #[test]
 fn the_human_format_draws_each_files_weekly_commits_counted_back_from_head() {
-    let directory = project(&[
-        ("jabuti.toml", &error_on_long_functions(5)),
-        ("src/lib.rs", &function_of("wide", 20)),
-    ]);
+    let directory = project(&[("src/lib.rs", &function_of("wide", 70))]);
     git(&directory, &["init", "-q", "-b", "main"]);
     git(&directory, &["config", "user.email", "test@example.com"]);
     git(&directory, &["config", "user.name", "test"]);
     commit_dated(&directory, "2026-01-01T12:00:00+00:00");
-    write(&directory, "src/lib.rs", &function_of("wide", 21));
-    write(&directory, "src/a\"[b].rs", &function_of("odd", 20));
+    write(&directory, "src/lib.rs", &function_of("wide", 71));
+    write(&directory, "src/a\"[b].rs", &function_of("odd", 70));
     commit_dated(&directory, "2026-01-22T12:00:00+00:00");
 
     jabuti(&directory)
@@ -508,16 +393,13 @@ fn the_human_format_draws_each_files_weekly_commits_counted_back_from_head() {
 
 #[test]
 fn verbose_opens_with_the_commits_of_the_change_and_marks_the_lines_it_touched() {
-    let directory = project(&[
-        ("jabuti.toml", &error_on_long_functions(5)),
-        ("src/lib.rs", &function_of("wide", 20)),
-    ]);
+    let directory = project(&[("src/lib.rs", &function_of("wide", 70))]);
     git(&directory, &["init", "-q", "-b", "main"]);
     git(&directory, &["config", "user.email", "test@example.com"]);
     git(&directory, &["config", "user.name", "test"]);
     commit_dated(&directory, "2026-01-01T12:00:00+00:00");
     git(&directory, &["switch", "-q", "-c", "feature"]);
-    let grown = function_of("wide", 20).replacen("{\n", "{\n    let grown = 2;\n", 1);
+    let grown = function_of("wide", 70).replacen("{\n", "{\n    let grown = 2;\n", 1);
     write(&directory, "src/lib.rs", &grown);
     git(&directory, &["add", "-A"]);
     git(
@@ -554,8 +436,7 @@ fn verbose_opens_with_the_commits_of_the_change_and_marks_the_lines_it_touched()
 #[test]
 fn verbose_lists_only_the_commits_that_touched_the_project_checked() {
     let directory = project(&[
-        ("app/jabuti.toml", &error_on_long_functions(5)),
-        ("app/src/lib.rs", &function_of("wide", 20)),
+        ("app/src/lib.rs", &function_of("wide", 70)),
         ("web/index.js", "export const a = 1;\n"),
     ]);
     git(&directory, &["init", "-q", "-b", "main"]);
@@ -569,7 +450,7 @@ fn verbose_lists_only_the_commits_that_touched_the_project_checked() {
         &directory,
         &["-c", "commit.gpgsign=false", "commit", "-qm", "web only"],
     );
-    write(&directory, "app/src/lib.rs", &function_of("wide", 21));
+    write(&directory, "app/src/lib.rs", &function_of("wide", 71));
     git(&directory, &["add", "-A"]);
     git(
         &directory,
@@ -585,4 +466,20 @@ fn verbose_lists_only_the_commits_that_touched_the_project_checked() {
 
     assert!(output.contains("  app grows\n  ┴\n"), "{output}");
     assert!(!output.contains("web only"), "{output}");
+}
+
+#[test]
+fn a_misspelled_table_in_the_configuration_stops_the_run_instead_of_being_ignored() {
+    let directory = project(&[
+        (
+            "jabuti.toml",
+            "[layer.domain]\npaths = [\"src/domain/**\"]\n",
+        ),
+        ("src/lib.rs", "fn small() {}\n"),
+    ]);
+
+    jabuti(&directory)
+        .assert()
+        .code(2)
+        .stderr(contains("unknown field `layer`"));
 }

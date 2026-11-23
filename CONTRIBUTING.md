@@ -74,7 +74,7 @@ what makes it late.
 4. Calibrate the limit if the rule carries one, per language, and record the distribution in the
    calibration data. A threshold measured on one corpus does not transfer to another language.
 5. Write the measure page and the rule page. The measure page explains the number. The rule page
-   explains the limit, the severity, and what a reader should make of a finding.
+   explains the limit, why a finding is worth fixing, and what a reader should make of it.
 6. Write the succinct explanation that ships in the output, which is a separate artifact from the rule
    page and written for a different reader.
 7. Report the rate the rule produces over the corpora before it ships. A rule that fires on a fifth of a
@@ -83,10 +83,11 @@ what makes it late.
 A rule that needs a limit is only worth building if the distribution has a tail long enough to place one
 on. Measure first.
 
-With `--since`, every finding is trimmed in one place to the lines the change added, whatever rule
-raised it. A rule whose finding belongs somewhere else, such as a check that was deleted or a caller the
-change broke without touching, would be dropped there without a word. The first such rule declares
-where its findings anchor in the catalog, and the trim learns to respect it, before the rule ships.
+When a check judges a change, every finding is trimmed in one place to the lines the change added,
+whatever rule raised it. A rule whose finding belongs somewhere else, such as a check that was
+deleted or a caller the change broke without touching, would be dropped there without a word. The
+first such rule declares where its findings anchor in the catalog, and the trim learns to respect
+it, before the rule ships.
 
 ## Style
 

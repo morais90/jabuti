@@ -146,40 +146,34 @@ pub(crate) fn findings(scan: &Scan<'_>, index: &Index) -> Vec<Finding> {
     }
     let roots = roots(scan.sources, index);
 
-    let mut found = Vec::new();
-    for source in scan
-        .sources
+    scan.sources
         .iter()
         .filter(|source| considered(source, scan))
-    {
-        let Some(severity) = super::reporting(scan.policy, source.language, Rule::SpeculativeApi)
-        else {
-            continue;
-        };
-        let then = match scan.base.get(&source.path) {
-            None => None,
-            Some(None) => continue,
-            Some(Some(then)) => Some(&then.facts),
-        };
+        .filter(|source| super::reports(scan.policy, source.language, Rule::SpeculativeApi))
+        .flat_map(|source| in_source(scan, source, &roots))
+        .collect()
+}
 
-        for item in speculative(source, then, scan.sources, &roots)
-            .into_iter()
-            .filter(|item| !mentioned_in_unreadable(scan, &item.name))
-        {
-            found.push(Finding {
-                rule: RuleId::Native(Rule::SpeculativeApi),
-                severity,
-                path: item.path.display().to_string(),
-                span: item.span,
-                subject: Some(item.name),
-                detail: Detail::Message {
-                    message: "public, and nothing references it".to_owned(),
-                },
-            });
-        }
-    }
+fn in_source(scan: &Scan<'_>, source: &Source, roots: &Roots) -> Vec<Finding> {
+    let then = match scan.base.get(&source.path) {
+        None => None,
+        Some(None) => return Vec::new(),
+        Some(Some(then)) => Some(&then.facts),
+    };
 
-    found
+    speculative(source, then, scan.sources, roots)
+        .into_iter()
+        .filter(|item| !mentioned_in_unreadable(scan, &item.name))
+        .map(|item| Finding {
+            rule: RuleId::Native(Rule::SpeculativeApi),
+            path: item.path.display().to_string(),
+            span: item.span,
+            subject: Some(item.name),
+            detail: Detail::Message {
+                message: "public, and nothing references it".to_owned(),
+            },
+        })
+        .collect()
 }
 
 fn considered(source: &Source, scan: &Scan<'_>) -> bool {

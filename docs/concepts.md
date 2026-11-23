@@ -81,29 +81,23 @@ measure had to change for that rule to exist.
 ## Rule
 
 A rule reads a measure, compares it against a limit, and decides whether you should hear about it. A
-rule has an identifier you can put in configuration, a limit, and a severity.
+rule has an identifier and, when it reads a number, a limit. jabuti fixes both, along with whether the
+rule is on; a project cannot change them. Every finding is something to fix, and any finding fails
+the run.
 
-Severity has three settings:
-
-| Severity | What happens |
-|---|---|
-| `error` | The finding is reported and the command fails |
-| `warning` | The finding is reported and the command still passes |
-| `off` | The measure is still calculated, but nothing is reported |
-
-`off` is not the same as removing the rule. The number is still there, which is what allows rules
-that combine several measures to work later on.
+A rule that is off still has its measure calculated, so rules that combine several measures, such as
+`hotspot`, can read it.
 
 ## Finding
 
 A finding is one rule firing on one unit. This is what you see:
 
 ```
-src/handler.rs:120  error  function-lines  handle_request  measured 71, limit 60
+src/handler.rs:120  function-lines  handle_request  measured 71, limit 60
 ```
 
-Reading left to right: where it is, how seriously to take it, which rule fired, which unit it
-belongs to, and the two numbers that made it fire.
+Reading left to right: where it is, which rule fired, which unit it belongs to, and the two numbers
+that made it fire.
 
 There is deliberately no advice in that line. jabuti tells you what it measured. What to do about it
 depends on the code, and you can see the code.
@@ -124,8 +118,8 @@ flowchart TD
 ```
 
 The important part of that picture is that measuring and deciding are separate steps. Everything to
-the left of the diamond is arithmetic. Everything to the right is policy, and policy is what your
-`jabuti.toml` controls.
+the left of the diamond is arithmetic. Everything to the right is policy, and the policy is fixed by
+jabuti rather than by your `jabuti.toml`.
 
 That file is looked for in the working directory and then in every directory above it, and the
 directory holding it is the project root. Paths in every report, `exclude` patterns and layer paths
@@ -260,7 +254,7 @@ $ jabuti check
               :1  turn  cognitive-complexity  ━━━━┃━━━━━━╌╌  18/7
                         parameters            ━━━━━━━━━┃━━━   5/4
 
-2 warnings · seal 2d40·014d
+2 to fix · seal 2d40·014d
 ```
 
 In a git repository each file opens with the commits that touched it in each of the last twelve
@@ -290,12 +284,11 @@ them without parsing text:
 
 ```json
 {
-  "schema": 3,
-  "summary": { "files": 42, "units": 378, "errors": 1, "warnings": 0, "unreadable": 0 },
+  "schema": 4,
+  "summary": { "files": 42, "units": 378, "findings": 1, "unreadable": 0 },
   "findings": [
     {
       "rule": "function-lines",
-      "severity": "error",
       "path": "src/handler.rs",
       "span": { "start_line": 120, "end_line": 190 },
       "subject": "handle_request",
@@ -306,8 +299,7 @@ them without parsing text:
 }
 ```
 
-A rule is named the same way here as in your configuration, so anything you read out of the report
-can be written straight back into `jabuti.toml`.
+A rule is named the same way here as in every other format and on its page under `docs/rules/`.
 
 `--format sarif` emits one deterministic run conforming to SARIF 2.1.0 and names the
 [official errata schema](https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json):
@@ -371,11 +363,11 @@ The driver carries the version of jabuti that produced the report. Its rule desc
 by identifier and carry identity only. `ruleIndex` links each result to that stable order without
 inventing descriptions or help text, including for rules contributed by external tools.
 
-Every finding becomes exactly one result. Jabuti errors map to SARIF `error`, warnings map to
-`warning`, and the message contains the same factual subject and detail as the agent line. Regions
-contain a one-based `startLine` and inclusive `endLine`. The model measures whole lines, so it does
-not pretend to know columns. Artifact URIs are RFC 3986 percent-encoded paths relative to the project
-root. Absolute checkout paths and URI bases never enter the report.
+Every finding becomes exactly one result, and every result has `level: "error"`, because every
+finding is something to fix. The message contains the same factual subject and detail as the agent
+line. Regions contain a one-based `startLine` and inclusive `endLine`. The model measures whole
+lines, so it does not pretend to know columns. Artifact URIs are RFC 3986 percent-encoded paths
+relative to the project root. Absolute checkout paths and URI bases never enter the report.
 
 A clean run keeps the run metadata and carries `"results": []`. SARIF always contains every result
 and every execution notification; `--limit` truncates only the human and agent formats. `partialFingerprints`
@@ -414,7 +406,7 @@ so retain the SARIF artifact or use the JSON output when those coverage gaps mus
 [`docs/languages.md`](languages.md) lists the constructs currently behind this.
 
 `--format measures` is different in kind. It reports every number jabuti computed, for every unit,
-including the ones whose rules are switched off. Values are keyed by measure rather than by rule, so
+including the ones whose rules are off. Values are keyed by measure rather than by rule, so
 a file and a function both report `lines`, which `file-lines` and `function-lines` each compare
 against a limit of their own:
 
@@ -436,8 +428,8 @@ happen to know about; there are others, and finding them needs the numbers rathe
 
 | Code | Meaning |
 |---|---|
-| `0` | Nothing to report, or only warnings |
-| `1` | At least one `error` finding |
+| `0` | Nothing to fix, or a run under `--all`, which never fails |
+| `1` | At least one finding |
 | `2` | jabuti itself failed, for example an unreadable configuration file |
 
 The difference between `1` and `2` matters if something automated is reading the result. `1` means

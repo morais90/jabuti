@@ -86,11 +86,11 @@ vanishingly unlikely, but it is a comparison of hashes rather than a proof of eq
 worth knowing that.
 
 Structure is all that is compared. Two functions with the same shape and genuinely unrelated
-meanings will be reported, which is why the [`duplicate-block`](../rules/duplicate-block.md) rule
-ships as a warning rather than an error.
+meanings will be reported by the [`duplicate-block`](../rules/duplicate-block.md) rule, which is why
+its limit stays above the small shapes unrelated code routinely shares.
 
-Because this measure is a comparison, it needs to see the whole codebase to work. Scoping a run with
-`--since` narrows which findings are *reported*, but jabuti still reads every file, because a copy
+Because this measure is a comparison, it needs to see the whole codebase to work. A check that judges a
+change narrows which findings are *reported*, but jabuti still reads every file, because a copy
 in the file you edited is only findable if the original is also in view.
 
 ## Further reading

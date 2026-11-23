@@ -118,11 +118,11 @@ fn normalized(method: &Method) -> &'static str {
 ```
 
 That function scores 10. Nothing about it is hard to follow. This is the main reason the
-[`cyclomatic-complexity` rule](../rules/cyclomatic-complexity.md) is switched off by default.
+[`cyclomatic-complexity` rule](../rules/cyclomatic-complexity.md) is off in the catalog.
 
 ## Calibration
 
-The rule is off by default and carries a language-specific limit for TypeScript. The measured
+The rule is off in the catalog and carries a language-specific limit for TypeScript. The measured
 distributions and inspection results live in [`CALIBRATION.md`](../../CALIBRATION.md).
 
 ## Further reading

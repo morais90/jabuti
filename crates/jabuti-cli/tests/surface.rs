@@ -35,9 +35,9 @@ fn a_new_public_function_nothing_references_is_reported_where_it_was_declared() 
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/tasks.rs:3  warning  speculative-api  pause  public, and nothing references it",
+            "src/tasks.rs:3  speculative-api  pause  public, and nothing references it",
         ));
 }
 
@@ -99,9 +99,9 @@ fn a_new_item_in_a_public_module_of_a_library_is_the_library_surface_and_not_spe
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/internal.rs:5  warning  speculative-api  stray  public, and nothing references it",
+            "src/internal.rs:5  speculative-api  stray  public, and nothing references it",
         ))
         .stdout(contains("spare").not());
 }
@@ -139,52 +139,11 @@ fn a_new_kotlin_class_nothing_references_is_reported_and_an_annotated_one_is_not
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/main/kotlin/shop/Shelf.kt:6  warning  speculative-api  Basket  public, and nothing references it",
+            "src/main/kotlin/shop/Shelf.kt:6  speculative-api  Basket  public, and nothing references it",
         ))
         .stdout(contains("Catalog").not());
-}
-
-#[test]
-fn the_rule_can_be_switched_off() {
-    let directory = binary_crate();
-    write(
-        &directory,
-        "jabuti.toml",
-        "[rules]\nspeculative-api = { severity = \"off\" }\n",
-    );
-    write(
-        &directory,
-        "src/tasks.rs",
-        "pub fn run() {}\n\npub fn pause() {}\n",
-    );
-
-    jabuti(&directory)
-        .arg("--since")
-        .arg("HEAD")
-        .assert()
-        .success()
-        .stdout(contains("No findings"));
-}
-
-#[test]
-fn without_since_the_rule_has_nothing_to_compare_against_and_says_so_when_it_gates() {
-    let directory = binary_crate();
-    write(
-        &directory,
-        "jabuti.toml",
-        "[rules]\nspeculative-api = { severity = \"error\" }\n",
-    );
-    write(
-        &directory,
-        "src/tasks.rs",
-        "pub fn run() {}\n\npub fn pause() {}\n",
-    );
-
-    jabuti(&directory).arg("--all").assert().success().stderr(contains(
-        "speculative-api compares against an earlier revision, and this check has none to compare against",
-    ));
 }
 
 #[test]
@@ -251,28 +210,6 @@ fn a_caller_outside_the_paths_given_on_the_command_line_still_counts() {
 }
 
 #[test]
-fn a_language_can_switch_the_rule_on_while_the_shared_setting_is_off() {
-    let directory = binary_crate();
-    write(
-        &directory,
-        "jabuti.toml",
-        "[rules]\nspeculative-api = { severity = \"off\" }\n\n[languages.rust.rules]\nspeculative-api = { severity = \"warning\" }\n",
-    );
-    write(
-        &directory,
-        "src/tasks.rs",
-        "pub fn run() {}\n\npub fn pause() {}\n",
-    );
-
-    jabuti(&directory)
-        .arg("--since")
-        .arg("HEAD")
-        .assert()
-        .success()
-        .stdout(contains("speculative-api  pause"));
-}
-
-#[test]
 fn a_file_whose_earlier_revision_does_not_parse_is_skipped_rather_than_read_as_new() {
     let directory = binary_crate();
     write(
@@ -309,6 +246,6 @@ fn a_change_that_is_already_staged_is_still_measured_against_the_revision() {
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains("speculative-api  pause"));
 }

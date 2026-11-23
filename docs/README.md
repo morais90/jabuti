@@ -21,7 +21,7 @@ measures and SARIF for programmatic consumers.
 ## Measures
 
 A measure is a number about your code, or about how that code has changed over time. On its own it says nothing about whether that number is good
-or bad. You never configure a measure directly. You configure the rules that read it.
+or bad. Rules read measures and compare them against the limits jabuti sets.
 
 | Measure | What it counts |
 |---|---|
@@ -35,7 +35,7 @@ or bad. You never configure a measure directly. You configure the rules that rea
 ## Rules
 
 A rule is what turns a number into something worth your attention. Each page below tells you what
-the rule is looking for, what it means when it fires, and when changing the default makes sense.
+the rule is looking for, what it means when it fires, and why its limit sits where it does.
 
 Most rules read one measure. [`hotspot`](rules/hotspot.md) reads two, which is where measures start
 paying for themselves: neither change frequency nor complexity says much alone, and together they
@@ -45,27 +45,28 @@ Every rule belongs to a [family](principles.md#families), which names the way a 
 than the area of software it touches. Reading the catalog by family is usually faster than reading it
 by name.
 
-| Rule | Family | Limit | Severity |
+| Rule | Family | Limit | Runs |
 |---|---|---|---|
-| [`cognitive-complexity`](rules/cognitive-complexity.md) | `shape` | 7 | warning |
-| [`duplicate-block`](rules/duplicate-block.md) | `shape` | 120 nodes | warning |
-| [`error-masking`](rules/error-masking.md) | `silent-failure` | none | warning |
-| [`hotspot`](rules/hotspot.md) | `cost` | 90 | warning |
-| [`function-lines`](rules/function-lines.md) | `shape` | 60 | warning |
-| [`parameters`](rules/parameters.md) | `shape` | 4 | warning |
-| [`new-dependency`](rules/new-dependency.md) | `structure` | none | warning |
-| [`layer-violation`](rules/layer-violation.md) | `structure` | none | warning |
-| [`speculative-api`](rules/speculative-api.md) | `shape` | none | warning |
-| [`suppression`](rules/suppression.md) | `silenced` | none | warning |
-| [`assertion`](rules/assertion.md) | `completeness` | none | warning |
+| [`cognitive-complexity`](rules/cognitive-complexity.md) | `shape` | 7 | always |
+| [`duplicate-block`](rules/duplicate-block.md) | `shape` | 120 nodes | always |
+| [`error-masking`](rules/error-masking.md) | `silent-failure` | none | always |
+| [`function-lines`](rules/function-lines.md) | `shape` | 60 | always |
+| [`parameters`](rules/parameters.md) | `shape` | 4 | always |
+| [`suppression`](rules/suppression.md) | `silenced` | none | always |
+| [`assertion`](rules/assertion.md) | `completeness` | none | always |
+| [`layer-violation`](rules/layer-violation.md) | `structure` | none | when layers are declared |
+| [`new-dependency`](rules/new-dependency.md) | `structure` | none | on a change |
+| [`speculative-api`](rules/speculative-api.md) | `shape` | none | on a change |
+| [`uncovered-new-code`](rules/uncovered-new-code.md) | `completeness` | none | on a change, with a coverage report |
+| [`hotspot`](rules/hotspot.md) | `cost` | 90 | under `--all` |
 | [`file-lines`](rules/file-lines.md) | `shape` | 1000 | off |
 | [`cyclomatic-complexity`](rules/cyclomatic-complexity.md) | `shape` | 10 | off |
 | [`churn`](rules/churn.md) | `cost` | none | off |
-| [`uncovered-new-code`](rules/uncovered-new-code.md) | `completeness` | none | off |
 
-The last four are switched off by default. Their pages explain why, and what you gain by turning
-them on if your project wants them. `uncovered-new-code` is off for a different reason from the other
-three: it needs a coverage report, which your build produces or a tool produces for it.
+Every finding is something to fix, and any finding fails the run. Rules marked "on a change" compare
+against an earlier revision, so they skip `--all` and repositories without git. `hotspot` ranks the
+whole repository, so it runs only under `--all`, which never fails. The last three are off and cannot
+be turned on; their measures still appear in `--format measures`, and their pages explain why.
 
 ## External tools
 
@@ -82,11 +83,14 @@ and one that does not exist is an error rather than an empty report:
 ```toml
 exclude = ["generated/**"]
 
-[rules]
-function-lines = { limit = 60, severity = "error" }
-file-lines = { limit = 800, severity = "warning" }
+[coverage]
+report = "target/coverage/lcov.info"
+
+[layers]
+domain = { paths = ["src/domain/**"], depends_on = [] }
 ```
 
-Severity can be `error`, which makes the run fail, `warning`, which reports the finding but still
-passes, or `off`. Anything you leave out keeps its default, so you only write down what you want to
-change.
+The file holds what only the project knows: `exclude`, which tools run under `[tools.<name>]`, the
+coverage report under `[coverage]`, the layers under `[layers]`, and the project's own wrappers under
+`[languages.<name>.concepts]`. Which rules run and where their limits sit are fixed by jabuti. A
+`[rules]` or `[languages.<name>.rules]` table stops the run with exit `2` and says why.

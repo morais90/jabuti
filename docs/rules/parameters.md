@@ -2,12 +2,12 @@
 
 Reports a function that declares more arguments than the limit.
 
-**Default limit:** 4. **Default severity:** warning.
+**Default limit:** 4.
 
 ## What it means when it fires
 
 ```
-src/partners/mod.rs:60  warning  parameters  new  measured 6, limit 4
+src/partners/mod.rs:60  parameters  new  measured 6, limit 4
 ```
 
 There are two common causes, and they have different fixes.
@@ -26,20 +26,7 @@ knowing even though it says nothing about what the function does.
 
 Rust, Kotlin and TypeScript currently use 4. An explicit TypeScript `this` parameter identifies the
 receiver and is excluded. [`CALIBRATION.md`](../../CALIBRATION.md) records the measured distributions
-and report rates.
-
-## When to change it
-
-```toml
-[rules]
-parameters = { limit = 6, severity = "warning" }
-```
-
-Raising it is reasonable in code where wide signatures are deliberate. Performance-sensitive internal
-functions sometimes take many arguments specifically to avoid building a structure on a hot path, and
-that is a trade-off the author made on purpose rather than an oversight.
-
-Lowering it below 3 will start reporting ordinary code, since the 95th percentile is only 3.
+and report rates. The 95th percentile is 3, so a limit below that would report ordinary code.
 
 ## Further reading
 

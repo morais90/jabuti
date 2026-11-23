@@ -122,32 +122,6 @@ fn a_lint_from_the_tool_is_reported_like_any_other_finding() {
 }
 
 #[test]
-fn a_lint_the_configuration_switches_off_is_not_reported() {
-    let directory = rust_project(&[(
-        "jabuti.toml",
-        "[tools.clippy]\nenabled = true\n\n[rules]\n\"clippy/needless_range_loop\" = { severity = \"off\" }\n",
-    )]);
-
-    jabuti(&directory)
-        .assert()
-        .success()
-        .stdout(contains("No findings"));
-}
-
-#[test]
-fn a_lint_switched_off_for_its_language_is_not_reported() {
-    let directory = rust_project(&[(
-        "jabuti.toml",
-        "[tools.clippy]\nenabled = true\n\n[languages.rust.rules]\n\"clippy/needless_range_loop\" = { severity = \"off\" }\n",
-    )]);
-
-    jabuti(&directory)
-        .assert()
-        .success()
-        .stdout(contains("No findings"));
-}
-
-#[test]
 fn a_tool_that_cannot_be_found_says_how_to_install_it() {
     let directory = rust_project(&[("jabuti.toml", CLIPPY_ON)]);
 
@@ -214,9 +188,9 @@ fn a_lint_is_placed_relative_to_the_project_whichever_member_of_a_nested_workspa
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "rust/member/src/lib.rs:5  warning  clippy/needless_range_loop",
+            "rust/member/src/lib.rs:5  clippy/needless_range_loop",
         ));
 }
 
@@ -248,10 +222,7 @@ fn a_lint_in_a_workspace_member_outside_the_project_is_left_out() {
         .arg("--all")
         .arg(".")
         .assert()
-        .stdout(
-            contains("src/lib.rs:3  warning  clippy/needless_range_loop")
-                .and(contains("other").not()),
-        );
+        .stdout(contains("src/lib.rs:3  clippy/needless_range_loop").and(contains("other").not()));
 }
 
 #[test]
@@ -596,7 +567,7 @@ cargo\tllvm-cov\t--version\n";
         let fake = FakeTools::new(true);
         fs::write(
             fake.project.path().join("jabuti.toml"),
-            "[rules]\nhotspot = { severity = \"off\" }\n\n[tools.clippy]\nenabled = true\n\n[tools.cargo-llvm-cov]\nenabled = true\n",
+            "[tools.clippy]\nenabled = true\n\n[tools.cargo-llvm-cov]\nenabled = true\n",
         )
         .expect("configuration written");
 
@@ -615,11 +586,7 @@ cargo\tllvm-cov\t--version\n";
     #[test]
     fn check_never_probes_a_tool_the_project_left_off() {
         let fake = FakeTools::new(true);
-        fs::write(
-            fake.project.path().join("jabuti.toml"),
-            "[rules]\nhotspot = { severity = \"off\" }\n",
-        )
-        .expect("configuration written");
+        fs::write(fake.project.path().join("jabuti.toml"), "").expect("configuration written");
 
         fake.check()
             .assert()

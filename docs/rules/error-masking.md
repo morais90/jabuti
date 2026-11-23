@@ -2,7 +2,7 @@
 
 Reports code that removes an error path without handling it.
 
-**Default severity:** warning. This rule has no limit; every occurrence is reported.
+This rule has no limit; every occurrence is reported.
 
 ## The idea
 
@@ -90,7 +90,7 @@ Production code beside a test module is still read. Only the test parts are quie
 ## What the finding says
 
 ```
-src/handler.rs:42  warning  error-masking  unwrap  the failure becomes a panic
+src/handler.rs:42  error-masking  unwrap  the failure becomes a panic
 ```
 
 The construct is named as it appears in your code, and the consequence describes what was removed.
@@ -112,25 +112,23 @@ true of a panic in `main`, where stopping is the correct behaviour.
 The question worth asking at each one is simple: can this fail because of something outside the
 program, such as a file, a network, a user, or a clock? If yes, the failure will happen eventually
 and someone will have to diagnose it without the information this line discarded. If no, the
-construct is documenting an invariant and it is fine.
+invariant belongs somewhere the compiler can hold it, such as a value built once at startup or a type
+that cannot be empty. The rule reports the line either way, because it cannot tell the two apart.
 
-## Why it is a warning
+## Why it fails a change
 
-Because it reports shape, and shape cannot tell an invariant from a real error path. Precision is
-medium by construction, and recall is high, which is a reasonable thing to show a person and an
-unreasonable thing to fail a build on by default.
+The rule reports shape, and shape cannot tell an invariant from a real error path. Precision is
+medium by construction, and recall is high.
 
-The rule earns most of its value scoped to a change. Two new masked errors in a diff is a question
-worth asking. Four hundred in a codebase you inherited is a fact you cannot act on.
+The scope keeps that workable. A check reports only what the change made worse, so the
+question is asked of the masked errors a diff added. Two new masked errors in a diff is a question
+worth asking. Four hundred in a codebase you inherited is a fact you cannot act on, and a check on a
+change never shows them.
 
 ## Requirements and limits
 
-There is no threshold to tune. Every matched occurrence is reported when the rule is enabled. The
-measured production rate and the test-code exclusion study live in
-[`CALIBRATION.md`](../../CALIBRATION.md).
-
-Detection is per file, so unlike [`duplicate-block`](duplicate-block.md) this rule can be configured
-per language.
+There is no threshold. Every matched occurrence is reported. The measured production rate and the
+test-code exclusion study live in [`CALIBRATION.md`](../../CALIBRATION.md).
 
 ## Extending the concept vocabulary
 
@@ -146,24 +144,6 @@ error-discard = ["@mycorp/errors.discard"]
 
 Direct and aliased imports resolve to that path. The configured binding extends the built-ins; it
 does not replace the empty-handler checks.
-
-## Changing it
-
-```toml
-[rules]
-error-masking = { severity = "error" }
-```
-
-Promoting it to `error` is reasonable together with `--since`, which turns it into a gate on newly
-introduced masking while leaving what already exists alone.
-
-```toml
-[languages.kotlin.rules]
-error-masking = { severity = "off" }
-```
-
-Turning it off for one language is supported, and is the right move if a codebase has a convention
-this rule reads wrongly.
 
 ## Further reading
 

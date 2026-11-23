@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use jabuti_core::catalog::{Rule, Severity};
+use jabuti_core::catalog::Rule;
 use jabuti_core::code::{assertion, concepts, units};
 use jabuti_core::lang::{self, LangSpec};
 use jabuti_core::model::Finding;
@@ -114,7 +114,7 @@ fn a_rule_switched_off_reports_nothing_however_many_tests_are_empty() {
         Rule::Assertion,
         RuleConfig {
             limit: 0,
-            severity: Severity::Off,
+            enabled: false,
         },
     );
 

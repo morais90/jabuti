@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use jabuti_core::catalog::Input;
+use jabuti_core::code::Measured;
 use jabuti_core::graph::index::Source;
 use jabuti_core::model::Finding;
 use jabuti_core::policy::Layers;
@@ -56,10 +57,9 @@ pub(crate) fn verdict(
             })
         })
         .transpose()?;
-    let plan = Plan::of(&settings, changes.is_some());
-    notices.extend(plan.notices());
+    let plan = Plan::of(&settings, changes.is_some(), matches!(scope, Scope::All));
 
-    let history = history::load(&settings, notices);
+    let history = history::load(plan.reads(Input::History), notices);
     let paths = workspace::sources(roots, &settings.exclude, &root)?;
     let churn = history::commits(history.as_ref(), &paths);
     let touched = changes.as_ref().map(|changes| touched_by(changes, &paths));
@@ -149,18 +149,9 @@ fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
         &run.settings.policy,
     ));
 
-    let tools = tools::Scan {
-        project: run.root,
-        paths: run.paths,
-        settings: run.settings,
-    };
-    let (reported, produced) = tools::findings(&tools, notices)?;
-    outcome.findings.extend(reported);
-    if let Some(changes) = run.changes {
-        outcome
-            .findings
-            .extend(crossings::uncovered(&tools, changes, produced, notices));
-    }
+    outcome
+        .findings
+        .extend(orchestrated(run, &measured, notices)?);
 
     let layers = layered(run, &extent, notices)?;
     outcome.findings.extend(graphed(
@@ -172,6 +163,25 @@ fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
     ));
 
     Ok(outcome)
+}
+
+fn orchestrated(
+    run: &Run<'_>,
+    measured: &[Measured],
+    notices: &mut Vec<String>,
+) -> Result<Vec<Finding>> {
+    let tools = tools::Scan {
+        project: run.root,
+        paths: run.paths,
+        settings: run.settings,
+    };
+    let (mut found, produced) = tools::findings(&tools, notices)?;
+    if let Some(changes) = run.changes {
+        let judged = crossings::Judged { changes, measured };
+        found.extend(crossings::uncovered(&tools, judged, produced, notices));
+    }
+
+    Ok(found)
 }
 
 fn worsened(

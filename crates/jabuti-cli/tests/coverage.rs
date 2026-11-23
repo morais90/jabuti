@@ -12,7 +12,7 @@ use tempfile::TempDir;
 
 const CARGO_TOML: &str = "[package]\nname = \"covme\"\nversion = \"0.1.0\"\nedition = \"2021\"\n";
 
-const REPORTED: &str = "[coverage]\nreport = \"coverage.lcov\"\n\n[rules]\nhotspot = { severity = \"off\" }\nuncovered-new-code = { severity = \"warning\" }\n";
+const REPORTED: &str = "[coverage]\nreport = \"coverage.lcov\"\n";
 
 const BEFORE: &str = "fn existing() -> i32 {\n    1\n}\n";
 
@@ -76,9 +76,9 @@ fn a_stretch_of_new_lines_no_test_ran_is_reported_once_at_its_first_line() {
 
     since_head(&directory)
         .assert()
-        .success()
+        .code(1)
         .stdout(
-            "0 errors and 1 warning across 1 file and 2 units.\n\nsrc/lib.rs:5  warning  uncovered-new-code  4 lines run by no test\n",
+            "1 finding to fix across 1 file and 2 units.\n\nsrc/lib.rs:5  uncovered-new-code  4 lines run by no test\n",
         )
         .stderr("");
 }
@@ -111,8 +111,8 @@ fn a_new_line_a_test_ran_is_not_reported_and_the_stretch_starts_where_coverage_s
     );
     write(&directory, "coverage.lcov", &report);
 
-    since_head(&directory).assert().success().stdout(contains(
-        "src/lib.rs:7  warning  uncovered-new-code  2 lines run by no test",
+    since_head(&directory).assert().code(1).stdout(contains(
+        "src/lib.rs:7  uncovered-new-code  2 lines run by no test",
     ));
 }
 
@@ -186,53 +186,6 @@ fn notices_come_out_in_one_order_whatever_stage_raised_them() {
 }
 
 #[test]
-fn a_newer_changed_file_for_a_language_where_the_rule_is_off_does_not_make_the_report_stale() {
-    let directory = repository(&[
-        (
-            "jabuti.toml",
-            "[coverage]\nreport = \"coverage.lcov\"\n\n[rules]\nhotspot = { severity = \"off\" }\nuncovered-new-code = { severity = \"warning\" }\n\n[languages.rust.rules]\nuncovered-new-code = { severity = \"off\" }\n",
-        ),
-        ("src/lib.rs", "fn existing() {}\n"),
-        ("src/main/kotlin/Catalog.kt", "fun existing(): Int = 1\n"),
-    ]);
-    write(
-        &directory,
-        "src/lib.rs",
-        "fn existing() {}\nfn added() {}\n",
-    );
-    write(
-        &directory,
-        "src/main/kotlin/Catalog.kt",
-        "fun existing(): Int = 1\n\nfun added(): Int {\n    return 2\n}\n",
-    );
-    let report = lcov(&directory, "src/main/kotlin/Catalog.kt", &[(3, 0), (4, 0)]);
-    write(&directory, "coverage.lcov", &report);
-    set_modified(
-        &directory,
-        "src/main/kotlin/Catalog.kt",
-        SystemTime::UNIX_EPOCH + Duration::from_hours(24),
-    );
-    set_modified(
-        &directory,
-        "coverage.lcov",
-        SystemTime::UNIX_EPOCH + Duration::from_hours(48),
-    );
-    set_modified(
-        &directory,
-        "src/lib.rs",
-        SystemTime::UNIX_EPOCH + Duration::from_hours(72),
-    );
-
-    since_head(&directory)
-        .assert()
-        .success()
-        .stdout(contains(
-            "src/main/kotlin/Catalog.kt:3  warning  uncovered-new-code  2 lines run by no test",
-        ))
-        .stderr("");
-}
-
-#[test]
 fn a_configured_report_that_does_not_exist_is_named_in_the_skip_notice() {
     let directory = rust_repository(REPORTED);
     write(&directory, "src/lib.rs", AFTER);
@@ -248,9 +201,7 @@ fn a_configured_report_that_does_not_exist_is_named_in_the_skip_notice() {
 
 #[test]
 fn a_configured_report_with_an_extension_nobody_reads_stops_the_run() {
-    let directory = rust_repository(
-        "[coverage]\nreport = \"coverage.txt\"\n\n[rules]\nhotspot = { severity = \"off\" }\nuncovered-new-code = { severity = \"warning\" }\n",
-    );
+    let directory = rust_repository("[coverage]\nreport = \"coverage.txt\"\n");
 
     since_head(&directory).assert().code(2).stderr(contains(
         "coverage report coverage.txt has an extension jabuti cannot read; use .lcov, .info or .xml",
@@ -258,47 +209,21 @@ fn a_configured_report_with_an_extension_nobody_reads_stops_the_run() {
 }
 
 #[test]
-fn the_rule_says_it_needs_a_report_when_nothing_provides_one() {
-    let directory = rust_repository(
-        "[rules]\nhotspot = { severity = \"off\" }\nuncovered-new-code = { severity = \"warning\" }\n",
-    );
+fn without_a_report_the_rule_has_nothing_to_read_and_stays_quiet() {
+    let directory = rust_repository("");
     write(&directory, "src/lib.rs", AFTER);
 
     since_head(&directory)
         .assert()
         .success()
         .stdout("No findings across 1 file and 2 units.\n")
-        .stderr(
-            "jabuti: uncovered-new-code needs a coverage report; set [coverage] report or enable a tool that produces one\n",
-        );
-}
-
-#[test]
-fn the_rule_stays_quiet_while_it_is_off_even_when_no_report_exists() {
-    let directory = rust_repository("[rules]\nhotspot = { severity = \"off\" }\n");
-    write(&directory, "src/lib.rs", AFTER);
-
-    since_head(&directory).assert().success().stderr("");
-}
-
-#[test]
-fn a_rule_set_to_gate_says_it_cannot_run_without_a_reference_instead_of_passing() {
-    let directory = rust_repository(
-        "[coverage]\nreport = \"coverage.lcov\"\n\n[rules]\nhotspot = { severity = \"off\" }\nuncovered-new-code = { severity = \"error\" }\n",
-    );
-
-    jabuti(&directory).arg("--all").assert().success().stderr(contains(
-        "uncovered-new-code compares against an earlier revision, and this check has none to compare against",
-    ));
+        .stderr("");
 }
 
 #[test]
 fn a_jacoco_report_locates_a_kotlin_file_by_its_package_directory() {
     let directory = repository(&[
-        (
-            "jabuti.toml",
-            "[coverage]\nreport = \"build/jacoco.xml\"\n\n[rules]\nhotspot = { severity = \"off\" }\nuncovered-new-code = { severity = \"warning\" }\n",
-        ),
+        ("jabuti.toml", "[coverage]\nreport = \"build/jacoco.xml\"\n"),
         (
             "src/main/kotlin/org/example/Catalog.kt",
             "package org.example\n\nclass Catalog {\n    fun size(): Int = 0\n}\n",
@@ -315,8 +240,8 @@ fn a_jacoco_report_locates_a_kotlin_file_by_its_package_directory() {
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<!DOCTYPE report PUBLIC \"-//JACOCO//DTD Report 1.1//EN\" \"report.dtd\">\n<report name=\"app\">\n  <package name=\"org/example\">\n    <sourcefile name=\"Catalog.kt\">\n      <line nr=\"4\" mi=\"0\" ci=\"2\" mb=\"0\" cb=\"0\"/>\n      <line nr=\"8\" mi=\"2\" ci=\"0\" mb=\"0\" cb=\"0\"/>\n      <line nr=\"9\" mi=\"3\" ci=\"0\" mb=\"0\" cb=\"0\"/>\n    </sourcefile>\n  </package>\n</report>\n",
     );
 
-    since_head(&directory).assert().success().stdout(contains(
-        "src/main/kotlin/org/example/Catalog.kt:8  warning  uncovered-new-code  2 lines run by no test",
+    since_head(&directory).assert().code(1).stdout(contains(
+        "src/main/kotlin/org/example/Catalog.kt:8  uncovered-new-code  2 lines run by no test",
     ));
 }
 
@@ -359,10 +284,7 @@ fn the_coverage_producer_says_how_to_turn_itself_on() {
 #[test]
 fn the_coverage_producer_runs_the_tests_and_the_rule_reads_what_it_wrote() {
     let directory = repository(&[
-        (
-            "jabuti.toml",
-            "[tools.cargo-llvm-cov]\nenabled = true\n\n[rules]\nhotspot = { severity = \"off\" }\nuncovered-new-code = { severity = \"warning\" }\n",
-        ),
+        ("jabuti.toml", "[tools.cargo-llvm-cov]\nenabled = true\n"),
         ("Cargo.toml", CARGO_TOML),
         (
             "src/lib.rs",
@@ -381,9 +303,9 @@ fn the_coverage_producer_runs_the_tests_and_the_rule_reads_what_it_wrote() {
 
     since_head(&directory)
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/lib.rs:5  warning  uncovered-new-code  4 lines run by no test",
+            "src/lib.rs:5  uncovered-new-code  4 lines run by no test",
         ))
         .stderr("");
 
@@ -399,10 +321,7 @@ fn the_coverage_producer_runs_the_tests_and_the_rule_reads_what_it_wrote() {
 #[test]
 fn the_coverage_producer_does_not_inherit_the_instrumentation_of_a_run_it_is_nested_in() {
     let directory = repository(&[
-        (
-            "jabuti.toml",
-            "[tools.cargo-llvm-cov]\nenabled = true\n\n[rules]\nhotspot = { severity = \"off\" }\nuncovered-new-code = { severity = \"warning\" }\n",
-        ),
+        ("jabuti.toml", "[tools.cargo-llvm-cov]\nenabled = true\n"),
         ("Cargo.toml", CARGO_TOML),
         ("src/lib.rs", BEFORE),
     ]);
@@ -413,9 +332,9 @@ fn the_coverage_producer_does_not_inherit_the_instrumentation_of_a_run_it_is_nes
         .env("__CARGO_LLVM_COV_RUSTC_WRAPPER_CRATE_NAMES", "covme")
         .env("RUSTC_WRAPPER", "/nonexistent/enclosing-coverage-wrapper")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/lib.rs:5  warning  uncovered-new-code  5 lines run by no test",
+            "src/lib.rs:5  uncovered-new-code  5 lines run by no test",
         ))
         .stderr("");
 }
@@ -423,10 +342,7 @@ fn the_coverage_producer_does_not_inherit_the_instrumentation_of_a_run_it_is_nes
 #[test]
 fn a_producer_whose_tests_fail_says_so_and_the_rule_does_not_guess() {
     let directory = repository(&[
-        (
-            "jabuti.toml",
-            "[tools.cargo-llvm-cov]\nenabled = true\n\n[rules]\nhotspot = { severity = \"off\" }\nuncovered-new-code = { severity = \"warning\" }\n",
-        ),
+        ("jabuti.toml", "[tools.cargo-llvm-cov]\nenabled = true\n"),
         ("Cargo.toml", CARGO_TOML),
         ("src/lib.rs", BEFORE),
         (
@@ -447,4 +363,26 @@ fn a_producer_whose_tests_fail_says_so_and_the_rule_does_not_guess() {
         );
 
     assert!(!Path::new(&directory.path().join("target/jabuti/coverage.lcov")).exists());
+}
+
+#[test]
+fn a_new_function_the_compiler_evaluated_and_no_test_ran_is_left_out() {
+    let directory = rust_repository(REPORTED);
+    write(
+        &directory,
+        "src/lib.rs",
+        "fn existing() -> i32 {\n    1\n}\n\nconst fn added() -> i32 {\n    let first = 2;\n    let second = 3;\n    first + second\n}\n\nconst LIMIT: i32 = added();\n",
+    );
+    let report = lcov(
+        &directory,
+        "src/lib.rs",
+        &[(1, 1), (2, 1), (3, 1), (5, 0), (6, 0), (7, 0), (8, 0)],
+    );
+    write(&directory, "coverage.lcov", &report);
+
+    since_head(&directory)
+        .assert()
+        .success()
+        .stdout("No findings across 1 file and 2 units.\n")
+        .stderr("");
 }

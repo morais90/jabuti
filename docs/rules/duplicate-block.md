@@ -2,7 +2,7 @@
 
 Reports a region of code that also exists somewhere else.
 
-**Default limit:** 120 nodes. **Default severity:** warning.
+**Default limit:** 120 nodes.
 
 ## The idea
 
@@ -25,7 +25,7 @@ over is something it has no way to do.
 ## What the finding says
 
 ```
-src/parser.rs:12  warning  duplicate-block  143 nodes repeated at src/reader.rs:40 (limit 120)
+src/parser.rs:12  duplicate-block  143 nodes repeated at src/reader.rs:40 (limit 120)
 ```
 
 Every occurrence is reported, and each one points at the others. So a block appearing in two places
@@ -60,44 +60,23 @@ in a test is frequently the point: a test that reads top to bottom without sendi
 helper is easier to trust when it fails. Extracting shared setup is worth it when the setup is
 genuinely shared, and not worth it when it only looks shared.
 
-## Why it is a warning
-
-Because the rule reports structure, and structure is evidence rather than proof. Two functions can
-have the same shape and nothing to do with each other, and jabuti cannot tell the difference. That
-is a reasonable thing to put in front of a person, and not a reasonable thing to fail a build on.
-
 ## Where the default comes from
 
 The default stays above the small grammar shapes that unrelated code routinely shares. Lower values
 trade substantial-copy detection for more structural coincidences. The measured finding rate and
 manual inspection record live in [`CALIBRATION.md`](../../CALIBRATION.md).
 
-## Changing it
-
-```toml
-[rules]
-duplicate-block = { limit = 200, severity = "warning" }
-```
-
-Raising it leaves only substantial copies, which is a reasonable first setting on an existing
-codebase where you want the rule on without a backlog appearing on day one. Lowering it toward 80
-catches smaller repeats and is worth trying on a codebase you already keep clean.
-
-Promoting it to `error` works best together with `--since`, so that the gate applies to copies being
-introduced rather than to every copy already present.
-
 ## Requirements and limits
 
-The rule compares files against each other, so jabuti reads every file in scope even when the run is
-narrowed with `--since`. Only findings that touch changed lines are reported, but the search itself
+The rule compares files against each other, so jabuti reads every file in scope even when a check
+judges a change. Only findings that touch changed lines are reported, but the search itself
 has to see the whole picture, since a copy is only findable when its twin is also in view. Reading a
 file is not the same as counting it: the summary line and `--format measures` still cover only the
 change, so scoping a run means the same thing whether or not this rule is on.
 
 Because the rule compares files against each other, a finding is about a pair of files rather than
-about one file in one language. It therefore belongs to the run rather than to a language, and
-setting it under `[languages.<name>.rules]` is rejected with an error rather than quietly ignored.
-The same is true of [`hotspot`](hotspot.md).
+about one file in one language. It therefore belongs to the run rather than to a language, and has
+one limit for every language. The same is true of [`hotspot`](hotspot.md).
 
 Copies are found across files but not across languages. The fingerprint is built from the names each
 grammar gives its nodes, so a function translated between Rust, Kotlin and TypeScript will not match

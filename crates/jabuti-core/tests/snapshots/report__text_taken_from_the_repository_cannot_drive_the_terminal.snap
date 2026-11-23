@@ -1,11 +1,11 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 657
+assertion_line: 670
 expression: shown_escapes(&rendered)
 ---
 ␛[1;38;2;232;179;58m⬢␛[0m ␛[1;38;2;217;207;189mjabuti␛[0m  ␛[38;2;125;115;102msince �main · 42 files · 378 units␛[0m
 
 ␛]8;;file:///work/%C3%BCn%C3%AFcode%20project/src/%1B%5B2Jlib.rs␛\␛[1;38;2;217;207;189msrc/�[2Jlib.rs␛[0m␛]8;;␛\
-  ␛[38;2;125;115;102m:3␛[0m  ␛[38;2;232;179;58mdead_code, reason = "�]…␛[0m  ␛[38;2;125;115;102msuppression␛[0m  ␛[38;2;232;179;58ma linter diagnostic is suppressed instead of satisfied␛[0m
+  ␛[38;2;125;115;102m:3␛[0m  ␛[38;2;232;179;58mdead_code, reason = "�]…␛[0m  ␛[38;2;125;115;102msuppression␛[0m  ␛[38;2;226;85;42ma linter diagnostic is suppressed instead of satisfied␛[0m
 
-␛[1;38;2;26;20;16;48;2;232;179;58m 1 warning ␛[0m  ␛[38;2;125;115;102mseal b667·00b1␛[0m
+␛[1;38;2;26;20;16;48;2;226;85;42m 1 to fix ␛[0m  ␛[38;2;125;115;102mseal c9d6·23dc␛[0m

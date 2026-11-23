@@ -2,8 +2,7 @@
 
 Reports a test that runs code and checks nothing.
 
-**Default severity:** warning. This rule has no limit; every unit marked as a test and carrying no
-assertion is reported.
+This rule has no limit; every unit marked as a test and carrying no assertion is reported.
 
 ## The idea
 
@@ -93,23 +92,25 @@ already reads as assertions, so they need no special case.
 ## What the finding says
 
 ```
-src/create_user.test.ts:3  warning  assertion  the test runs and asserts nothing
-tests/report.rs:12  warning  assertion  creates_a_user  the test runs and asserts nothing
+src/create_user.test.ts:3  assertion  the test runs and asserts nothing
+tests/report.rs:12  assertion  creates_a_user  the test runs and asserts nothing
 ```
 
 A named test carries its name as the subject. An anonymous TypeScript closure carries none, the same
 way any other unnamed unit does.
 
-## Why it is a warning
+## Why it fails a change
 
 Because the one-hop rule undercounts on purpose, a real assertion reached through a longer chain of
 helpers reports the same as a genuinely empty test. Precision on "does this project consider its test
 suite complete" is not something shape can answer; precision on "does this specific unit, read on its
-own terms, make a claim" is what the rule promises.
+own terms, make a claim" is what the rule promises. A test whose claim sits deeper than one helper
+away is fixed by bringing the claim into the test, or by binding the project's helper as an
+assertion, as the next section shows.
 
 ## Requirements and limits
 
-There is no threshold to tune. Every unit marked as a test and found not to assert is reported. The
+There is no threshold. Every unit marked as a test and found not to assert is reported. The
 measured standing rate over three corpora lives in [`CALIBRATION.md`](../../CALIBRATION.md).
 
 ## Extending the concept vocabulary
@@ -124,21 +125,3 @@ assertion = ["@mycorp/testing.checkThat"]
 
 Direct and aliased imports resolve to that path. The configured binding extends the built-ins; it
 does not replace them.
-
-## Changing it
-
-```toml
-[rules]
-assertion = { severity = "error" }
-```
-
-Promoting it to `error` is reasonable together with `--since`, which turns it into a gate on newly
-written tests while leaving what already exists alone.
-
-```toml
-[languages.typescript.rules]
-assertion = { severity = "off" }
-```
-
-Turning it off for one language is supported, and is the right move if a codebase leans on an
-assertion style this rule cannot follow, such as a snapshot-testing library.

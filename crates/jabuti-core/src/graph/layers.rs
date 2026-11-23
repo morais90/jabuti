@@ -2,9 +2,9 @@ use std::path::PathBuf;
 
 use super::Scan;
 use super::index::{Edges, Index};
-use crate::catalog::{Rule, RuleId, Severity};
+use crate::catalog::{Rule, RuleId};
 use crate::model::{Detail, Finding, Span};
-use crate::policy::{Layers, Policy};
+use crate::policy::Layers;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Violation {
@@ -45,9 +45,9 @@ pub fn violations(edges: &Edges, layers: &Layers) -> Vec<Violation> {
 }
 
 pub(crate) fn findings(scan: &Scan<'_>, index: &Index) -> Vec<Finding> {
-    let Some(severity) = reporting(scan.policy) else {
+    if scan.policy.active(Rule::LayerViolation).is_none() {
         return Vec::new();
-    };
+    }
     let Some(layers) = scan.layers else {
         return Vec::new();
     };
@@ -57,7 +57,6 @@ pub(crate) fn findings(scan: &Scan<'_>, index: &Index) -> Vec<Finding> {
         .into_iter()
         .map(|violation| Finding {
             rule: RuleId::Native(Rule::LayerViolation),
-            severity,
             path: violation.from.display().to_string(),
             span: violation.at,
             subject: None,
@@ -71,12 +70,6 @@ pub(crate) fn findings(scan: &Scan<'_>, index: &Index) -> Vec<Finding> {
             },
         })
         .collect()
-}
-
-fn reporting(policy: &Policy) -> Option<Severity> {
-    policy
-        .active(Rule::LayerViolation)
-        .map(|config| config.severity)
 }
 
 fn outgoing(scan: &Scan<'_>, index: &Index) -> Edges {

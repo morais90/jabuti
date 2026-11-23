@@ -1,4 +1,4 @@
-use jabuti_core::catalog::{Rule, Severity};
+use jabuti_core::catalog::Rule;
 use jabuti_core::code::duplication::{self, FileFragments};
 use jabuti_core::policy::{Policy, RuleConfig};
 
@@ -27,7 +27,7 @@ fn reporting_above(minimum: u32) -> Policy {
         Rule::DuplicateBlock,
         RuleConfig {
             limit: minimum,
-            severity: Severity::Warning,
+            enabled: true,
         },
     );
     policy
@@ -98,7 +98,7 @@ fn a_rule_switched_off_reports_nothing_however_much_is_repeated() {
         Rule::DuplicateBlock,
         RuleConfig {
             limit: 10,
-            severity: Severity::Off,
+            enabled: false,
         },
     );
 

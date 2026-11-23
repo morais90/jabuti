@@ -68,7 +68,6 @@ impl Judged<'_> {
 
         findings.push(Finding {
             rule: RuleId::Native(rule),
-            severity: config.severity,
             path: self.file.path.clone(),
             span: unit.span,
             subject: unit.name.clone(),

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use jabuti_core::catalog::{Rule, Severity, UnitKind};
+use jabuti_core::catalog::{Rule, UnitKind};
 use jabuti_core::code::{self, Measured, Reviewed, Scan};
 use jabuti_core::lang;
 use jabuti_core::model::Span;
@@ -38,10 +38,10 @@ fn text(shown: &str, source: &str) -> Text {
     }
 }
 
-fn policy(rules: &[(Rule, u32, Severity)]) -> Policy {
+fn policy(rules: &[(Rule, u32, bool)]) -> Policy {
     let mut policy = Policy::default();
-    for &(rule, limit, severity) in rules {
-        policy.set(rule, RuleConfig { limit, severity });
+    for &(rule, limit, enabled) in rules {
+        policy.set(rule, RuleConfig { limit, enabled });
     }
     policy
 }
@@ -85,8 +85,8 @@ fn read_units(outcome: &Outcome) -> Vec<(&str, UnitKind, Option<&str>)> {
 #[test]
 fn a_file_is_counted_measured_and_judged_whole() {
     let policy = policy(&[
-        (Rule::FunctionLines, 2, Severity::Warning),
-        (Rule::DuplicateBlock, 0, Severity::Off),
+        (Rule::FunctionLines, 2, true),
+        (Rule::DuplicateBlock, 0, false),
     ]);
     let churn = BTreeMap::from([(PathBuf::from("/project/src/lib.rs"), 5)]);
     let request = Scan {
@@ -126,6 +126,7 @@ fn a_file_is_counted_measured_and_judged_whole() {
             },
             churn: 5,
             complexity: 1,
+            compile_time: Vec::new(),
         }]
     );
 }
@@ -133,8 +134,8 @@ fn a_file_is_counted_measured_and_judged_whole() {
 #[test]
 fn test_code_may_mask_an_error_and_a_file_git_never_saw_has_no_churn() {
     let policy = policy(&[
-        (Rule::FunctionLines, 2, Severity::Warning),
-        (Rule::DuplicateBlock, 0, Severity::Off),
+        (Rule::FunctionLines, 2, true),
+        (Rule::DuplicateBlock, 0, false),
     ]);
     let request = Scan {
         policy: &policy,
@@ -170,8 +171,8 @@ fn only_the_touched_files_are_reviewed_unless_duplication_reads_them_all() {
         PathBuf::from("/project/b.rs"),
     ];
     let touched = BTreeSet::from([PathBuf::from("/project/a.rs")]);
-    let quiet = policy(&[(Rule::DuplicateBlock, 0, Severity::Off)]);
-    let duplicating = policy(&[(Rule::DuplicateBlock, 20, Severity::Warning)]);
+    let quiet = policy(&[(Rule::DuplicateBlock, 0, false)]);
+    let duplicating = policy(&[(Rule::DuplicateBlock, 20, true)]);
     let scope = |policy: &Policy, touched: Option<&BTreeSet<PathBuf>>| {
         Scan {
             policy,
@@ -191,8 +192,8 @@ fn only_the_touched_files_are_reviewed_unless_duplication_reads_them_all() {
 #[test]
 fn an_untouched_file_feeds_duplication_without_being_counted_or_judged() {
     let policy = policy(&[
-        (Rule::DuplicateBlock, 20, Severity::Warning),
-        (Rule::FunctionLines, 2, Severity::Warning),
+        (Rule::DuplicateBlock, 20, true),
+        (Rule::FunctionLines, 2, true),
     ]);
     let touched = BTreeSet::from([PathBuf::from("/project/a.rs")]);
     let request = Scan {
@@ -228,7 +229,7 @@ fn an_untouched_file_feeds_duplication_without_being_counted_or_judged() {
 
 #[test]
 fn nothing_is_fragmented_while_duplication_is_switched_off() {
-    let policy = policy(&[(Rule::DuplicateBlock, 20, Severity::Off)]);
+    let policy = policy(&[(Rule::DuplicateBlock, 20, false)]);
     let request = Scan {
         policy: &policy,
         bindings: &ConceptBindings::default(),
@@ -248,8 +249,8 @@ fn nothing_is_fragmented_while_duplication_is_switched_off() {
 #[test]
 fn a_reviewed_file_hands_over_the_findings_it_judged() {
     let policy = policy(&[
-        (Rule::FunctionLines, 2, Severity::Warning),
-        (Rule::DuplicateBlock, 0, Severity::Off),
+        (Rule::FunctionLines, 2, true),
+        (Rule::DuplicateBlock, 0, false),
     ]);
     let request = Scan {
         policy: &policy,
@@ -273,5 +274,37 @@ fn a_reviewed_file_hands_over_the_findings_it_judged() {
             ("function-lines".to_owned(), Some("read")),
             ("suppression".to_owned(), Some("dead_code")),
         ]
+    );
+}
+
+#[test]
+fn a_const_fn_is_measured_as_code_that_runs_at_compile_time() {
+    let source = "const fn limit() -> u32 {\n    60\n}\n\nconst unsafe fn raw() -> u32 {\n    1\n}\n\nimpl Rule {\n    pub const fn id(self) -> u32 {\n        0\n    }\n}\n\nasync fn later() {}\n\nfn now() -> u32 {\n    limit()\n}\n";
+    let policy = Policy::default();
+    let request = Scan {
+        policy: &policy,
+        bindings: &ConceptBindings::default(),
+        touched: None,
+        churn: &BTreeMap::new(),
+    };
+    let lib = text("src/lib.rs", source);
+
+    let (_, measured) = code::scan(vec![reviewed(&lib, &request)], &request);
+
+    let spans = |pairs: &[(u32, u32)]| -> Vec<Span> {
+        pairs
+            .iter()
+            .map(|&(start_line, end_line)| Span {
+                start_line,
+                end_line,
+            })
+            .collect()
+    };
+    assert_eq!(
+        measured
+            .iter()
+            .map(|file| file.compile_time.clone())
+            .collect::<Vec<_>>(),
+        [spans(&[(1, 3), (5, 7), (10, 12)])]
     );
 }

@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 
-use jabuti_core::catalog::{Concept, Rule, RuleId, Severity};
+use jabuti_core::catalog::{Concept, Rule, RuleId};
 use jabuti_core::lang::{self, LanguageId};
 use jabuti_core::model::{Detail, Finding, Span};
 use jabuti_core::policy::{ConceptBindings, Policy, RuleConfig};
@@ -20,7 +20,7 @@ fn the_default_policy_sets_every_rule_in_every_language() {
                 "{:<10} {:<22} {:<7} {}",
                 spec.id.name(),
                 rule.id(),
-                config.severity.label(),
+                if config.enabled { "on" } else { "off" },
                 config.limit
             )
             .expect("writing to a string never fails");
@@ -33,7 +33,12 @@ fn the_default_policy_sets_every_rule_in_every_language() {
 #[test]
 fn only_a_rule_that_reports_is_active() {
     let policy = Policy::default();
-    let active = |limit, severity| Some(RuleConfig { limit, severity });
+    let active = |limit| {
+        Some(RuleConfig {
+            limit,
+            enabled: true,
+        })
+    };
 
     assert_eq!(
         [
@@ -43,20 +48,13 @@ fn only_a_rule_that_reports_is_active() {
             policy.active_for(LanguageId::Rust, Rule::CyclomaticComplexity),
             policy.active(RuleId::parse("clippy/unwrap_used").expect("a tool lint")),
         ],
-        [
-            active(120, Severity::Warning),
-            None,
-            active(71, Severity::Warning),
-            None,
-            None,
-        ]
+        [active(120), None, active(71), None, None,]
     );
 }
 
 fn lint_at(path: &str) -> Finding {
     Finding {
         rule: RuleId::parse("clippy/unwrap_used").expect("a tool lint"),
-        severity: Severity::Warning,
         path: path.to_owned(),
         span: Span {
             start_line: 3,
@@ -77,7 +75,7 @@ fn a_tool_lint_follows_the_setting_for_the_language_of_its_file() {
         lint.clone(),
         RuleConfig {
             limit: 0,
-            severity: Severity::Error,
+            enabled: true,
         },
     );
     policy.set_for(
@@ -85,7 +83,7 @@ fn a_tool_lint_follows_the_setting_for_the_language_of_its_file() {
         lint,
         RuleConfig {
             limit: 0,
-            severity: Severity::Off,
+            enabled: false,
         },
     );
 
@@ -94,13 +92,7 @@ fn a_tool_lint_follows_the_setting_for_the_language_of_its_file() {
             policy.admit(lint_at("src/lib.rs")),
             policy.admit(lint_at("build/Cargo.toml")),
         ],
-        [
-            None,
-            Some(Finding {
-                severity: Severity::Error,
-                ..lint_at("build/Cargo.toml")
-            }),
-        ]
+        [None, Some(lint_at("build/Cargo.toml")),]
     );
 }
 
@@ -133,17 +125,17 @@ fn concept_bindings_report_global_and_per_language_emptiness() {
 }
 
 #[test]
-fn a_rule_is_enabled_where_any_language_reports_it_and_gates_where_any_fails_on_it() {
+fn a_rule_is_enabled_where_any_language_reports_it() {
     let mut policy = Policy::default();
     policy.set_for(
         LanguageId::Kotlin,
         Rule::Churn,
         RuleConfig {
             limit: 0,
-            severity: Severity::Error,
+            enabled: true,
         },
     );
-    let asked = |rule| (policy.enabled(rule), policy.gates(rule));
+    let asked = |rule| policy.enabled(rule);
 
     assert_eq!(
         [
@@ -151,43 +143,6 @@ fn a_rule_is_enabled_where_any_language_reports_it_and_gates_where_any_fails_on_
             asked(Rule::CyclomaticComplexity),
             asked(Rule::Churn),
         ],
-        [(true, false), (false, false), (true, true)]
-    );
-}
-
-#[test]
-fn adjusting_per_language_reaches_every_calibrated_language_and_nothing_else() {
-    let mut policy = Policy::default();
-
-    policy.adjust_per_language(Rule::FunctionLines, |config| RuleConfig {
-        severity: Severity::Error,
-        ..config
-    });
-
-    let error = |limit| {
-        Some(RuleConfig {
-            limit,
-            severity: Severity::Error,
-        })
-    };
-    assert_eq!(
-        [
-            policy.config_for(LanguageId::TypeScript, Rule::FunctionLines),
-            policy.config_for(LanguageId::Kotlin, Rule::FunctionLines),
-            policy.config_for(LanguageId::Rust, Rule::FunctionLines),
-            policy.config_for(LanguageId::TypeScript, Rule::CognitiveComplexity),
-        ],
-        [
-            error(71),
-            error(47),
-            Some(RuleConfig {
-                limit: 60,
-                severity: Severity::Warning,
-            }),
-            Some(RuleConfig {
-                limit: 18,
-                severity: Severity::Warning,
-            }),
-        ]
+        [true, false, true]
     );
 }

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use jabuti_core::catalog::{Rule, RuleId, Severity};
+use jabuti_core::catalog::{Rule, RuleId};
 use jabuti_core::diff::{self, Diff, Placement};
 use jabuti_core::model::{Detail, Finding, Span};
 use rstest::rstest;
@@ -108,7 +108,6 @@ fn an_empty_diff_covers_nothing() {
 fn finding(path: &str, start_line: u32, end_line: u32) -> Finding {
     Finding {
         rule: RuleId::Native(Rule::FunctionLines),
-        severity: Severity::Warning,
         path: path.to_owned(),
         span: lines(start_line, end_line),
         subject: None,
@@ -220,7 +219,6 @@ fn a_hunk_with_context_lines_ends_where_both_of_its_sides_do() {
 fn measured(rule: Rule, subject: &str, start_line: u32, measured: u32) -> Finding {
     Finding {
         rule: RuleId::Native(rule),
-        severity: Severity::Warning,
         path: "src/lib.rs".to_owned(),
         span: lines(start_line, start_line + 9),
         subject: Some(subject.to_owned()),
@@ -231,7 +229,6 @@ fn measured(rule: Rule, subject: &str, start_line: u32, measured: u32) -> Findin
 fn told(subject: &str, start_line: u32) -> Finding {
     Finding {
         rule: RuleId::Native(Rule::ErrorMasking),
-        severity: Severity::Warning,
         path: "src/lib.rs".to_owned(),
         span: lines(start_line, start_line),
         subject: Some(subject.to_owned()),

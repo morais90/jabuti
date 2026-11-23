@@ -36,9 +36,9 @@ fn a_dependency_this_change_introduced_is_reported_where_it_was_written() {
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/report.rs:2  warning  new-dependency  now depends on src/git.rs",
+            "src/report.rs:2  new-dependency  now depends on src/git.rs",
         ));
 }
 
@@ -105,12 +105,12 @@ fn every_changed_file_is_compared_against_its_own_earlier_revision_even_around_a
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/git.rs:2  warning  new-dependency  now depends on src/report.rs",
+            "src/git.rs:2  new-dependency  now depends on src/report.rs",
         ))
         .stdout(contains(
-            "src/report.rs:2  warning  new-dependency  now depends on src/git.rs",
+            "src/report.rs:2  new-dependency  now depends on src/git.rs",
         ))
         .stdout(contains("src/log.rs").not());
 }
@@ -152,9 +152,9 @@ fn a_path_that_was_a_directory_at_the_base_does_not_shift_the_next_file_off_its_
         .arg("--since")
         .arg("HEAD~1")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/tally.rs:2  warning  new-dependency  now depends on src/report.rs",
+            "src/tally.rs:2  new-dependency  now depends on src/report.rs",
         ))
         .stdout(contains("src/report.rs:2").not());
 }
@@ -162,11 +162,7 @@ fn a_path_that_was_a_directory_at_the_base_does_not_shift_the_next_file_off_its_
 #[test]
 fn the_earlier_revision_is_still_read_when_only_this_rule_asks_for_it() {
     let directory = project();
-    write(
-        &directory,
-        "jabuti.toml",
-        "[rules]\nspeculative-api = { severity = \"off\" }\n",
-    );
+    write(&directory, "jabuti.toml", "");
     write(
         &directory,
         "src/report.rs",
@@ -177,9 +173,9 @@ fn the_earlier_revision_is_still_read_when_only_this_rule_asks_for_it() {
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/report.rs:2  warning  new-dependency  now depends on src/git.rs",
+            "src/report.rs:2  new-dependency  now depends on src/git.rs",
         ));
 }
 
@@ -211,9 +207,9 @@ fn a_dependency_on_a_file_outside_the_paths_given_on_the_command_line_is_still_r
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/report/mod.rs:2  warning  new-dependency  now depends on src/git.rs",
+            "src/report/mod.rs:2  new-dependency  now depends on src/git.rs",
         ));
 }
 
@@ -231,24 +227,10 @@ fn a_dependency_on_a_file_that_no_longer_parses_still_points_at_that_file() {
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/report.rs:2  warning  new-dependency  now depends on src/git.rs",
+            "src/report.rs:2  new-dependency  now depends on src/git.rs",
         ));
-}
-
-#[test]
-fn a_rule_set_to_gate_says_it_cannot_run_without_a_reference_instead_of_passing() {
-    let directory = project();
-    write(
-        &directory,
-        "jabuti.toml",
-        "[rules]\nnew-dependency = { severity = \"error\" }\n",
-    );
-
-    jabuti(&directory).arg("--all").assert().success().stderr(contains(
-        "new-dependency compares against an earlier revision, and this check has none to compare against",
-    ));
 }
 
 #[test]
@@ -282,9 +264,9 @@ fn the_comparison_finds_the_earlier_file_when_run_from_a_subdirectory() {
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains(
-            "src/report.rs:2  warning  new-dependency  now depends on src/git.rs",
+            "src/report.rs:2  new-dependency  now depends on src/git.rs",
         ));
 }
 
@@ -298,28 +280,6 @@ fn a_file_that_starts_using_something_it_declares_itself_is_not_a_dependency() {
         &directory,
         "src/Catalog.kt",
         "package org.example\n\nclass Helper\n\nclass Catalog {\n    fun size(): Int = Helper().hashCode()\n}\n",
-    );
-
-    jabuti(&directory)
-        .arg("--since")
-        .arg("HEAD")
-        .assert()
-        .success()
-        .stdout(contains("No findings"));
-}
-
-#[test]
-fn a_language_that_switches_the_rule_off_stops_being_reported() {
-    let directory = project();
-    write(
-        &directory,
-        "jabuti.toml",
-        "[languages.rust.rules]\nnew-dependency = { severity = \"off\" }\n",
-    );
-    write(
-        &directory,
-        "src/report.rs",
-        "pub fn render() -> String {\n    crate::git::run(&[\"status\"])\n}\n",
     );
 
     jabuti(&directory)

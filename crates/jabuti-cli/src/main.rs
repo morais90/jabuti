@@ -188,7 +188,7 @@ fn check(arguments: &CheckArgs) -> Result<ExitCode> {
     };
     print!("{}", rendered(&request, &verdict.outcome));
 
-    if verdict.gating && report::has_errors(&verdict.outcome.findings) {
+    if verdict.gating && report::fails(&verdict.outcome.findings) {
         return Ok(ExitCode::from(1));
     }
 

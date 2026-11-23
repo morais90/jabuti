@@ -10,9 +10,9 @@ pub fn findings(
     occurrences: &[Occurrence],
     policy: &Policy,
 ) -> Vec<Finding> {
-    let Some(config) = policy.active_for(language, Rule::ErrorMasking) else {
+    if policy.active_for(language, Rule::ErrorMasking).is_none() {
         return Vec::new();
-    };
+    }
 
     let concepts = Rule::ErrorMasking.spec().concepts;
 
@@ -21,7 +21,6 @@ pub fn findings(
         .filter(|occurrence| !occurrence.in_test && concepts.contains(&occurrence.concept))
         .map(|occurrence| Finding {
             rule: RuleId::Native(Rule::ErrorMasking),
-            severity: config.severity,
             path: path.to_owned(),
             span: occurrence.span,
             subject: Some(occurrence.subject.clone()),

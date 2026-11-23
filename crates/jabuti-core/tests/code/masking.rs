@@ -1,4 +1,4 @@
-use jabuti_core::catalog::{Concept, Rule, RuleId, Severity};
+use jabuti_core::catalog::{Concept, Rule, RuleId};
 use jabuti_core::code::concepts::Occurrence;
 use jabuti_core::code::masking;
 use jabuti_core::lang::LanguageId;
@@ -30,7 +30,6 @@ fn a_masking_concept_becomes_a_complete_finding() {
         found,
         [Finding {
             rule: RuleId::Native(Rule::ErrorMasking),
-            severity: Severity::Warning,
             path: "src/catalog.rs".to_owned(),
             span: Span {
                 start_line: 5,
@@ -69,7 +68,7 @@ fn a_rule_switched_off_reports_nothing_however_much_is_masked() {
         Rule::ErrorMasking,
         RuleConfig {
             limit: 0,
-            severity: Severity::Off,
+            enabled: false,
         },
     );
 

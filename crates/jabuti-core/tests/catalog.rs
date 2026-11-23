@@ -170,17 +170,23 @@ fn every_rule_declares_when_it_runs_and_what_it_reads() {
 
 #[test]
 fn a_scoping_allows_the_runs_it_names() {
-    let allowed: Vec<(Scoping, bool, bool)> = [Scoping::Any, Scoping::Change, Scoping::Repository]
+    let runs = [(false, false), (true, false), (false, true)];
+    let allowed: Vec<(Scoping, [bool; 3])> = [Scoping::Any, Scoping::Change, Scoping::Repository]
         .into_iter()
-        .map(|scoping| (scoping, scoping.allows(false), scoping.allows(true)))
+        .map(|scoping| {
+            (
+                scoping,
+                runs.map(|(compared, whole)| scoping.allows(compared, whole)),
+            )
+        })
         .collect();
 
     assert_eq!(
         allowed,
         [
-            (Scoping::Any, true, true),
-            (Scoping::Change, false, true),
-            (Scoping::Repository, true, false),
+            (Scoping::Any, [true, true, true]),
+            (Scoping::Change, [false, true, false]),
+            (Scoping::Repository, [false, false, true]),
         ]
     );
 }

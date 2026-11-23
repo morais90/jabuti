@@ -80,23 +80,14 @@ pub(crate) fn shaped_like(name: &str, first: &str, second: &str) -> String {
     if {second}.is_empty() {{
         return None;
     }}
+    let rest = {first}.next().unwrap_or_default().trim();
+    if rest.starts_with('#') || rest.len() > 80 {{
+        return Some(rest.to_uppercase() + &{second});
+    }}
     Some({second})
 }}
 "
     )
-}
-
-pub(crate) fn report_duplication_above(limit: usize) -> String {
-    format!(
-        "[rules]
-duplicate-block = {{ limit = {limit}, severity = \"warning\" }}
-hotspot = {{ severity = \"off\" }}
-"
-    )
-}
-
-pub(crate) fn error_on_long_functions(limit: usize) -> String {
-    format!("[rules]\nfunction-lines = {{ limit = {limit}, severity = \"error\" }}\n")
 }
 
 pub(crate) fn git(directory: &TempDir, arguments: &[&str]) {

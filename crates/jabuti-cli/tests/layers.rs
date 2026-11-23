@@ -1,6 +1,6 @@
 mod common;
 
-use common::{binary, commit, jabuti, repository, write};
+use common::{binary, jabuti, repository, write};
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 
@@ -44,7 +44,7 @@ fn a_dependency_a_layer_may_not_have_is_reported_at_the_line_that_makes_it() {
     let directory = layered(LEAKING_BOOK);
 
     jabuti(&directory).arg("--all").assert().success().stdout(contains(
-        "src/domain/book.rs:4  warning  layer-violation  domain may not depend on infrastructure (src/infrastructure/db.rs)",
+        "src/domain/book.rs:4  layer-violation  domain may not depend on infrastructure (src/infrastructure/db.rs)",
     ));
 }
 
@@ -65,28 +65,8 @@ fn a_crossing_made_by_a_file_outside_the_paths_given_on_the_command_line_is_not_
         .assert()
         .success()
         .stdout(contains(
-            "src/domain/book.rs:4  warning  layer-violation  domain may not depend on infrastructure (src/infrastructure/db.rs)",
+            "src/domain/book.rs:4  layer-violation  domain may not depend on infrastructure (src/infrastructure/db.rs)",
         ));
-}
-
-#[test]
-fn layers_declared_for_a_rule_that_is_off_do_not_make_the_whole_project_read() {
-    let directory = layered(LEAKING_BOOK);
-    write(
-        &directory,
-        "jabuti.toml",
-        &format!("{LAYERS}\n[rules]\nlayer-violation = {{ severity = \"off\" }}\n"),
-    );
-    write(&directory, "src/infrastructure/broken.rs", "fn broken( {\n");
-
-    binary(&directory)
-        .arg("check")
-        .arg("--all")
-        .arg("src/domain")
-        .assert()
-        .success()
-        .stdout(contains("No findings"))
-        .stdout(contains("src/infrastructure/broken.rs").not());
 }
 
 #[test]
@@ -115,7 +95,7 @@ fn a_violation_this_change_wrote_is_reported_under_since() {
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .success()
+        .code(1)
         .stdout(contains("layer-violation"));
 }
 
@@ -145,22 +125,6 @@ fn a_layer_that_depends_on_an_undeclared_one_is_a_configuration_error() {
     jabuti(&directory).assert().code(2).stderr(contains(
         "layer domain depends on storage, which is not a declared layer",
     ));
-}
-
-#[test]
-fn switching_the_rule_off_keeps_the_layers_but_reports_nothing() {
-    let directory = layered(LEAKING_BOOK);
-    write(
-        &directory,
-        "jabuti.toml",
-        &format!("{LAYERS}\n[rules]\nlayer-violation = {{ severity = \"off\" }}\n"),
-    );
-    commit(&directory, "switch off");
-
-    jabuti(&directory)
-        .assert()
-        .success()
-        .stdout(contains("No findings"));
 }
 
 #[test]

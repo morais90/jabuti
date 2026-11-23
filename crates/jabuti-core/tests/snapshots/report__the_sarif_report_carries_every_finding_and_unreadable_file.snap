@@ -1,5 +1,6 @@
 ---
 source: crates/jabuti-core/tests/report.rs
+assertion_line: 138
 expression: rendered
 ---
 {
@@ -84,7 +85,7 @@ expression: rendered
         {
           "ruleId": "clippy/needless_range_loop",
           "ruleIndex": 0,
-          "level": "warning",
+          "level": "error",
           "message": {
             "text": "the loop variable is only used to index"
           },

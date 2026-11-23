@@ -2,7 +2,7 @@
 
 Reports a linter or type-checker diagnostic that was switched off instead of resolved.
 
-**Default severity:** warning. This rule has no limit; every occurrence is reported.
+This rule has no limit; every occurrence is reported.
 
 ## The idea
 
@@ -53,8 +53,8 @@ file is read, tests included.
 ## What the finding says
 
 ```
-src/report.rs:1  warning  suppression  too_many_arguments  a linter diagnostic is suppressed instead of satisfied
-src/widen.ts:4  warning  suppression  any  a type-checker diagnostic is suppressed instead of satisfied
+src/report.rs:1  suppression  too_many_arguments  a linter diagnostic is suppressed instead of satisfied
+src/widen.ts:4  suppression  any  a type-checker diagnostic is suppressed instead of satisfied
 ```
 
 The message names which check was switched off: a linter for `allow`, `Suppress`, `ts-ignore`,
@@ -68,16 +68,16 @@ with no limit, whether or not it carries a written reason. Reading it is still w
 time, because the decision to waive a standard is exactly the kind of thing a diff should show rather
 than hide.
 
-## Why it is a warning
+## Why it fails a change
 
-Because a suppression is sometimes the right call, and the rule cannot tell a reasoned waiver from a
-convenient one by shape alone. Precision on "was this the right call" is not something syntax can
-answer; precision on "was a check switched off here" is exact. That is what the rule promises, and no
-more.
+The rule cannot tell a reasoned waiver from a convenient one by shape alone. Precision on "was this
+the right call" is not something syntax can answer; precision on "was a check switched off here" is
+exact. That is what the rule promises, and it is enough to fail a change on: the change switched a
+check off, and what it leaves to fix is the code the check was pointing at.
 
 ## Requirements and limits
 
-There is no threshold to tune. Every matched occurrence is reported when the rule is enabled. The
+There is no threshold. Every matched occurrence is reported. The
 measured standing rate lives in [`CALIBRATION.md`](../../CALIBRATION.md), together with the answer to
 the two questions the idea above leaves open.
 
@@ -106,21 +106,3 @@ suppression = ["@mycorp/types.castAny"]
 
 Direct and aliased imports resolve to that path. The configured binding extends the built-ins; it
 does not replace them.
-
-## Changing it
-
-```toml
-[rules]
-suppression = { severity = "error" }
-```
-
-Promoting it to `error` is reasonable together with `--since`, which turns it into a gate on newly
-introduced suppressions while leaving what already exists alone.
-
-```toml
-[languages.rust.rules]
-suppression = { severity = "off" }
-```
-
-Turning it off for one language is supported, and is the right move if a codebase has a convention
-this rule reads wrongly.

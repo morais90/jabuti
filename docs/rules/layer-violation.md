@@ -2,7 +2,7 @@
 
 Reports a file that depends on a layer its own layer is not allowed to depend on.
 
-**Default severity:** warning. This rule has no limit; every crossing is reported. It does nothing
+This rule has no limit; every crossing is reported. It does nothing
 until you declare layers, and it says so when a layer you declared matches no file.
 
 ## The idea
@@ -28,7 +28,7 @@ infrastructure = { paths = ["src/infrastructure/**"], depends_on = ["domain", "a
 Each layer names the files it contains and the layers it may depend on. Anything else is a crossing:
 
 ```
-src/domain/book.rs:4  warning  layer-violation  domain may not depend on infrastructure (src/infrastructure/db.rs)
+src/domain/book.rs:4  layer-violation  domain may not depend on infrastructure (src/infrastructure/db.rs)
 ```
 
 The finding sits on the line that made the dependency, so the fix is one click away from the report.
@@ -63,26 +63,16 @@ directory itself, so `src/domain` matches nothing you want and `src/domain/**` m
 under it. Because that mistake is easy to make and silent, a layer that matches no file is reported
 on stderr rather than left empty.
 
-## Together with `--since`
+## On a change
 
-Under `--since`, a crossing is reported only when the line that makes it is part of the change. A
-codebase with a hundred existing violations can switch the rule on today and hear about them one at
-a time, as each is touched, rather than all at once.
+When a check judges a change, a crossing is reported only when the line that makes it is part of the
+change. A crossing is a defect by your own declaration, so it fails the run like any other finding,
+and a codebase with a hundred existing violations can declare its layers today and hear about them
+one at a time, as each is touched, rather than all at once.
 
-The same line often carries two findings under `--since`: [`new-dependency`](new-dependency.md)
+The same line often carries two findings on a change: [`new-dependency`](new-dependency.md)
 says the dependency did not exist before, and this rule says it is not allowed. They are different
 facts and both are worth knowing.
-
-## Changing it
-
-```toml
-[rules]
-layer-violation = { severity = "error" }
-```
-
-Promoting it to `error` is the natural setting once the layers are trusted, since a crossing is a
-defect by your own declaration. It is a warning by default so that switching the rule on in an
-existing codebase reports rather than fails, and `--since` keeps that report short.
 
 ## Further reading
 

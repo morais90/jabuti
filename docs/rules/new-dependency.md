@@ -2,9 +2,8 @@
 
 Reports a file that now depends on another file it did not depend on before.
 
-**Default severity:** warning. This rule has no limit; every new dependency is reported. It is
-evaluated on a change and not under `--all`, because "new" only means anything against an earlier
-revision, and it says so rather than staying quiet when it would have gated.
+Every new dependency is reported. "New" needs an earlier revision to compare against, so the rule
+runs only when a check judges a change, never under `--all` or outside git.
 
 ## The idea
 
@@ -13,10 +12,10 @@ between them. That web grows one edge at a time, and each edge on its own looks 
 decides to couple the payment code to the reporting code; someone needs a formatter, imports it, and
 the coupling arrives as a side effect of a five line change.
 
-A finding here is not a defect. It is a fact you would otherwise have to go looking for:
+A finding here is a fact you would otherwise have to go looking for:
 
 ```
-src/report.rs:2  warning  new-dependency  now depends on src/git.rs
+src/report.rs:2  new-dependency  now depends on src/git.rs
 ```
 
 The report module used to be self-contained and now runs git. That may be exactly right, and it may
@@ -53,16 +52,3 @@ same dependency in another form is not a finding.
 The rule has no numerical threshold: any dependency added to an existing file is one finding. The
 commit-history probe used to validate its noise level lives in
 [`CALIBRATION.md`](../../CALIBRATION.md).
-
-## Changing it
-
-```toml
-[rules]
-new-dependency = { severity = "off" }
-```
-
-Turning it off is reasonable on a codebase in early construction, where nearly every commit is
-supposed to be wiring things together and the finding tells you nothing you did not intend.
-
-Promoting it to `error` only makes sense next to a written rule about what may depend on what. On its
-own it would fail a build for the ordinary act of using something, which is not a defect.

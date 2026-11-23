@@ -1,15 +1,14 @@
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
-use jabuti_core::catalog::{Rule, RuleId, Severity, UnitKind};
+use jabuti_core::catalog::{Rule, RuleId, UnitKind};
 use jabuti_core::model::{Detail, Finding, Reading, Span, Unreadable};
 use jabuti_core::report::trail::{Commit, Line, Trail};
 use jabuti_core::report::{self, Outcome, Rhythm, Scanned};
 
-fn finding(severity: Severity, line: u32, subject: Option<&str>) -> Finding {
+fn finding(line: u32, subject: Option<&str>) -> Finding {
     Finding {
         rule: RuleId::Native(Rule::FunctionLines),
-        severity,
         path: "src/handler.rs".to_owned(),
         span: Span {
             start_line: line,
@@ -29,7 +28,6 @@ fn tool_finding() -> Finding {
             tool: "clippy".to_owned(),
             lint: "needless_range_loop".to_owned(),
         },
-        severity: Severity::Warning,
         path: "src/lib.rs".to_owned(),
         span: Span {
             start_line: 3,
@@ -57,37 +55,30 @@ fn a_clean_run_says_so_in_a_single_line() {
 }
 
 #[test]
-fn a_finding_names_its_severity_rule_location_and_both_numbers() {
-    let rendered = report::agent(
-        &[finding(Severity::Error, 120, Some("handle_request"))],
-        &[],
-        scanned(),
-        40,
-    );
+fn a_finding_names_its_rule_location_and_both_numbers() {
+    let rendered = report::agent(&[finding(120, Some("handle_request"))], &[], scanned(), 40);
 
     assert_eq!(
         rendered,
-        "1 error and 0 warnings across 42 files and 378 units.\n\
+        "1 finding to fix across 42 files and 378 units.\n\
          \n\
-         src/handler.rs:120  error  function-lines  handle_request  measured 71, limit 60\n"
+         src/handler.rs:120  function-lines  handle_request  measured 71, limit 60\n"
     );
 }
 
 #[test]
 fn a_finding_without_a_subject_leaves_no_gap_where_the_name_would_be() {
-    let rendered = report::agent(&[finding(Severity::Warning, 1, None)], &[], scanned(), 40);
+    let rendered = report::agent(&[finding(1, None)], &[], scanned(), 40);
 
     assert!(
-        rendered.ends_with("src/handler.rs:1  warning  function-lines  measured 71, limit 60\n"),
+        rendered.ends_with("src/handler.rs:1  function-lines  measured 71, limit 60\n"),
         "{rendered}"
     );
 }
 
 #[test]
 fn output_beyond_the_limit_is_replaced_by_a_count_of_what_was_withheld() {
-    let findings: Vec<Finding> = (1..=10)
-        .map(|line| finding(Severity::Warning, line, Some("wide")))
-        .collect();
+    let findings: Vec<Finding> = (1..=10).map(|line| finding(line, Some("wide"))).collect();
 
     let rendered = report::agent(&findings, &[], scanned(), 3);
 
@@ -105,18 +96,14 @@ fn output_beyond_the_limit_is_replaced_by_a_count_of_what_was_withheld() {
 }
 
 #[test]
-fn only_an_error_severity_finding_fails_the_gate() {
-    assert!(!report::has_errors(&[finding(Severity::Warning, 1, None)]));
-    assert!(report::has_errors(&[finding(Severity::Error, 1, None)]));
+fn any_finding_fails_the_gate() {
+    assert!(!report::fails(&[]));
+    assert!(report::fails(&[finding(1, None)]));
 }
 
 #[test]
 fn the_json_report_carries_a_schema_a_summary_and_the_findings() {
-    let rendered = report::json(
-        &[finding(Severity::Error, 120, Some("handle_request"))],
-        &[],
-        scanned(),
-    );
+    let rendered = report::json(&[finding(120, Some("handle_request"))], &[], scanned());
 
     insta::assert_snapshot!(rendered);
 }
@@ -140,10 +127,7 @@ fn a_finding_from_a_tool_serialises_its_message_instead_of_a_threshold() {
 
 #[test]
 fn the_sarif_report_carries_every_finding_and_unreadable_file() {
-    let findings = [
-        finding(Severity::Error, 120, Some("handle_request")),
-        tool_finding(),
-    ];
+    let findings = [finding(120, Some("handle_request")), tool_finding()];
     let unreadable = [
         unreadable("src/theme.kt", 51),
         unreadable("src/nav.kt", 314),
@@ -188,7 +172,7 @@ fn a_clean_sarif_report_keeps_the_complete_empty_envelope() {
 
 #[test]
 fn sarif_artifact_uris_encode_bytes_and_normalise_the_platform_separator() {
-    let mut reported = finding(Severity::Warning, 7, None);
+    let mut reported = finding(7, None);
     reported.path = format!(
         "src{}safe-._~ space#100% café.rs",
         std::path::MAIN_SEPARATOR
@@ -201,10 +185,7 @@ fn sarif_artifact_uris_encode_bytes_and_normalise_the_platform_separator() {
 
 #[test]
 fn sarif_rule_indices_point_into_lexically_sorted_descriptors() {
-    let findings = [
-        finding(Severity::Error, 120, Some("handle_request")),
-        tool_finding(),
-    ];
+    let findings = [finding(120, Some("handle_request")), tool_finding()];
     let rendered = report::sarif(&findings, &[]);
     let document: serde_json::Value = serde_json::from_str(&rendered).expect("valid JSON");
     let run = &document["runs"][0];
@@ -287,7 +268,7 @@ fn a_clean_run_still_names_every_file_it_could_not_read() {
 #[test]
 fn unreadable_files_are_listed_after_the_findings_they_are_not_part_of() {
     let rendered = report::agent(
-        &[finding(Severity::Error, 120, Some("handle_request"))],
+        &[finding(120, Some("handle_request"))],
         &[
             unreadable("src/theme.kt", 51),
             unreadable("src/nav.kt", 314),
@@ -298,9 +279,9 @@ fn unreadable_files_are_listed_after_the_findings_they_are_not_part_of() {
 
     assert_eq!(
         rendered,
-        "1 error and 0 warnings across 42 files and 378 units.\n\
+        "1 finding to fix across 42 files and 378 units.\n\
          \n\
-         src/handler.rs:120  error  function-lines  handle_request  measured 71, limit 60\n\
+         src/handler.rs:120  function-lines  handle_request  measured 71, limit 60\n\
          \n\
          2 files were not measured, so nothing above accounts for them.\n\
          src/theme.kt  unreadable syntax from line 51\n\
@@ -357,9 +338,9 @@ fn reading(path: &str, line: u32, kind: UnitKind) -> Reading {
 fn an_outcome_puts_its_findings_readings_and_unreadable_files_in_one_order() {
     let mut outcome = Outcome {
         findings: vec![
-            finding(Severity::Error, 120, Some("handle_request")),
+            finding(120, Some("handle_request")),
             tool_finding(),
-            finding(Severity::Warning, 12, Some("parse")),
+            finding(12, Some("parse")),
         ],
         readings: vec![
             reading("app-b/c.rs", 1, UnitKind::File),
@@ -380,8 +361,8 @@ fn an_outcome_puts_its_findings_readings_and_unreadable_files_in_one_order() {
         outcome,
         Outcome {
             findings: vec![
-                finding(Severity::Warning, 12, Some("parse")),
-                finding(Severity::Error, 120, Some("handle_request")),
+                finding(12, Some("parse")),
+                finding(120, Some("handle_request")),
                 tool_finding(),
             ],
             readings: vec![
@@ -402,7 +383,6 @@ fn an_outcome_puts_its_findings_readings_and_unreadable_files_in_one_order() {
 fn measured(rule: Rule, path: &str, line: u32, subject: &str, values: (u32, u32)) -> Finding {
     Finding {
         rule: RuleId::Native(rule),
-        severity: Severity::Error,
         path: path.to_owned(),
         span: Span {
             start_line: line,
@@ -419,7 +399,6 @@ fn measured(rule: Rule, path: &str, line: u32, subject: &str, values: (u32, u32)
 fn told(rule: Rule, path: &str, line: u32, subject: Option<&str>, message: &str) -> Finding {
     Finding {
         rule: RuleId::Native(rule),
-        severity: Severity::Warning,
         path: path.to_owned(),
         span: Span {
             start_line: line,
@@ -591,7 +570,7 @@ fn a_clean_human_run_is_one_line_naming_the_scope_and_its_seal() {
 
     assert_eq!(
         rendered,
-        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal 517b·f003\n"
+        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal d958·767d\n"
     );
 }
 
@@ -606,22 +585,6 @@ fn a_clean_human_run_still_names_every_file_it_could_not_read() {
     );
 
     insta::assert_snapshot!(rendered);
-}
-
-#[test]
-fn a_human_report_of_warnings_alone_counts_them_instead_of_what_to_fix() {
-    let findings = [told(
-        Rule::ErrorMasking,
-        "src/lib.rs",
-        4,
-        Some("ok"),
-        "the failure is dropped",
-    )];
-
-    let rendered = report::human(&findings, &[], scanned(), 40, view(None, false));
-
-    assert!(rendered.contains("\n1 warning · seal "), "{rendered}");
-    assert!(!rendered.contains("to fix"), "{rendered}");
 }
 
 #[test]
@@ -728,7 +691,7 @@ fn two_units_sharing_a_name_each_keep_their_own_line_and_name() {
 }
 
 #[test]
-fn a_human_report_of_errors_alone_mentions_no_warnings() {
+fn a_human_report_ends_with_how_many_findings_there_are_to_fix() {
     let findings = [measured(
         Rule::FunctionLines,
         "src/lib.rs",
@@ -1011,7 +974,7 @@ fn a_clean_verbose_report_still_shows_the_commits_of_the_change() {
 
     assert_eq!(
         rendered,
-        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal 517b·f003\n  ┬ 7f893ac  feat: a clean change\n  ┴\n"
+        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal d958·767d\n  ┬ 7f893ac  feat: a clean change\n  ┴\n"
     );
 }
 
