@@ -141,12 +141,21 @@ is code nobody has touched in months, which is rarely what you want to act on to
 $ jabuti check --since main
 ```
 
-With `--since`, only files that changed against that reference are analysed, and only findings that
-overlap a changed line are reported. Uncommitted edits and brand new files count as changed.
+With `--since`, only files that changed against that reference are analysed, and only what the change
+made worse is reported. Uncommitted edits and brand new files count as changed.
+
+Made worse means the reference did not have it. Each changed file is also measured as the reference
+had it, and a finding is reported only when it is new: a unit over its limit that the reference did
+not have, a unit whose measure grew, or one more occurrence of something the unit already carried,
+such as a second swallowed error. Units are matched by name, and units sharing a name by the
+order they appear in, so moving a function or editing one line of it leaves its finding where it was.
+A renamed file is compared with the file it came from.
 
 This is also the setting that makes it practical to fail a build on findings. A function that was
-already too long stays quiet until someone edits it, so you can turn the gate on today instead of
-waiting for a cleanup that never gets scheduled.
+already too long stays quiet when someone fixes one line of it, and is reported when someone makes it
+longer, so you can turn the gate on today instead of waiting for a cleanup that never gets scheduled.
+`duplicate-block`, `hotspot` and the findings of orchestrated tools are not compared yet: they are
+reported where they overlap a changed line.
 
 ## What the graph sees
 

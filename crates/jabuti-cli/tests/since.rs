@@ -3,6 +3,7 @@ mod common;
 use common::{
     append, binary, commit, error_on_long_functions, function_of, git, jabuti, repository, write,
 };
+use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 
 #[test]
@@ -124,7 +125,7 @@ fn a_new_file_named_with_an_accent_stays_in_the_change() {
 }
 
 #[test]
-fn one_changed_line_inside_a_unit_is_enough_to_report_it() {
+fn touching_a_unit_already_over_its_limit_without_growing_it_reports_nothing() {
     let base = function_of("long", 70);
     let directory = repository(&[
         ("jabuti.toml", &error_on_long_functions(60)),
@@ -136,6 +137,24 @@ fn one_changed_line_inside_a_unit_is_enough_to_report_it() {
         "src/live.rs",
         &base.replacen("    let value = 1;\n", "    let value = 2;\n", 1),
     );
+
+    jabuti(&directory)
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stdout(contains("function-lines").not());
+}
+
+#[test]
+fn a_unit_over_its_limit_that_the_change_made_longer_is_reported() {
+    let base = function_of("long", 70);
+    let directory = repository(&[
+        ("jabuti.toml", &error_on_long_functions(60)),
+        ("src/live.rs", &base),
+    ]);
+
+    write(&directory, "src/live.rs", &function_of("long", 71));
 
     jabuti(&directory)
         .arg("--since")
@@ -156,15 +175,19 @@ fn a_change_on_the_opening_line_of_a_unit_reports_it() {
     write(
         &directory,
         "src/live.rs",
-        &base.replacen("fn long() {", "fn long(/* touched */) {", 1),
+        &base.replacen(
+            "fn long() {",
+            "fn long(a: u8, b: u8, c: u8, d: u8, e: u8) {",
+            1,
+        ),
     );
 
     jabuti(&directory)
         .arg("--since")
         .arg("HEAD")
         .assert()
-        .code(1)
-        .stdout(contains("src/live.rs:2  error  function-lines  long"));
+        .stdout(contains("src/live.rs:2  warning  parameters  long"))
+        .stdout(contains("function-lines").not());
 }
 
 #[test]
@@ -249,4 +272,45 @@ fn an_unknown_reference_stops_the_run_rather_than_passing_the_gate() {
         .assert()
         .code(2)
         .stderr(contains("git merge-base --all HEAD no-such-branch failed"));
+}
+
+#[test]
+fn a_renamed_file_is_compared_with_the_file_it_came_from() {
+    let base = function_of("long", 70);
+    let directory = repository(&[
+        ("jabuti.toml", &error_on_long_functions(60)),
+        ("src/old.rs", &base),
+    ]);
+    git(&directory, &["mv", "src/old.rs", "src/new.rs"]);
+    write(
+        &directory,
+        "src/new.rs",
+        &base.replacen("    let value = 1;\n", "    let value = 2;\n", 1),
+    );
+
+    jabuti(&directory)
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stdout(contains("function-lines").not());
+}
+
+#[test]
+fn how_often_a_file_changed_is_not_compared_with_itself() {
+    let directory = repository(&[
+        (
+            "jabuti.toml",
+            "[rules.churn]\nseverity = \"error\"\nlimit = 0\n",
+        ),
+        ("src/live.rs", "fn live() {}\n"),
+    ]);
+    write(&directory, "src/live.rs", "fn live() {}\nfn more() {}\n");
+
+    jabuti(&directory)
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .code(1)
+        .stdout(contains("src/live.rs:1  error  churn"));
 }

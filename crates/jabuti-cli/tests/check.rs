@@ -513,7 +513,7 @@ fn verbose_opens_with_the_commits_of_the_change_and_marks_the_lines_it_touched()
     git(&directory, &["config", "user.name", "test"]);
     commit_dated(&directory, "2026-01-01T12:00:00+00:00");
     git(&directory, &["switch", "-q", "-c", "feature"]);
-    let grown = function_of("wide", 20).replacen("let value = 1;", "let grown = 2;", 1);
+    let grown = function_of("wide", 20).replacen("{\n", "{\n    let grown = 2;\n", 1);
     write(&directory, "src/lib.rs", &grown);
     git(&directory, &["add", "-A"]);
     git(

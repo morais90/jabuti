@@ -11,7 +11,7 @@ use jabuti_core::graph::index::Source;
 use jabuti_core::model::Finding;
 use jabuti_core::policy::Layers;
 use jabuti_core::report::Outcome;
-use jabuti_core::{code, graph};
+use jabuti_core::{code, diff, graph};
 
 use self::plan::Plan;
 use crate::config::Settings;
@@ -106,6 +106,19 @@ fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
 
     let (mut outcome, measured) = code::scan(examined.reviewed, &request);
     outcome.unreadable = examined.unreadable;
+    let base_texts = match run.changes {
+        Some(changes) => changes.base_texts(run.paths, run.root)?,
+        None => BTreeMap::new(),
+    };
+    if let Some(changes) = run.changes {
+        outcome.findings = worsened(
+            run,
+            changes,
+            &request,
+            &base_texts,
+            std::mem::take(&mut outcome.findings),
+        );
+    }
     outcome.findings.extend(crossings::hotspots(
         run.plan,
         &measured,
@@ -131,9 +144,32 @@ fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
         &examined.sources,
         &examined.opaque,
         layers.as_ref(),
-    )?);
+        &base_texts,
+    ));
 
     Ok(outcome)
+}
+
+fn worsened(
+    run: &Run<'_>,
+    changes: &Changes,
+    request: &code::Scan<'_>,
+    base_texts: &BTreeMap<PathBuf, String>,
+    findings: Vec<Finding>,
+) -> Vec<Finding> {
+    let unhistoried = code::Scan {
+        churn: &BTreeMap::new(),
+        ..*request
+    };
+    let base = examine::base_findings(run, base_texts, &unhistoried);
+    let placement = changes.placement(run.paths);
+
+    diff::worsened(findings, &base, |finding| {
+        changes.diff().touches(
+            &placement.in_repository(Path::new(&finding.path)),
+            finding.span,
+        )
+    })
 }
 
 fn layered(run: &Run<'_>, extent: &[PathBuf], notices: &mut Vec<String>) -> Result<Option<Layers>> {
@@ -149,10 +185,12 @@ fn graphed(
     sources: &[Source],
     opaque: &[String],
     layers: Option<&Layers>,
-) -> Result<Vec<Finding>> {
-    let base = match (run.changes, run.plan.reads(Input::BaseRevision)) {
-        (Some(changes), true) => examine::base_sources(changes, run.paths, run.root)?,
-        _ => BTreeMap::new(),
+    base_texts: &BTreeMap<PathBuf, String>,
+) -> Vec<Finding> {
+    let base = if run.plan.reads(Input::BaseRevision) {
+        examine::base_sources(base_texts)
+    } else {
+        BTreeMap::new()
     };
     let requested: BTreeSet<PathBuf> = run
         .paths
@@ -161,7 +199,7 @@ fn graphed(
         .map(|path| PathBuf::from(workspace::display(path, run.root)))
         .collect();
 
-    Ok(graph::findings(&graph::Scan {
+    graph::findings(&graph::Scan {
         requested: &requested,
         sources,
         opaque,
@@ -169,5 +207,5 @@ fn graphed(
         policy: &run.settings.policy,
         compared: run.changes.is_some(),
         layers,
-    }))
+    })
 }

@@ -6,13 +6,12 @@ use jabuti_core::catalog::Input;
 use jabuti_core::graph::facts::{self, FileFacts};
 use jabuti_core::graph::index::Source;
 use jabuti_core::lang::{self, LangSpec, LanguageId};
-use jabuti_core::model::Unreadable;
+use jabuti_core::model::{Finding, Unreadable};
 use jabuti_core::syntax::{self, Parsed, SyntaxError, Text};
 use jabuti_core::{code, graph};
 use rayon::prelude::*;
 
 use super::Run;
-use crate::inputs::git::since::Changes;
 use crate::inputs::workspace;
 
 #[derive(Debug)]
@@ -145,16 +144,34 @@ pub(super) fn files(run: &Run<'_>, extent: &[PathBuf], request: &code::Scan<'_>)
     examined
 }
 
-pub(super) fn base_sources(
-    changes: &Changes,
-    paths: &[PathBuf],
-    project: &Path,
-) -> Result<BTreeMap<PathBuf, Option<Source>>> {
-    Ok(changes
-        .base_texts(paths, project)?
-        .into_par_iter()
-        .filter_map(|(shown, text)| base_source(shown, &text))
-        .collect())
+pub(super) fn base_findings(
+    run: &Run<'_>,
+    texts: &BTreeMap<PathBuf, String>,
+    request: &code::Scan<'_>,
+) -> Vec<Finding> {
+    texts
+        .par_iter()
+        .filter_map(|(shown, source)| {
+            let spec = lang::detect(shown)?;
+            let text = Text {
+                path: run.root.join(shown),
+                shown: shown.to_string_lossy().into_owned(),
+                spec,
+                source: source.clone(),
+            };
+            let parsed = syntax::parse(&text.source, spec).ok()?;
+            let aliases = graph::aliases(&parsed, spec.id, &run.settings.concepts);
+            Some(code::reviewed(&text, &parsed, &aliases, request).into_findings())
+        })
+        .flatten()
+        .collect()
+}
+
+pub(super) fn base_sources(texts: &BTreeMap<PathBuf, String>) -> BTreeMap<PathBuf, Option<Source>> {
+    texts
+        .par_iter()
+        .filter_map(|(shown, text)| base_source(shown.clone(), text))
+        .collect()
 }
 
 fn base_source(shown: PathBuf, text: &str) -> Option<(PathBuf, Option<Source>)> {

@@ -71,13 +71,14 @@ cannot tell which ones it caused, so it learns to ignore the output.
 $ jabuti check --since main
 ```
 
-Only changed files are analysed, and within them only findings overlapping a changed line are
-reported. Uncommitted edits and untracked files count as changed, because that is the state an agent
-is usually in.
+Only changed files are analysed, and within them only what the change made worse is reported: a new
+function over a limit, a function the change made longer or more complex, one more swallowed error.
+Uncommitted edits and untracked files count as changed, because that is the state an agent is usually
+in.
 
 This is also what makes an absolute threshold adoptable. A legacy function that was already over the
-limit stays quiet until someone touches it, so a project can turn the gate on today rather than
-after a cleanup it will never schedule.
+limit stays quiet when someone fixes a line of it and is reported when someone makes it worse, so a
+project can turn the gate on today rather than after a cleanup it will never schedule.
 
 ## Holding a boundary
 

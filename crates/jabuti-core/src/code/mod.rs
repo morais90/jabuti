@@ -111,6 +111,12 @@ pub fn reviewed(
     }
 }
 
+impl Reviewed {
+    pub fn into_findings(self) -> Vec<Finding> {
+        self.findings
+    }
+}
+
 pub fn scan(reviewed: Vec<Reviewed>, request: &Scan<'_>) -> (Outcome, Vec<Measured>) {
     let measured: Vec<Measured> = reviewed.iter().map(|file| file.measured.clone()).collect();
 

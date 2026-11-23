@@ -244,3 +244,34 @@ fn nothing_is_fragmented_while_duplication_is_switched_off() {
 
     assert_eq!(fired(&outcome), []);
 }
+
+#[test]
+fn a_reviewed_file_hands_over_the_findings_it_judged() {
+    let policy = policy(&[
+        (Rule::FunctionLines, 2, Severity::Warning),
+        (Rule::DuplicateBlock, 0, Severity::Off),
+    ]);
+    let request = Scan {
+        policy: &policy,
+        bindings: &ConceptBindings::default(),
+        touched: None,
+        churn: &BTreeMap::new(),
+    };
+    let lib = text("src/lib.rs", GUARDED);
+
+    let findings = reviewed(&lib, &request).into_findings();
+
+    let mut fired: Vec<(String, Option<&str>)> = findings
+        .iter()
+        .map(|finding| (finding.rule.id(), finding.subject.as_deref()))
+        .collect();
+    fired.sort();
+    assert_eq!(
+        fired,
+        [
+            ("error-masking".to_owned(), Some("unwrap")),
+            ("function-lines".to_owned(), Some("read")),
+            ("suppression".to_owned(), Some("dead_code")),
+        ]
+    );
+}

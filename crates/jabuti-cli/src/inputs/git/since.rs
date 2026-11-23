@@ -19,7 +19,7 @@ impl Changes {
     pub(crate) fn since(reference: &str, project: &Path) -> Result<Self> {
         let root = PathBuf::from(super::run(&["rev-parse", "--show-toplevel"])?.trim());
         let base = merge_base(reference)?;
-        let unified = super::run(&["diff", "--unified=0", &base])?;
+        let unified = super::run(&["diff", "--unified=0", "--find-renames", &base])?;
         let untracked = super::run_at(&root, &["ls-files", "--others", "--exclude-standard"])?;
 
         let mut diff = Diff::parse(&unified);
@@ -46,7 +46,8 @@ impl Changes {
                 continue;
             };
             if self.diff.covers(&relative) {
-                requested.insert(relative, PathBuf::from(workspace::display(path, project)));
+                let origin = self.diff.origin(&relative).to_path_buf();
+                requested.insert(origin, PathBuf::from(workspace::display(path, project)));
             }
         }
         let inside: Vec<PathBuf> = requested.keys().cloned().collect();

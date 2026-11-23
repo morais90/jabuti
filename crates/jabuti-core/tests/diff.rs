@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use jabuti_core::catalog::{Rule, RuleId, Severity};
-use jabuti_core::diff::{Diff, Placement};
+use jabuti_core::diff::{self, Diff, Placement};
 use jabuti_core::model::{Detail, Finding, Span};
 use rstest::rstest;
 
@@ -215,4 +215,169 @@ fn a_hunk_with_context_lines_ends_where_both_of_its_sides_do() {
 
     assert!(diff.covers(Path::new("src/query.rs")));
     assert!(diff.touches(Path::new("src/tail.rs"), lines(1, 1)));
+}
+
+fn measured(rule: Rule, subject: &str, start_line: u32, measured: u32) -> Finding {
+    Finding {
+        rule: RuleId::Native(rule),
+        severity: Severity::Warning,
+        path: "src/lib.rs".to_owned(),
+        span: lines(start_line, start_line + 9),
+        subject: Some(subject.to_owned()),
+        detail: Detail::Threshold { measured, limit: 4 },
+    }
+}
+
+fn told(subject: &str, start_line: u32) -> Finding {
+    Finding {
+        rule: RuleId::Native(Rule::ErrorMasking),
+        severity: Severity::Warning,
+        path: "src/lib.rs".to_owned(),
+        span: lines(start_line, start_line),
+        subject: Some(subject.to_owned()),
+        detail: Detail::Message {
+            message: "the failure is dropped without being read".to_owned(),
+        },
+    }
+}
+
+fn anywhere(_: &Finding) -> bool {
+    true
+}
+
+#[test]
+fn a_unit_over_its_limit_is_reported_only_when_the_change_made_its_measure_grow() {
+    let base = [
+        measured(Rule::Parameters, "grew", 1, 5),
+        measured(Rule::Parameters, "held", 20, 6),
+        measured(Rule::Parameters, "shrank", 40, 9),
+    ];
+    let current = vec![
+        measured(Rule::Parameters, "grew", 3, 6),
+        measured(Rule::Parameters, "held", 22, 6),
+        measured(Rule::Parameters, "shrank", 42, 7),
+    ];
+
+    assert_eq!(
+        diff::worsened(current, &base, anywhere),
+        [measured(Rule::Parameters, "grew", 3, 6)]
+    );
+}
+
+#[test]
+fn a_unit_the_base_never_had_over_its_limit_is_reported() {
+    let base = [measured(Rule::FunctionLines, "old", 1, 70)];
+    let current = vec![
+        measured(Rule::FunctionLines, "old", 1, 70),
+        measured(Rule::FunctionLines, "fresh", 30, 61),
+        measured(Rule::Parameters, "old", 1, 5),
+    ];
+
+    assert_eq!(
+        diff::worsened(current, &base, anywhere),
+        [
+            measured(Rule::FunctionLines, "fresh", 30, 61),
+            measured(Rule::Parameters, "old", 1, 5),
+        ]
+    );
+}
+
+#[test]
+fn units_sharing_a_name_are_compared_in_the_order_they_appear() {
+    let base = [
+        measured(Rule::Parameters, "new", 1, 8),
+        measured(Rule::Parameters, "new", 30, 5),
+    ];
+    let current = vec![
+        measured(Rule::Parameters, "new", 1, 6),
+        measured(Rule::Parameters, "new", 30, 7),
+    ];
+
+    assert_eq!(
+        diff::worsened(current, &base, anywhere),
+        [measured(Rule::Parameters, "new", 30, 7)]
+    );
+}
+
+#[test]
+fn a_unit_sharing_its_name_with_one_that_grew_keeps_its_own_comparison() {
+    let base = [
+        measured(Rule::Parameters, "new", 1, 8),
+        measured(Rule::Parameters, "new", 30, 5),
+    ];
+    let current = vec![
+        measured(Rule::Parameters, "new", 1, 8),
+        measured(Rule::Parameters, "new", 30, 9),
+    ];
+
+    assert_eq!(
+        diff::worsened(current, &base, anywhere),
+        [measured(Rule::Parameters, "new", 30, 9)]
+    );
+}
+
+#[test]
+fn a_fact_is_reported_only_as_many_times_as_the_change_added_it_preferring_changed_lines() {
+    let base = [told("load", 3), told("load", 9)];
+    let current = vec![told("load", 3), told("load", 6), told("load", 12)];
+
+    let reported = diff::worsened(current, &base, |finding| finding.span.start_line == 6);
+
+    assert_eq!(reported, [told("load", 6)]);
+}
+
+#[test]
+fn a_fact_the_change_moved_but_did_not_add_is_not_reported() {
+    let base = [told("load", 3)];
+    let current = vec![told("load", 40)];
+
+    assert_eq!(diff::worsened(current, &base, anywhere), []);
+}
+
+#[test]
+fn facts_with_different_messages_or_units_are_counted_apart() {
+    let mut other = told("load", 5);
+    other.detail = Detail::Message {
+        message: "another failure".to_owned(),
+    };
+    let base = [told("load", 3)];
+    let current = vec![told("load", 3), told("save", 8), other.clone()];
+
+    assert_eq!(
+        diff::worsened(current, &base, anywhere),
+        [other, told("save", 8)]
+    );
+}
+
+#[test]
+fn a_renamed_file_is_compared_with_the_path_it_came_from() {
+    let diff = Diff::parse(
+        "diff --git a/src/old.rs b/src/new.rs\n\
+         similarity index 90%\n\
+         rename from src/old.rs\n\
+         rename to src/new.rs\n\
+         index 1111111..2222222 100644\n\
+         --- a/src/old.rs\n\
+         +++ b/src/new.rs\n\
+         @@ -3 +3 @@\n\
+         -    old();\n\
+         +    new();\n\
+         diff --git a/src/kept.rs b/src/kept.rs\n\
+         index 3333333..4444444 100644\n\
+         --- a/src/kept.rs\n\
+         +++ b/src/kept.rs\n\
+         @@ -1 +1 @@\n\
+         -rename from src/fake.rs\n\
+         +rename to src/kept.rs\n",
+    );
+
+    assert_eq!(
+        diff.origin(Path::new("src/new.rs")),
+        Path::new("src/old.rs")
+    );
+    assert_eq!(
+        diff.origin(Path::new("src/kept.rs")),
+        Path::new("src/kept.rs")
+    );
+    assert!(diff.touches(Path::new("src/new.rs"), lines(3, 3)));
 }

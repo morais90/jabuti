@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 
-use crate::model::{Finding, Span};
+use crate::catalog::RuleId;
+use crate::model::{Detail, Finding, Span};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Touched {
@@ -24,13 +25,28 @@ impl Touched {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Diff {
     touched: BTreeMap<PathBuf, Touched>,
+    renames: BTreeMap<PathBuf, PathBuf>,
 }
 
 impl Diff {
     pub fn parse(unified: &str) -> Self {
-        Self {
-            touched: hunks(unified),
+        let mut reader = Reader::default();
+        for line in unified.lines() {
+            reader.read(line);
         }
+
+        Self {
+            touched: reader
+                .touched
+                .into_iter()
+                .map(|(path, ranges)| (path, Touched::Lines(ranges)))
+                .collect(),
+            renames: reader.renames,
+        }
+    }
+
+    pub fn origin<'a>(&'a self, path: &'a Path) -> &'a Path {
+        self.renames.get(path).map_or(path, PathBuf::as_path)
     }
 
     pub fn add_whole(&mut self, path: PathBuf) {
@@ -57,6 +73,83 @@ impl Diff {
     }
 }
 
+type Identity = (RuleId, String, Option<String>, Option<String>);
+
+pub fn worsened(
+    findings: Vec<Finding>,
+    base: &[Finding],
+    touched: impl Fn(&Finding) -> bool,
+) -> Vec<Finding> {
+    let mut before: BTreeMap<Identity, Vec<&Finding>> = BTreeMap::new();
+    for finding in base {
+        before.entry(identity(finding)).or_default().push(finding);
+    }
+    let mut groups: BTreeMap<Identity, Vec<Finding>> = BTreeMap::new();
+    for finding in findings {
+        groups.entry(identity(&finding)).or_default().push(finding);
+    }
+
+    groups
+        .into_iter()
+        .flat_map(|(identity, group)| {
+            let mut earlier = before.remove(&identity).unwrap_or_default();
+            earlier.sort_by_key(|finding| finding.span);
+            match identity.3 {
+                Some(_) => surplus(group, earlier.len(), &touched),
+                None => grown(group, &earlier),
+            }
+        })
+        .collect()
+}
+
+fn identity(finding: &Finding) -> Identity {
+    let message = match &finding.detail {
+        Detail::Message { message } => Some(message.clone()),
+        Detail::Threshold { .. } => None,
+    };
+
+    (
+        finding.rule.clone(),
+        finding.path.clone(),
+        finding.subject.clone(),
+        message,
+    )
+}
+
+fn measure(finding: &Finding) -> u32 {
+    match finding.detail {
+        Detail::Threshold { measured, .. } => measured,
+        Detail::Message { .. } => 0,
+    }
+}
+
+fn grown(mut group: Vec<Finding>, earlier: &[&Finding]) -> Vec<Finding> {
+    group.sort_by_key(|finding| finding.span);
+
+    group
+        .into_iter()
+        .enumerate()
+        .filter(|(index, finding)| {
+            earlier
+                .get(*index)
+                .is_none_or(|was| measure(finding) > measure(was))
+        })
+        .map(|(_, finding)| finding)
+        .collect()
+}
+
+fn surplus(
+    mut group: Vec<Finding>,
+    earlier: usize,
+    touched: &impl Fn(&Finding) -> bool,
+) -> Vec<Finding> {
+    let added = group.len().saturating_sub(earlier);
+    group.sort_by_key(|finding| !touched(finding));
+    group.truncate(added);
+
+    group
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Placement {
     pub project: PathBuf,
@@ -72,22 +165,11 @@ impl Placement {
     }
 }
 
-fn hunks(diff: &str) -> BTreeMap<PathBuf, Touched> {
-    let mut reader = Reader::default();
-    for line in diff.lines() {
-        reader.read(line);
-    }
-
-    reader
-        .touched
-        .into_iter()
-        .map(|(path, ranges)| (path, Touched::Lines(ranges)))
-        .collect()
-}
-
 #[derive(Default)]
 struct Reader<'a> {
     touched: BTreeMap<PathBuf, Vec<RangeInclusive<u32>>>,
+    renames: BTreeMap<PathBuf, PathBuf>,
+    renamed: Option<PathBuf>,
     current: Option<PathBuf>,
     previous: &'a str,
     remaining: (u32, u32),
@@ -106,6 +188,12 @@ impl<'a> Reader<'a> {
             self.current = target(spec);
         } else if let Some(header) = line.strip_prefix("@@ ") {
             self.open(header);
+        } else if let Some(from) = line.strip_prefix("rename from ") {
+            self.renamed = Some(PathBuf::from(from));
+        } else if let (Some(to), Some(from)) =
+            (line.strip_prefix("rename to "), self.renamed.take())
+        {
+            self.renames.insert(PathBuf::from(to), from);
         }
 
         self.previous = line;
