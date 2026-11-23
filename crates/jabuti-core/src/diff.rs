@@ -25,7 +25,14 @@ impl Touched {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Diff {
     touched: BTreeMap<PathBuf, Touched>,
+    hunks: BTreeMap<PathBuf, Vec<Hunk>>,
     renames: BTreeMap<PathBuf, PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Hunk {
+    old: (u32, u32),
+    new: (u32, u32),
 }
 
 impl Diff {
@@ -41,8 +48,26 @@ impl Diff {
                 .into_iter()
                 .map(|(path, ranges)| (path, Touched::Lines(ranges)))
                 .collect(),
+            hunks: reader.hunks,
             renames: reader.renames,
         }
+    }
+
+    pub fn moved(&self, path: &Path, line: u32) -> u32 {
+        let mut shift = 0_i64;
+        for hunk in self.hunks.get(path).map_or(&[][..], Vec::as_slice) {
+            let (old_start, old_count) = hunk.old;
+            let first_after = old_start + old_count.max(1);
+            if line >= first_after {
+                shift += i64::from(hunk.new.1) - i64::from(old_count);
+            } else if old_count > 0 && line >= old_start {
+                return hunk.new.0.max(1);
+            } else {
+                break;
+            }
+        }
+
+        u32::try_from(i64::from(line) + shift).unwrap_or(line)
     }
 
     pub fn origin<'a>(&'a self, path: &'a Path) -> &'a Path {
@@ -79,10 +104,14 @@ pub fn worsened(
     findings: Vec<Finding>,
     base: &[Finding],
     touched: impl Fn(&Finding) -> bool,
+    moved: impl Fn(&Finding) -> u32,
 ) -> Vec<Finding> {
-    let mut before: BTreeMap<Identity, Vec<&Finding>> = BTreeMap::new();
+    let mut before: BTreeMap<Identity, Vec<(u32, u32)>> = BTreeMap::new();
     for finding in base {
-        before.entry(identity(finding)).or_default().push(finding);
+        before
+            .entry(identity(finding))
+            .or_default()
+            .push((moved(finding), measure(finding)));
     }
     let mut groups: BTreeMap<Identity, Vec<Finding>> = BTreeMap::new();
     for finding in findings {
@@ -92,8 +121,7 @@ pub fn worsened(
     groups
         .into_iter()
         .flat_map(|(identity, group)| {
-            let mut earlier = before.remove(&identity).unwrap_or_default();
-            earlier.sort_by_key(|finding| finding.span);
+            let earlier = before.remove(&identity).unwrap_or_default();
             match identity.3 {
                 Some(_) => surplus(group, earlier.len(), &touched),
                 None => grown(group, &earlier),
@@ -123,18 +151,32 @@ fn measure(finding: &Finding) -> u32 {
     }
 }
 
-fn grown(mut group: Vec<Finding>, earlier: &[&Finding]) -> Vec<Finding> {
-    group.sort_by_key(|finding| finding.span);
+fn grown(group: Vec<Finding>, earlier: &[(u32, u32)]) -> Vec<Finding> {
+    let mut pairs: Vec<(u32, usize, usize)> = group
+        .iter()
+        .enumerate()
+        .flat_map(|(current, finding)| {
+            earlier.iter().enumerate().map(move |(was, (line, _))| {
+                (finding.span.start_line.abs_diff(*line), current, was)
+            })
+        })
+        .collect();
+    pairs.sort_unstable();
+
+    let mut matched: Vec<Option<usize>> = vec![None; group.len()];
+    let mut used = vec![false; earlier.len()];
+    for (_, current, was) in pairs {
+        if matched[current].is_none() && !used[was] {
+            matched[current] = Some(was);
+            used[was] = true;
+        }
+    }
 
     group
         .into_iter()
-        .enumerate()
-        .filter(|(index, finding)| {
-            earlier
-                .get(*index)
-                .is_none_or(|was| measure(finding) > measure(was))
-        })
-        .map(|(_, finding)| finding)
+        .zip(matched)
+        .filter(|(finding, was)| was.is_none_or(|was| measure(finding) > earlier[was].1))
+        .map(|(finding, _)| finding)
         .collect()
 }
 
@@ -168,6 +210,7 @@ impl Placement {
 #[derive(Default)]
 struct Reader<'a> {
     touched: BTreeMap<PathBuf, Vec<RangeInclusive<u32>>>,
+    hunks: BTreeMap<PathBuf, Vec<Hunk>>,
     renames: BTreeMap<PathBuf, PathBuf>,
     renamed: Option<PathBuf>,
     current: Option<PathBuf>,
@@ -201,8 +244,17 @@ impl<'a> Reader<'a> {
 
     fn open(&mut self, header: &str) {
         self.remaining = sides(header);
+        let Some(path) = self.current.as_ref() else {
+            return;
+        };
 
-        if let (Some(path), Some(range)) = (self.current.as_ref(), added(header)) {
+        if let (Some(old), Some(new)) = (span_of(header, '-'), span_of(header, '+')) {
+            self.hunks
+                .entry(path.clone())
+                .or_default()
+                .push(Hunk { old, new });
+        }
+        if let Some(range) = added(header) {
             self.touched.entry(path.clone()).or_default().push(range);
         }
     }

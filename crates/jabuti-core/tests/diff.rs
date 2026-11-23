@@ -245,6 +245,10 @@ fn anywhere(_: &Finding) -> bool {
     true
 }
 
+fn unmoved(finding: &Finding) -> u32 {
+    finding.span.start_line
+}
+
 #[test]
 fn a_unit_over_its_limit_is_reported_only_when_the_change_made_its_measure_grow() {
     let base = [
@@ -259,7 +263,7 @@ fn a_unit_over_its_limit_is_reported_only_when_the_change_made_its_measure_grow(
     ];
 
     assert_eq!(
-        diff::worsened(current, &base, anywhere),
+        diff::worsened(current, &base, anywhere, unmoved),
         [measured(Rule::Parameters, "grew", 3, 6)]
     );
 }
@@ -274,7 +278,7 @@ fn a_unit_the_base_never_had_over_its_limit_is_reported() {
     ];
 
     assert_eq!(
-        diff::worsened(current, &base, anywhere),
+        diff::worsened(current, &base, anywhere, unmoved),
         [
             measured(Rule::FunctionLines, "fresh", 30, 61),
             measured(Rule::Parameters, "old", 1, 5),
@@ -294,7 +298,7 @@ fn units_sharing_a_name_are_compared_in_the_order_they_appear() {
     ];
 
     assert_eq!(
-        diff::worsened(current, &base, anywhere),
+        diff::worsened(current, &base, anywhere, unmoved),
         [measured(Rule::Parameters, "new", 30, 7)]
     );
 }
@@ -311,7 +315,7 @@ fn a_unit_sharing_its_name_with_one_that_grew_keeps_its_own_comparison() {
     ];
 
     assert_eq!(
-        diff::worsened(current, &base, anywhere),
+        diff::worsened(current, &base, anywhere, unmoved),
         [measured(Rule::Parameters, "new", 30, 9)]
     );
 }
@@ -321,7 +325,12 @@ fn a_fact_is_reported_only_as_many_times_as_the_change_added_it_preferring_chang
     let base = [told("load", 3), told("load", 9)];
     let current = vec![told("load", 3), told("load", 6), told("load", 12)];
 
-    let reported = diff::worsened(current, &base, |finding| finding.span.start_line == 6);
+    let reported = diff::worsened(
+        current,
+        &base,
+        |finding| finding.span.start_line == 6,
+        unmoved,
+    );
 
     assert_eq!(reported, [told("load", 6)]);
 }
@@ -331,7 +340,7 @@ fn a_fact_the_change_moved_but_did_not_add_is_not_reported() {
     let base = [told("load", 3)];
     let current = vec![told("load", 40)];
 
-    assert_eq!(diff::worsened(current, &base, anywhere), []);
+    assert_eq!(diff::worsened(current, &base, anywhere, unmoved), []);
 }
 
 #[test]
@@ -344,7 +353,7 @@ fn facts_with_different_messages_or_units_are_counted_apart() {
     let current = vec![told("load", 3), told("save", 8), other.clone()];
 
     assert_eq!(
-        diff::worsened(current, &base, anywhere),
+        diff::worsened(current, &base, anywhere, unmoved),
         [other, told("save", 8)]
     );
 }
@@ -380,4 +389,48 @@ fn a_renamed_file_is_compared_with_the_path_it_came_from() {
         Path::new("src/kept.rs")
     );
     assert!(diff.touches(Path::new("src/new.rs"), lines(3, 3)));
+}
+
+#[test]
+fn a_new_unit_added_above_one_sharing_its_name_is_not_mistaken_for_it() {
+    let base = [measured(Rule::FunctionLines, "new", 1, 80)];
+    let current = vec![
+        measured(Rule::FunctionLines, "new", 1, 70),
+        measured(Rule::FunctionLines, "new", 75, 80),
+    ];
+
+    let reported = diff::worsened(current, &base, anywhere, |finding| {
+        finding.span.start_line + 74
+    });
+
+    assert_eq!(reported, [measured(Rule::FunctionLines, "new", 1, 70)]);
+}
+
+#[test]
+fn a_line_of_the_base_is_moved_by_every_hunk_above_it() {
+    let diff = Diff::parse(
+        "diff --git a/src/lib.rs b/src/lib.rs\n\
+         --- a/src/lib.rs\n\
+         +++ b/src/lib.rs\n\
+         @@ -2,0 +3,4 @@\n\
+         +a\n\
+         +b\n\
+         +c\n\
+         +d\n\
+         @@ -10,3 +14,1 @@\n\
+         -e\n\
+         -f\n\
+         -g\n\
+         +h\n\
+         @@ -20 +22 @@\n\
+         -i\n\
+         +j\n",
+    );
+    let moved = |line| diff.moved(Path::new("src/lib.rs"), line);
+
+    assert_eq!(
+        [1, 2, 3, 9, 10, 12, 13, 19, 20, 21].map(moved),
+        [1, 2, 7, 13, 14, 14, 15, 21, 22, 23]
+    );
+    assert_eq!(diff.moved(Path::new("src/other.rs"), 9), 9);
 }

@@ -2,9 +2,9 @@
 
 Reports a file that now depends on another file it did not depend on before.
 
-**Default severity:** warning. This rule has no limit; every new dependency is reported. It needs
-`--since`, because "new" only means anything against an earlier revision, and it says so rather than
-staying quiet when you leave the flag out.
+**Default severity:** warning. This rule has no limit; every new dependency is reported. It is
+evaluated on a change and not under `--all`, because "new" only means anything against an earlier
+revision, and it says so rather than staying quiet when it would have gated.
 
 ## The idea
 

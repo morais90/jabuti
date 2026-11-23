@@ -245,6 +245,7 @@ fn a_lint_in_a_workspace_member_outside_the_project_is_left_out() {
     common::binary(&directory)
         .current_dir(directory.path().join("rust/member"))
         .arg("check")
+        .arg("--all")
         .arg(".")
         .assert()
         .stdout(

@@ -4,9 +4,9 @@ Reports a stretch of consecutive lines that this change added and that no test e
 
 **Default severity:** off. This rule has no limit; every uncovered stretch of new code is reported,
 once, at its first line. It ships switched off because it cannot run without a coverage report, and
-producing one costs a full instrumented test run. It needs `--since`, because "added" only means
-anything against an earlier revision, and when it is set to `error` without the flag it says so
-rather than staying quiet.
+producing one costs a full instrumented test run. It is evaluated on a change and not under `--all`,
+because "added" only means anything against an earlier revision, and when it is set to `error` under
+`--all` it says so rather than staying quiet.
 
 ## The idea
 

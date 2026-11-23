@@ -5,7 +5,7 @@ mod plan;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use jabuti_core::catalog::Input;
 use jabuti_core::graph::index::Source;
 use jabuti_core::model::Finding;
@@ -15,24 +15,46 @@ use jabuti_core::{code, diff, graph};
 
 use self::plan::Plan;
 use crate::config::Settings;
-use crate::inputs::git::since::Changes;
+use crate::inputs::git::since::{self, Changes};
 use crate::inputs::{history, layers, tools, workspace};
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Scope<'a> {
+    Since(&'a str),
+    Implied,
+    All,
+}
 
 pub(crate) struct Verdict {
     pub(crate) root: PathBuf,
     pub(crate) outcome: Outcome,
     pub(crate) changes: Option<Changes>,
+    pub(crate) reference: Option<String>,
+    pub(crate) gating: bool,
 }
 
 pub(crate) fn verdict(
     roots: &[PathBuf],
-    since: Option<&str>,
+    scope: Scope<'_>,
     notices: &mut Vec<String>,
 ) -> Result<Verdict> {
     let (root, settings) = workspace::discover()?;
     tools::known(&settings)?;
-    let changes = since
-        .map(|reference| Changes::since(reference, &root))
+    let reference = match scope {
+        Scope::Since(reference) => Some(reference.to_owned()),
+        Scope::Implied => since::implied()?,
+        Scope::All => None,
+    };
+    let changes = reference
+        .as_deref()
+        .map(|reference| {
+            Changes::since(reference, &root).with_context(|| match scope {
+                Scope::Implied => format!(
+                    "the change was worked out from {reference}; name another reference with --since, or list the whole repository with --all"
+                ),
+                Scope::Since(_) | Scope::All => format!("comparing against {reference}"),
+            })
+        })
         .transpose()?;
     let plan = Plan::of(&settings, changes.is_some());
     notices.extend(plan.notices());
@@ -63,6 +85,8 @@ pub(crate) fn verdict(
         root,
         outcome,
         changes,
+        reference,
+        gating: !matches!(scope, Scope::All),
     })
 }
 
@@ -164,12 +188,18 @@ fn worsened(
     let base = examine::base_findings(run, base_texts, &unhistoried);
     let placement = changes.placement(run.paths);
 
-    diff::worsened(findings, &base, |finding| {
-        changes.diff().touches(
-            &placement.in_repository(Path::new(&finding.path)),
-            finding.span,
-        )
-    })
+    let place = |finding: &Finding| placement.in_repository(Path::new(&finding.path));
+
+    diff::worsened(
+        findings,
+        &base,
+        |finding| changes.diff().touches(&place(finding), finding.span),
+        |finding| {
+            changes
+                .diff()
+                .moved(&place(finding), finding.span.start_line)
+        },
+    )
 }
 
 fn layered(run: &Run<'_>, extent: &[PathBuf], notices: &mut Vec<String>) -> Result<Option<Layers>> {

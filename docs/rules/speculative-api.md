@@ -3,8 +3,8 @@
 Reports a public declaration that this change added and that nothing in the project references.
 
 **Default severity:** warning. This rule has no limit; every unreferenced new public item is
-reported. It needs `--since`, because "added" only means anything against an earlier revision, and
-it says so rather than staying quiet when you leave the flag out.
+reported. It compares against an earlier revision, so it is evaluated on a change and not under
+`--all`, and it says so rather than staying quiet when it would have gated.
 
 ## The idea
 

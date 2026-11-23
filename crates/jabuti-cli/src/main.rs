@@ -42,8 +42,11 @@ struct CheckArgs {
     #[arg(default_value = ".")]
     paths: Vec<PathBuf>,
 
-    #[arg(long, value_name = "REF")]
+    #[arg(long, value_name = "REF", conflicts_with = "all")]
     since: Option<String>,
+
+    #[arg(long)]
+    all: bool,
 
     #[arg(long, value_enum)]
     format: Option<Format>,
@@ -150,9 +153,13 @@ fn install_tools() -> Result<ExitCode> {
 }
 
 fn check(arguments: &CheckArgs) -> Result<ExitCode> {
-    let since = arguments.since.as_deref();
+    let scope = match (arguments.all, arguments.since.as_deref()) {
+        (true, _) => check::Scope::All,
+        (false, Some(reference)) => check::Scope::Since(reference),
+        (false, None) => check::Scope::Implied,
+    };
     let mut notices = Vec::new();
-    let verdict = check::verdict(&arguments.paths, since, &mut notices);
+    let verdict = check::verdict(&arguments.paths, scope, &mut notices);
     announce(notices);
 
     let verdict = verdict?;
@@ -172,7 +179,7 @@ fn check(arguments: &CheckArgs) -> Result<ExitCode> {
         format,
         limit: arguments.limit,
         view: report::View {
-            since,
+            since: verdict.reference.as_deref(),
             color: report::colored(interactive, no_color.as_deref()),
             links: Some(&verdict.root),
             rhythm: extras.rhythm.as_ref(),
@@ -181,7 +188,7 @@ fn check(arguments: &CheckArgs) -> Result<ExitCode> {
     };
     print!("{}", rendered(&request, &verdict.outcome));
 
-    if report::has_errors(&verdict.outcome.findings) {
+    if verdict.gating && report::has_errors(&verdict.outcome.findings) {
         return Ok(ExitCode::from(1));
     }
 

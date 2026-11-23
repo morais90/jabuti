@@ -1,7 +1,8 @@
 mod common;
 
 use common::{
-    append, binary, commit, error_on_long_functions, function_of, git, jabuti, repository, write,
+    append, binary, commit, error_on_long_functions, function_of, git, jabuti, project, repository,
+    write,
 };
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
@@ -313,4 +314,179 @@ fn how_often_a_file_changed_is_not_compared_with_itself() {
         .assert()
         .code(1)
         .stdout(contains("src/live.rs:1  error  churn"));
+}
+
+#[test]
+fn on_the_principal_branch_the_change_is_what_is_not_committed_yet() {
+    let directory = repository(&[
+        ("jabuti.toml", &error_on_long_functions(60)),
+        ("src/legacy.rs", &function_of("legacy", 70)),
+    ]);
+    write(&directory, "src/fresh.rs", &function_of("fresh", 70));
+
+    jabuti(&directory)
+        .assert()
+        .code(1)
+        .stdout(contains("src/fresh.rs:1  error  function-lines  fresh"))
+        .stdout(contains("function-lines  legacy").not());
+}
+
+#[test]
+fn on_another_branch_the_change_is_everything_since_it_left_the_principal_one() {
+    let directory = repository(&[
+        ("jabuti.toml", &error_on_long_functions(60)),
+        ("src/legacy.rs", &function_of("legacy", 70)),
+    ]);
+    git(&directory, &["switch", "-q", "-c", "feature"]);
+    write(&directory, "src/fresh.rs", &function_of("fresh", 70));
+    commit(&directory, "fresh");
+
+    jabuti(&directory)
+        .assert()
+        .code(1)
+        .stdout(contains("src/fresh.rs:1  error  function-lines  fresh"))
+        .stdout(contains("function-lines  legacy").not());
+}
+
+#[test]
+fn the_principal_branch_is_the_one_the_remote_names() {
+    let directory = repository(&[
+        ("jabuti.toml", &error_on_long_functions(60)),
+        ("src/legacy.rs", &function_of("legacy", 70)),
+    ]);
+    git(&directory, &["branch", "-q", "-m", "main", "trunk"]);
+    git(
+        &directory,
+        &["update-ref", "refs/remotes/origin/trunk", "HEAD"],
+    );
+    git(
+        &directory,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/trunk",
+        ],
+    );
+    git(&directory, &["switch", "-q", "-c", "feature"]);
+    write(&directory, "src/fresh.rs", &function_of("fresh", 70));
+    commit(&directory, "fresh");
+
+    jabuti(&directory)
+        .args(["--format", "human"])
+        .assert()
+        .code(1)
+        .stdout(contains("since origin/trunk"))
+        .stdout(contains(":1  fresh  function-lines"))
+        .stdout(contains("legacy.rs  ").not());
+}
+
+#[test]
+fn a_repository_without_commits_judges_every_file() {
+    let directory = project(&[
+        ("jabuti.toml", &error_on_long_functions(60)),
+        ("src/legacy.rs", &function_of("legacy", 70)),
+    ]);
+    git(&directory, &["init", "-q", "-b", "main"]);
+
+    jabuti(&directory)
+        .assert()
+        .code(1)
+        .stdout(contains("src/legacy.rs:1  error  function-lines  legacy"));
+}
+
+#[test]
+fn the_whole_repository_is_listed_with_all_and_fails_nothing() {
+    let directory = repository(&[
+        ("jabuti.toml", &error_on_long_functions(60)),
+        ("src/legacy.rs", &function_of("legacy", 70)),
+    ]);
+
+    jabuti(&directory)
+        .arg("--all")
+        .assert()
+        .success()
+        .stdout(contains("src/legacy.rs:1  error  function-lines  legacy"));
+}
+
+#[test]
+fn all_and_since_cannot_be_asked_together() {
+    let directory = repository(&[("src/lib.rs", "fn small() {}\n")]);
+
+    jabuti(&directory)
+        .args(["--all", "--since", "HEAD"])
+        .assert()
+        .code(2)
+        .stderr(contains("cannot be used with"));
+}
+
+#[test]
+fn on_the_principal_branch_a_commit_not_pushed_yet_is_no_longer_the_change() {
+    let directory = repository(&[
+        ("jabuti.toml", &error_on_long_functions(60)),
+        ("src/lib.rs", "fn small() {}\n"),
+    ]);
+    git(
+        &directory,
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    git(
+        &directory,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
+    write(&directory, "src/fresh.rs", &function_of("fresh", 70));
+    commit(&directory, "fresh");
+
+    jabuti(&directory)
+        .args(["--format", "human"])
+        .assert()
+        .success()
+        .stdout(contains("since HEAD"))
+        .stdout(contains("fresh").not());
+}
+
+#[test]
+fn a_detached_head_with_no_principal_branch_asks_for_a_reference_instead_of_judging_nothing() {
+    let directory = repository(&[("src/lib.rs", "fn small() {}\n")]);
+    git(&directory, &["branch", "-q", "-m", "main", "work"]);
+    git(&directory, &["switch", "-q", "--detach"]);
+
+    jabuti(&directory)
+        .assert()
+        .code(2)
+        .stderr(contains("HEAD is detached"))
+        .stderr(contains("--since"));
+}
+
+#[test]
+fn a_detached_head_is_judged_against_the_principal_branch() {
+    let directory = repository(&[
+        ("jabuti.toml", &error_on_long_functions(60)),
+        ("src/lib.rs", "fn small() {}\n"),
+    ]);
+    git(&directory, &["switch", "-q", "-c", "feature"]);
+    write(&directory, "src/fresh.rs", &function_of("fresh", 70));
+    commit(&directory, "fresh");
+    git(&directory, &["switch", "-q", "--detach"]);
+
+    jabuti(&directory)
+        .assert()
+        .code(1)
+        .stdout(contains("src/fresh.rs:1  error  function-lines  fresh"));
+}
+
+#[test]
+fn a_principal_branch_sharing_no_history_says_where_the_change_was_worked_out_from() {
+    let directory = repository(&[("src/lib.rs", "fn small() {}\n")]);
+    git(&directory, &["switch", "-q", "--orphan", "elsewhere"]);
+    write(&directory, "src/other.rs", "fn other() {}\n");
+    commit(&directory, "unrelated");
+
+    jabuti(&directory)
+        .assert()
+        .code(2)
+        .stderr(contains("the change was worked out from main"));
 }

@@ -246,8 +246,8 @@ fn a_rule_set_to_gate_says_it_cannot_run_without_a_reference_instead_of_passing(
         "[rules]\nnew-dependency = { severity = \"error\" }\n",
     );
 
-    jabuti(&directory).assert().success().stderr(contains(
-        "new-dependency compares against an earlier revision, so it needs --since",
+    jabuti(&directory).arg("--all").assert().success().stderr(contains(
+        "new-dependency compares against an earlier revision, and this check has none to compare against",
     ));
 }
 

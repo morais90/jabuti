@@ -182,8 +182,8 @@ fn without_since_the_rule_has_nothing_to_compare_against_and_says_so_when_it_gat
         "pub fn run() {}\n\npub fn pause() {}\n",
     );
 
-    jabuti(&directory).assert().success().stderr(contains(
-        "speculative-api compares against an earlier revision, so it needs --since",
+    jabuti(&directory).arg("--all").assert().success().stderr(contains(
+        "speculative-api compares against an earlier revision, and this check has none to compare against",
     ));
 }
 

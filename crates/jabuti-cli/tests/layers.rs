@@ -43,7 +43,7 @@ fn a_dependency_in_the_allowed_direction_is_not_reported() {
 fn a_dependency_a_layer_may_not_have_is_reported_at_the_line_that_makes_it() {
     let directory = layered(LEAKING_BOOK);
 
-    jabuti(&directory).assert().success().stdout(contains(
+    jabuti(&directory).arg("--all").assert().success().stdout(contains(
         "src/domain/book.rs:4  warning  layer-violation  domain may not depend on infrastructure (src/infrastructure/db.rs)",
     ));
 }
@@ -54,12 +54,13 @@ fn a_crossing_made_by_a_file_outside_the_paths_given_on_the_command_line_is_not_
 
     binary(&directory)
         .arg("check")
+        .arg("--all")
         .arg("src/infrastructure")
         .assert()
         .success()
         .stdout(contains("No findings"));
     binary(&directory)
-        .arg("check")
+        .arg("check").arg("--all")
         .arg("src/domain")
         .assert()
         .success()
@@ -80,6 +81,7 @@ fn layers_declared_for_a_rule_that_is_off_do_not_make_the_whole_project_read() {
 
     binary(&directory)
         .arg("check")
+        .arg("--all")
         .arg("src/domain")
         .assert()
         .success()
@@ -220,6 +222,7 @@ fn layer_paths_are_relative_to_the_project_whatever_root_the_command_names() {
 
     binary(&directory)
         .arg("check")
+        .arg("--all")
         .arg(&absolute)
         .assert()
         .success()

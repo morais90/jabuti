@@ -20,9 +20,10 @@ fn the_configuration_is_found_above_the_directory_the_command_runs_from() {
     binary(&directory)
         .current_dir(directory.path().join("src"))
         .arg("check")
+        .arg("--all")
         .arg(".")
         .assert()
-        .code(1)
+        .success()
         .stdout(contains("src/lib.rs:1  error  function-lines"));
 }
 
@@ -35,6 +36,7 @@ fn an_unreadable_file_outside_the_paths_given_is_not_named_when_no_rule_reads_th
 
     binary(&directory)
         .arg("check")
+        .arg("--all")
         .arg("src/inside")
         .assert()
         .success()
@@ -141,6 +143,7 @@ fn paths_are_shown_relative_to_the_project_wherever_the_command_runs_from() {
     binary(&directory)
         .current_dir(directory.path().join("src/deep"))
         .arg("check")
+        .arg("--all")
         .arg(".")
         .assert()
         .success()
@@ -160,6 +163,7 @@ fn a_directory_named_tests_above_the_project_does_not_make_the_project_test_code
     binary(&directory)
         .current_dir(directory.path().join("tests/project"))
         .arg("check")
+        .arg("--all")
         .arg(".")
         .assert()
         .success()
@@ -259,6 +263,7 @@ fn a_directory_named_like_a_source_file_is_not_read_as_one() {
 
     binary(&directory)
         .arg("check")
+        .arg("--all")
         .arg(".")
         .assert()
         .success()

@@ -114,6 +114,51 @@ impl Changes {
     }
 }
 
+pub(crate) fn implied() -> Result<Option<String>> {
+    if super::run(&["rev-parse", "--verify", "--quiet", "HEAD"]).is_err() {
+        return Ok(None);
+    }
+    let current = super::run(&["symbolic-ref", "--quiet", "--short", "HEAD"]).ok();
+    let current = current.as_deref().map(str::trim);
+
+    match (principal(), current) {
+        (Some(branch), Some(name)) if name == local(&branch) => Ok(Some("HEAD".to_owned())),
+        (Some(branch), _) => Ok(Some(branch)),
+        (None, Some(_)) => Ok(Some("HEAD".to_owned())),
+        (None, None) => bail!(
+            "HEAD is detached and no principal branch was found in origin/HEAD, main or master, so there is no telling what the change is. Name the reference it started from with --since, or list the whole repository with --all"
+        ),
+    }
+}
+
+fn principal() -> Option<String> {
+    if let Ok(remote) = super::run(&[
+        "symbolic-ref",
+        "--quiet",
+        "--short",
+        "refs/remotes/origin/HEAD",
+    ]) {
+        return Some(remote.trim().to_owned());
+    }
+
+    ["main", "master"]
+        .into_iter()
+        .find(|branch| {
+            super::run(&[
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                &format!("refs/heads/{branch}"),
+            ])
+            .is_ok()
+        })
+        .map(str::to_owned)
+}
+
+fn local(branch: &str) -> &str {
+    branch.strip_prefix("origin/").unwrap_or(branch)
+}
+
 fn merge_base(reference: &str) -> Result<String> {
     let listed = super::run(&["merge-base", "--all", "HEAD", reference])?;
     let mut bases = listed.lines();

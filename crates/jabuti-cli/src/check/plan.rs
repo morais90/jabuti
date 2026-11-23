@@ -33,14 +33,14 @@ impl<'a> Plan<'a> {
 
         for rule in Rule::ALL {
             match rule.spec().scoping {
-                Scoping::Repository if self.scoped && policy.enabled(rule) => {
+                Scoping::Repository if self.scoped && policy.gates(rule) => {
                     notices.push(format!(
-                        "{} ranks a whole repository, so it is not evaluated with --since",
+                        "{} ranks a whole repository, so it is evaluated only with --all",
                         rule.id()
                     ));
                 }
                 Scoping::Change if !self.scoped && policy.gates(rule) => notices.push(format!(
-                    "{} compares against an earlier revision, so it needs --since",
+                    "{} compares against an earlier revision, and this check has none to compare against",
                     rule.id()
                 )),
                 Scoping::Any | Scoping::Change | Scoping::Repository => {}

@@ -17,6 +17,7 @@ fn a_block_copied_into_another_file_is_reported_on_both_sides() {
     ]);
 
     jabuti(&directory)
+        .arg("--all")
         .assert()
         .success()
         .stdout(contains("src/parser.rs:1  warning  duplicate-block"))
@@ -132,6 +133,7 @@ fn the_same_file_reached_through_two_roots_is_not_a_copy_of_itself() {
     ]);
 
     jabuti(&directory)
+        .arg("--all")
         .arg("src")
         .assert()
         .success()

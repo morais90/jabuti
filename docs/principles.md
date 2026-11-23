@@ -58,9 +58,10 @@ and a project that produces none is told so on the map, because no single change
 adds it.
 
 **Where this stands today.** Native rules still report at warning, and a project can still change
-their severity and limits in `jabuti.toml`. A check scoped to a change reports what it made worse for
-the rules measured per file, while `duplicate-block`, `hotspot` and the findings of orchestrated tools
-are still reported wherever they overlap a changed line. This section is the model the next releases
+their severity and limits in `jabuti.toml`. A check judges a change by default and `--all` maps the
+repository without failing. The change reports what it made worse for the rules measured per file,
+while `duplicate-block` and the findings of orchestrated tools are still reported wherever they
+overlap a changed line, and `hotspot` is still a finding rather than context. This section is the model the next releases
 move to, and the documentation of each part changes with the release that ships it.
 
 ## Every default is an opinion

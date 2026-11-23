@@ -66,6 +66,7 @@ fn a_file_that_does_not_parse_is_named_in_the_output_and_left_out_of_the_count()
     ]);
 
     jabuti(&directory)
+        .arg("--all")
         .assert()
         .success()
         .stdout(contains("1 file and 1 unit"))
@@ -356,6 +357,7 @@ fn source_the_grammar_is_too_old_to_know_is_reported_rather_than_skipped() {
     ]);
 
     jabuti(&directory)
+        .arg("--all")
         .assert()
         .success()
         .stdout(
@@ -377,6 +379,7 @@ fn a_symlink_to_a_source_file_does_not_replace_the_file_it_points_at() {
         .expect("the alias can be created");
 
     jabuti(&directory)
+        .arg("--all")
         .assert()
         .success()
         .stdout(contains("src/lib.rs:3  warning  error-masking"))
@@ -491,9 +494,10 @@ fn the_human_format_draws_each_files_weekly_commits_counted_back_from_head() {
     commit_dated(&directory, "2026-01-22T12:00:00+00:00");
 
     jabuti(&directory)
+        .arg("--all")
         .args(["--format", "human"])
         .assert()
-        .code(1)
+        .success()
         .stdout(contains(
             "▁▁▁▁▁▁▁▁█▁▁█  src/lib.rs  2 commits in 12 weeks\n              :1  wide",
         ))

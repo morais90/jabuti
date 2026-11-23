@@ -134,28 +134,47 @@ from three directories down.
 
 ## Scoping to a change
 
-By default `jabuti check` looks at everything. On a codebase with any history, most of what it finds
-is code nobody has touched in months, which is rarely what you want to act on today.
+`jabuti check` judges a change. On a codebase with any history, most of what a run over everything
+finds is code nobody has touched in months, which is rarely what you want to act on today.
 
 ```console
-$ jabuti check --since main
+$ jabuti check
+$ jabuti check --since v1.4.0
 ```
 
-With `--since`, only files that changed against that reference are analysed, and only what the change
-made worse is reported. Uncommitted edits and brand new files count as changed.
+Without `--since`, the change is worked out from where you are. On a branch other than the principal
+one, it is everything since the branch left it: the principal branch is the one `origin/HEAD` names,
+or else `main`, or else `master`. On the principal branch itself, it is what is not committed yet,
+which is the state an agent is usually in. A detached `HEAD`, as a continuous integration checkout
+usually has, is judged against the principal branch, and when there is none to find the check stops
+and asks for `--since` rather than judging nothing. Outside a git repository, or in one with no commits, there
+is nothing to compare against and every file counts as new. `--since` names the reference instead.
+
+Only files that changed against the reference are analysed, and only what the change made worse is
+reported. Uncommitted edits and brand new files count as changed.
 
 Made worse means the reference did not have it. Each changed file is also measured as the reference
 had it, and a finding is reported only when it is new: a unit over its limit that the reference did
 not have, a unit whose measure grew, or one more occurrence of something the unit already carried,
-such as a second swallowed error. Units are matched by name, and units sharing a name by the
-order they appear in, so moving a function or editing one line of it leaves its finding where it was.
+such as a second swallowed error. Units are matched by name, and units sharing a name by where
+the change left them, so moving a function or editing one line of it leaves its finding where it was,
+and a new function named like an old one is still new.
 A renamed file is compared with the file it came from.
 
 This is also the setting that makes it practical to fail a build on findings. A function that was
 already too long stays quiet when someone fixes one line of it, and is reported when someone makes it
 longer, so you can turn the gate on today instead of waiting for a cleanup that never gets scheduled.
-`duplicate-block`, `hotspot` and the findings of orchestrated tools are not compared yet: they are
-reported where they overlap a changed line.
+`duplicate-block` and the findings of orchestrated tools are not compared yet: they are reported where
+they overlap a changed line.
+
+```console
+$ jabuti check --all
+```
+
+`--all` reads the whole repository instead and lists everything it finds, without failing. It is a
+map of where the work is rather than a verdict on a change, and the exit code is `0` whatever it
+lists. `hotspot`, which ranks a whole repository, is evaluated only there, and the rules that compare
+against an earlier revision are not.
 
 ## What the graph sees
 

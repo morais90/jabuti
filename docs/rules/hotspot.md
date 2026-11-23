@@ -56,9 +56,9 @@ change that pays.
 It needs a git repository. Outside one, jabuti says so on stderr and carries on without it rather
 than failing the run.
 
-It is not evaluated with `--since`. Ranking is a property of the whole repository, and a ranking
-computed over the three files you happened to change would be meaningless. When you use both, jabuti
-says the rule was skipped rather than quietly returning nothing.
+It is evaluated only under `--all`. Ranking is a property of the whole repository, and a ranking
+computed over the three files you happened to change would be meaningless. When it is set to `error`
+and a check judges a change, jabuti says the rule was skipped rather than quietly returning nothing.
 
 A repository with very few files cannot produce a meaningful ranking, and a single file never scores
 above zero.

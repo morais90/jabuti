@@ -17,9 +17,13 @@ fn every_commit_is_counted_against(name: &str) {
     write(&directory, name, "fn busy() {  }\n");
     commit(&directory, "third");
 
-    jabuti(&directory).assert().code(1).stdout(contains(format!(
-        "{name}:1  error  churn  measured 3, limit 1"
-    )));
+    jabuti(&directory)
+        .arg("--all")
+        .assert()
+        .success()
+        .stdout(contains(format!(
+            "{name}:1  error  churn  measured 3, limit 1"
+        )));
 }
 
 #[test]
@@ -60,8 +64,9 @@ fn churn_is_reported_against_the_file_and_not_its_functions() {
     commit(&directory, "second");
 
     jabuti(&directory)
+        .arg("--all")
         .assert()
-        .code(1)
+        .success()
         .stdout(contains("1 error and 0 warnings"));
 }
 
@@ -145,6 +150,7 @@ fn hotspot_is_evaluated_even_when_churn_reporting_is_off() {
     let directory = repository_with_a_hotspot();
 
     jabuti(&directory)
+        .arg("--all")
         .assert()
         .success()
         .stdout(contains("src/tangled.rs:1  warning  hotspot"))
@@ -152,7 +158,7 @@ fn hotspot_is_evaluated_even_when_churn_reporting_is_off() {
 }
 
 #[test]
-fn hotspot_is_skipped_with_since_and_says_so() {
+fn hotspot_is_skipped_on_a_change_and_says_so_only_when_it_gates() {
     let directory = repository_with_a_hotspot();
 
     jabuti(&directory)
@@ -161,7 +167,21 @@ fn hotspot_is_skipped_with_since_and_says_so() {
         .assert()
         .success()
         .stdout(contains("No findings"))
-        .stderr(contains("not evaluated with --since"));
+        .stderr("");
+
+    write(
+        &directory,
+        "jabuti.toml",
+        &ONLY_HOTSPOT.replace("severity = \"warning\"", "severity = \"error\""),
+    );
+    jabuti(&directory)
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stderr(contains(
+            "hotspot ranks a whole repository, so it is evaluated only with --all",
+        ));
 }
 
 #[test]
@@ -177,7 +197,8 @@ fn the_commit_that_renamed_a_file_counts_against_its_new_name() {
     commit(&directory, "edit");
 
     jabuti(&directory)
+        .arg("--all")
         .assert()
-        .code(1)
+        .success()
         .stdout(contains("src/new.rs:1  error  churn  measured 2, limit 1"));
 }
