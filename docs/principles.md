@@ -32,6 +32,36 @@ usual fix looks like are none of those things. They are fixed properties of the 
 threshold and its name are, and they read identically on every run. Text of that kind is data, and the
 determinism principle has nothing to say against it.
 
+## A finding is something to fix
+
+There are no warnings. A finding either needs fixing or it is not reported, and every finding that is
+reported fails the check. A level in between is where most codebases keep the problems they have decided
+to live with, and a list that is mostly things nobody will act on teaches its reader to stop reading it.
+
+**What fails is what the change made worse.** A check judges the change, not the codebase it lands in.
+A finding is reported when the change introduced it: a new function over a limit, a new swallowed
+error, a new suppression. A unit that was already over a limit is reported only when the change made
+its measure grow. Touching a long function to fix one line of it does not make that function the
+change's problem, and making it longer does. This is what lets a project adopt jabuti without a commit
+that fixes everything at once: each change leaves the code it touched no worse, and the code improves
+as it is worked on.
+
+**The whole repository is a map, not a verdict.** Asked about everything rather than a change, jabuti
+lists what it finds and fails nothing. It is where the work is, not a gate, which is also why there is
+no baseline file to keep: a gate scoped to the change has nothing to subtract.
+
+**History is context, not a finding.** How often a file changes, and whether it is complex and busy at
+once, describes the code's past. No change can fix it, so it is shown beside the findings rather than
+counted among them. The same goes for what the repository lacks rather than what a change did: new
+code a test never reaches is a finding, read from the coverage report the project already produces,
+and a project that produces none is told so on the map, because no single change can be the one that
+adds it.
+
+**Where this stands today.** Native rules still report at warning, a project can still change their
+severity and limits in `jabuti.toml`, and a check scoped to a change still reports what the change
+touched rather than what it made worse. This section is the model the next releases move to, and the
+documentation of each part changes with the release that ships it.
+
 ## Every default is an opinion
 
 A default is not a neutral place to start. It is the answer to "what is the best way to do this", and
@@ -39,11 +69,15 @@ answering that is what you came here for. A configuration you still have to go a
 gave you nothing, because the research was the product.
 
 So jabuti holds an opinion on four things, and each one is a decision somebody has to make anyway.
+None of them is a setting. A project does not choose which rules run or where their limits sit, any
+more than it chooses how jabuti counts lines: those are what jabuti is, and part of what it offers is
+the judgement of which measures and checks actually make code better.
 
-**Which rules run.** Off is an opinion too, not the absence of one. `cyclomatic-complexity` is off
-because `cognitive-complexity` measures the same code better and two rules firing on one function is
-noise. `churn` is off because no absolute limit transfers between repositories. Both are positions
-with a reason, and each rule page carries the reason rather than the setting alone.
+**Which rules run.** All of them, always. A rule that is not worth running on every project is not in
+the catalog. `cyclomatic-complexity` is not there, because `cognitive-complexity` measures the same
+code better and two rules firing on one function is noise. `file-lines` is, because an agent extends
+the file it is in rather than opening a new one, and a file of small functions can still be too large
+to hold in mind. Each rule page carries the reason it exists.
 
 **What limit each rule carries.** A number placed at a percentile of a named population, with the
 population named, because the same limit means different things in different languages and in
@@ -61,15 +95,35 @@ already collected. A linter invoked without the setting that enables its type aw
 an easier question than the one you think you asked. Every flag is a decision, and each one is written
 down with its reason.
 
-**What keeps this from being arbitrary.** An opinion here is measured rather than asserted, it carries
-its reason and the date it was formed, and one line in `jabuti.toml` overrides it. Defaults that
-improve are also why generated configuration writes only what differs from them. A file that pins
-today's answers is a file that never receives a better one.
+**What keeps this from being arbitrary.** An opinion here is measured rather than asserted, and it
+carries its reason and the date it was formed. When it is wrong it changes in jabuti, for everyone, in
+a release that says so. That is slower than a line in a configuration file, and it is the point: an
+opinion each project can turn down is a suggestion, and a tool made of suggestions is the one jabuti
+exists to replace.
 
-**The one place jabuti defers.** What your project explicitly configured, your project governs. Not
-configuring something and configuring it weakly are different acts, and only the second is a choice
-respected in silence. Where a project has actively switched a check off, the stricter answer is still
-reported, at warning, under its own rule id, and the finding says the project chose otherwise.
+## No exceptions
+
+A rule that reports something it should not have is a bug in jabuti. It is fixed in jabuti, not
+silenced in the project, and there is no comment, attribute or file that tells jabuti to look away
+from a line. Most tools offer one, and in most codebases that is where the findings go to live. The
+reader jabuti is written for makes it worse: an agent told it cannot finish while a finding stands, and
+given a way to mark one as accepted, will mark it, with a reason that sounds right.
+
+**What jabuti does not measure, it decides.** Some files are not code a person wrote: generated
+sources, vendored dependencies, lockfiles, the translations of an interface whose every file repeats
+the same keys. Measuring them reports something nobody can act on. jabuti recognises them itself, from
+the markers they carry and where they live, and leaves them out. A project does not list them, because
+a list a project keeps is an exception by another name.
+
+**A suppression is a finding.** The same holds for the tools jabuti runs. Switching off one of their
+checks for a line is reported as a finding of its own, whatever reason is written next to it.
+
+**A project can tell jabuti more, never ask it to look less.** Some checks need a fact only the project
+holds. `layer-violation` has nothing to enforce until the project declares which parts of it may depend
+on which, and that declaration adds a constraint rather than lifting one. That is what `jabuti.toml` is
+for, and the only thing it is for. A key that would change a rule's severity or limit is rejected with
+an error that says why, rather than ignored, because a setting that silently does nothing is worse than
+one that is refused.
 
 ## Tools are curated, not piped
 
@@ -87,6 +141,11 @@ whole groups allow by default, typescript-eslint's type aware rules need a setti
 because it costs seconds, detekt holds rule sets back, and a TypeScript project with strict mode off
 learns almost nothing from its own compiler. A curated set, per ecosystem and documented, is what turns
 a tool from a formality into a measurement.
+
+**What the curated set asks is fixed.** Every check in it is something to fix, whatever level the tool
+itself gives it. Most of clippy's lints default to warn, and reading that as optional would leave the
+curation asking nothing. A check the project switched on in its own configuration beyond the curated
+set keeps the tool's level: an error is something to fix, and a warning is not reported.
 
 **Restrict what it looks at.** The two moves pull in opposite directions on purpose: a broader set of
 questions asked of less code. Scope to the change, and where a coverage report exists, to the lines a
