@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use jabuti_core::catalog::Input;
-use jabuti_core::history::churn;
+use jabuti_core::history::{churn, rhythm};
+use jabuti_core::report::Rhythm;
 
 use crate::config::Settings;
 
@@ -66,4 +67,28 @@ pub(crate) fn commits(history: Option<&Churn>, paths: &[PathBuf]) -> BTreeMap<Pa
         .iter()
         .map(|path| (path.clone(), history.commits(path)))
         .collect()
+}
+
+pub(crate) fn rhythm(root: &Path, paths: &[&str]) -> Option<BTreeMap<String, Rhythm>> {
+    if paths.is_empty() {
+        return None;
+    }
+    let head = crate::inputs::git::run_at(root, &["log", "-1", "--format=%ct"]).ok()?;
+    let head = head.trim().parse::<i64>().ok()?;
+    let since = format!("--since=@{}", rhythm::window(head));
+    let mut arguments = vec![
+        "--literal-pathspecs",
+        "log",
+        "-z",
+        "--no-show-signature",
+        "--relative",
+        rhythm::FORMAT,
+        "--name-only",
+        &since,
+        "--",
+    ];
+    arguments.extend_from_slice(paths);
+    let log = crate::inputs::git::run_at(root, &arguments).ok()?;
+
+    Some(rhythm::read(&log, head))
 }

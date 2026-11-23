@@ -228,12 +228,21 @@ bar against its limit:
 $ jabuti check
 ⬢ jabuti  1 file · 2 units
 
-src/lib.rs
-  :1  turn  cognitive-complexity  ━━━━┃━━━━━━╌╌  18/7
-            parameters            ━━━━━━━━━┃━━━   5/4
+▁▁▁▁▁▁▁▁▁▁▁█  src/lib.rs  1 commit in 12 weeks
+              :1  turn  cognitive-complexity  ━━━━┃━━━━━━╌╌  18/7
+                        parameters            ━━━━━━━━━┃━━━   5/4
 
 2 warnings · seal 2d40·014d
 ```
+
+In a git repository each file opens with the commits that touched it in each of the last twelve
+weeks, oldest on the left, and their total. The files that changed most come first. The weeks are
+counted back from the date of the commit `HEAD` points at, not from today, so the same revision draws
+the same line on any day, and a commit sits in the week it was written rather than the week a rebase
+moved it to. Merge commits are not counted, and a file's history before a rename is not followed.
+Heights compare files with each other: the tallest mark is the busiest week among the files shown.
+There is no color for "too much", because how often a file may change is not something a limit
+carries from one repository to another.
 
 It is colored and each file name links to the file, unless the `NO_COLOR` environment variable is set
 to a non-empty value. The seal is a short digest of the whole verdict: two runs that print different

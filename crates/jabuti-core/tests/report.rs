@@ -1,8 +1,9 @@
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
 use jabuti_core::catalog::{Rule, RuleId, Severity, UnitKind};
 use jabuti_core::model::{Detail, Finding, Reading, Span, Unreadable};
-use jabuti_core::report::{self, Outcome, Scanned};
+use jabuti_core::report::{self, Outcome, Rhythm, Scanned};
 
 fn finding(severity: Severity, line: u32, subject: Option<&str>) -> Finding {
     Finding {
@@ -254,7 +255,7 @@ fn measures_are_reported_for_every_unit_whatever_the_thresholds_say() {
             line: 1,
             subject: Some("wide".to_owned()),
             kind: UnitKind::Function,
-            values: std::collections::BTreeMap::from([("parameters", 5), ("lines", 3)]),
+            values: BTreeMap::from([("parameters", 5), ("lines", 3)]),
         }],
         &[],
     );
@@ -347,7 +348,7 @@ fn reading(path: &str, line: u32, kind: UnitKind) -> Reading {
         line,
         subject: None,
         kind,
-        values: std::collections::BTreeMap::from([("lines", line)]),
+        values: BTreeMap::from([("lines", line)]),
     }
 }
 
@@ -510,7 +511,31 @@ fn view(since: Option<&str>, color: bool) -> report::View<'_> {
         since,
         color,
         links: Some(std::path::Path::new("/work/ünïcode project")),
+        rhythm: None,
     }
+}
+
+fn rhythms() -> BTreeMap<String, Rhythm> {
+    BTreeMap::from([
+        (
+            "server/src/api/policy.rs".to_owned(),
+            Rhythm {
+                weeks: [0, 0, 0, 0, 0, 0, 0, 13, 5, 7, 8, 7],
+            },
+        ),
+        (
+            "server/src/api/assistant.rs".to_owned(),
+            Rhythm {
+                weeks: [0, 0, 0, 0, 0, 0, 0, 4, 5, 1, 6, 4],
+            },
+        ),
+        (
+            "registry/src/ai.rs".to_owned(),
+            Rhythm {
+                weeks: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 4],
+            },
+        ),
+    ])
 }
 
 #[test]
@@ -713,4 +738,63 @@ fn a_human_report_of_errors_alone_mentions_no_warnings() {
     let rendered = report::human(&findings, &[], scanned(), 40, view(None, false));
 
     assert!(rendered.contains("\n1 to fix · seal "), "{rendered}");
+}
+
+#[test]
+fn each_file_leads_with_its_weekly_commits_and_the_busiest_comes_first() {
+    let rhythms = rhythms();
+    let view = report::View {
+        rhythm: Some(&rhythms),
+        ..view(None, false)
+    };
+
+    let rendered = report::human(&change(), &[], scanned(), 40, view);
+
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn quiet_weeks_are_dimmed_and_busy_ones_painted() {
+    let rhythms = rhythms();
+    let view = report::View {
+        rhythm: Some(&rhythms),
+        ..view(None, true)
+    };
+    let findings = [measured(
+        Rule::Parameters,
+        "registry/src/ai.rs",
+        223,
+        "bill",
+        (5, 4),
+    )];
+
+    let rendered = report::human(&findings, &[], scanned(), 40, view);
+
+    insta::assert_snapshot!(shown_escapes(&rendered));
+}
+
+#[test]
+fn the_files_shown_are_those_of_the_findings_within_the_limit_each_once() {
+    let findings = change();
+
+    assert_eq!(
+        report::shown_files(&findings, 5),
+        ["registry/src/ai.rs", "server/src/api/assistant.rs"]
+    );
+}
+
+#[test]
+fn the_note_of_what_was_withheld_lines_up_with_the_rows_under_a_rhythm() {
+    let rhythms = rhythms();
+    let view = report::View {
+        rhythm: Some(&rhythms),
+        ..view(None, false)
+    };
+
+    let rendered = report::human(&change(), &[], scanned(), 2, view);
+
+    assert!(
+        rendered.contains("\n              7 more not shown."),
+        "{rendered}"
+    );
 }

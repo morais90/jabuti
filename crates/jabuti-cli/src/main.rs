@@ -161,17 +161,25 @@ fn check(
     let term = std::env::var_os("TERM");
     let interactive = report::interactive(std::io::stdout().is_terminal(), term.as_deref());
     let no_color = std::env::var_os("NO_COLOR");
+    let format = format.unwrap_or(if interactive {
+        Format::Human
+    } else {
+        Format::Agent
+    });
+    let rhythm = match format {
+        Format::Human => {
+            inputs::history::rhythm(&root, &report::shown_files(&outcome.findings, limit))
+        }
+        Format::Agent | Format::Json | Format::Measures | Format::Sarif => None,
+    };
     let request = Request {
-        format: format.unwrap_or(if interactive {
-            Format::Human
-        } else {
-            Format::Agent
-        }),
+        format,
         limit,
         view: report::View {
             since,
             color: report::colored(interactive, no_color.as_deref()),
             links: Some(&root),
+            rhythm: rhythm.as_ref(),
         },
     };
     print!("{}", rendered(&request, &outcome));

@@ -11,6 +11,18 @@ use crate::catalog::Severity;
 use crate::model::{Detail, Finding, Reading, Unreadable};
 
 pub const DEFAULT_LIMIT: usize = 40;
+pub const WEEKS: usize = 12;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Rhythm {
+    pub weeks: [u32; WEEKS],
+}
+
+impl Rhythm {
+    pub fn commits(&self) -> u32 {
+        self.weeks.iter().sum()
+    }
+}
 pub const SCHEMA: u32 = 3;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -162,6 +174,16 @@ fn count(findings: &[Finding], severity: Severity) -> usize {
         .iter()
         .filter(|finding| finding.severity == severity)
         .count()
+}
+
+pub fn shown_files(findings: &[Finding], limit: usize) -> Vec<&str> {
+    let mut paths: Vec<&str> = findings
+        .iter()
+        .take(limit)
+        .map(|finding| finding.path.as_str())
+        .collect();
+    paths.dedup();
+    paths
 }
 
 pub fn has_errors(findings: &[Finding]) -> bool {

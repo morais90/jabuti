@@ -1,6 +1,6 @@
 mod common;
 
-use common::{error_on_long_functions, function_of, jabuti, project, repository, write};
+use common::{error_on_long_functions, function_of, git, jabuti, project, repository, write};
 use predicates::str::contains;
 
 #[test]
@@ -462,4 +462,42 @@ fn the_human_format_asked_for_through_a_pipe_is_written_without_color() {
              \n\
              1 to fix · seal aa9c·5128\n",
         );
+}
+
+fn commit_dated(directory: &tempfile::TempDir, date: &str) {
+    git(directory, &["add", "-A"]);
+    let status = std::process::Command::new("git")
+        .args(["-c", "commit.gpgsign=false", "commit", "-qm", date])
+        .env("GIT_AUTHOR_DATE", date)
+        .env("GIT_COMMITTER_DATE", date)
+        .current_dir(directory.path())
+        .status()
+        .expect("git runs");
+    assert!(status.success(), "git commit at {date}");
+}
+
+#[test]
+fn the_human_format_draws_each_files_weekly_commits_counted_back_from_head() {
+    let directory = project(&[
+        ("jabuti.toml", &error_on_long_functions(5)),
+        ("src/lib.rs", &function_of("wide", 20)),
+    ]);
+    git(&directory, &["init", "-q", "-b", "main"]);
+    git(&directory, &["config", "user.email", "test@example.com"]);
+    git(&directory, &["config", "user.name", "test"]);
+    commit_dated(&directory, "2026-01-01T12:00:00+00:00");
+    write(&directory, "src/lib.rs", &function_of("wide", 21));
+    write(&directory, "src/a\"[b].rs", &function_of("odd", 20));
+    commit_dated(&directory, "2026-01-22T12:00:00+00:00");
+
+    jabuti(&directory)
+        .args(["--format", "human"])
+        .assert()
+        .code(1)
+        .stdout(contains(
+            "▁▁▁▁▁▁▁▁█▁▁█  src/lib.rs  2 commits in 12 weeks\n              :1  wide",
+        ))
+        .stdout(contains(
+            "▁▁▁▁▁▁▁▁▁▁▁█  src/a\"[b].rs  1 commit in 12 weeks\n              :1  odd",
+        ));
 }

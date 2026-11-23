@@ -1,14 +1,17 @@
+use std::cmp::Reverse;
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fmt::Write;
 use std::path::{Component, Path};
 
 use super::sarif::encode_component;
-use super::{Scanned, count, json, plural};
+use super::{Rhythm, Scanned, WEEKS, count, json, plural};
 use crate::catalog::Severity;
 use crate::model::{Detail, Finding, Unreadable};
 
 const BAR_WIDTH: u32 = 12;
 const SUBJECT_WIDTH: usize = 24;
+const SPARK: [&str; 8] = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
@@ -17,6 +20,7 @@ pub struct View<'a> {
     pub since: Option<&'a str>,
     pub color: bool,
     pub links: Option<&'a Path>,
+    pub rhythm: Option<&'a BTreeMap<String, Rhythm>>,
 }
 
 pub fn interactive(terminal: bool, term: Option<&OsStr>) -> bool {
@@ -102,6 +106,7 @@ impl Paint<'_> {
 }
 
 struct Columns {
+    indent: usize,
     location: usize,
     subject: usize,
     rule: usize,
@@ -109,9 +114,10 @@ struct Columns {
 }
 
 impl Columns {
-    fn of(findings: &[Finding]) -> Self {
+    fn of(findings: &[Finding], indent: usize) -> Self {
         let widest = |width: fn(&Finding) -> usize| findings.iter().map(width).max().unwrap_or(0);
         Self {
+            indent,
             location: widest(|finding| location(finding).chars().count()),
             subject: widest(|finding| subject(finding).chars().count()),
             rule: widest(|finding| finding.rule.id().chars().count()),
@@ -151,7 +157,11 @@ pub(super) fn render(
 
     let hidden = findings.len() - shown.len();
     if hidden > 0 {
-        let note = format!("  {hidden} more not shown. Narrow the scope with a path argument.");
+        let indent = indent(view);
+        let note = format!(
+            "{:indent$}{hidden} more not shown. Narrow the scope with a path argument.",
+            ""
+        );
         writeln!(rendered, "{}\n", paint.plain(Tone::Dim, &note))
             .expect("writing to a string never fails");
     }
@@ -164,19 +174,75 @@ pub(super) fn render(
 }
 
 fn write_files(rendered: &mut String, paint: &Paint<'_>, shown: &[Finding]) {
-    let columns = Columns::of(shown);
-    for file in shown.chunk_by(|left, right| left.path == right.path) {
-        let path = paint.strong(Tone::Bone, &file[0].path);
-        writeln!(rendered, "{}", paint.linked(&file[0].path, path))
-            .expect("writing to a string never fails");
-        let mut previous: Option<&Finding> = None;
-        for finding in file {
-            let repeated = previous.is_some_and(|before| same_unit(before, finding));
-            write_row(rendered, paint, &columns, finding, repeated);
-            previous = Some(finding);
+    let mut files: Vec<&[Finding]> = shown
+        .chunk_by(|left, right| left.path == right.path)
+        .collect();
+    let columns = Columns::of(shown, indent(paint.view));
+    let rhythm = |path: &str| -> Rhythm {
+        paint
+            .view
+            .rhythm
+            .and_then(|rhythms| rhythms.get(path).copied())
+            .unwrap_or_default()
+    };
+    if paint.view.rhythm.is_some() {
+        files.sort_by_key(|file| Reverse(rhythm(&file[0].path).commits()));
+    }
+    let busiest = files
+        .iter()
+        .flat_map(|file| rhythm(&file[0].path).weeks)
+        .max()
+        .unwrap_or(0);
+
+    for file in files {
+        let path = &file[0].path;
+        let heading = paint.linked(path, paint.strong(Tone::Bone, path));
+        match paint.view.rhythm {
+            Some(_) => {
+                let pulse = rhythm(path);
+                writeln!(
+                    rendered,
+                    "{}  {heading}  {}",
+                    spark(paint, &pulse.weeks, busiest),
+                    paint.plain(Tone::Dim, &changed(pulse.commits()))
+                )
+            }
+            None => writeln!(rendered, "{heading}"),
         }
+        .expect("writing to a string never fails");
+        write_rows(rendered, paint, &columns, file);
         rendered.push('\n');
     }
+}
+
+fn write_rows(rendered: &mut String, paint: &Paint<'_>, columns: &Columns, file: &[Finding]) {
+    let mut previous: Option<&Finding> = None;
+    for finding in file {
+        let repeated = previous.is_some_and(|before| same_unit(before, finding));
+        write_row(rendered, paint, columns, finding, repeated);
+        previous = Some(finding);
+    }
+}
+
+fn indent(view: View<'_>) -> usize {
+    view.rhythm.map_or(2, |_| WEEKS + 2)
+}
+
+fn spark(paint: &Paint<'_>, weeks: &[u32; WEEKS], busiest: u32) -> String {
+    weeks
+        .iter()
+        .map(|&commits| {
+            if commits == 0 {
+                return paint.plain(Tone::Dim, SPARK[0]);
+            }
+            let level = (commits * 7).div_ceil(busiest) as usize;
+            paint.plain(Tone::Amber, SPARK[level])
+        })
+        .collect()
+}
+
+fn changed(commits: u32) -> String {
+    format!("{} in {WEEKS} weeks", plural(commits as usize, "commit"))
 }
 
 fn write_row(
@@ -197,10 +263,12 @@ fn write_row(
 
     write!(
         rendered,
-        "  {}  {}  {}  ",
+        "{:indent$}{}  {}  {}  ",
+        "",
         paint.plain(Tone::Dim, &place),
         paint.plain(Tone::Amber, &name),
         paint.plain(Tone::Dim, &rule),
+        indent = columns.indent,
     )
     .expect("writing to a string never fails");
 
