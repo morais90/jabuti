@@ -1,6 +1,6 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 863
+assertion_line: 859
 expression: rendered
 ---
 ⬢ jabuti  since main · 42 files · 378 units
@@ -10,13 +10,11 @@ expression: rendered
 
 registry/src/ai.rs
   :469  remembered                cognitive-complexity        ━━━━━━━━━┃━╌╌    8/7
-      468 │
       469 │ fn remembered(turns: &[Turn]) -> Vec<Turn> {
-      470 ▌     let kept = turns.len().min(KEPT);
-      471 ▌     turns[turns.len() - kept..].to_vec()
+      470 ┃     let kept = turns.len().min(KEPT);
+      471 ┃     turns[turns.len() - kept..].to_vec()
 
   :525  chat                      function-lines              ━━━━━┃━━━━━╌╌  108/60
-      524 │ #[instrument(skip(state))]
       525 │ pub async fn chat(state: State, body: Json<Ask>) -> Response {
 
 server/src/api/assistant.rs

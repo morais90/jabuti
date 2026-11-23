@@ -12,8 +12,8 @@ use crate::model::{Detail, Finding, Unreadable};
 
 const BAR_WIDTH: u32 = 12;
 const SUBJECT_WIDTH: usize = 24;
-const CODE_WIDTH: usize = 80;
-const COMMITS_SHOWN: usize = 10;
+const CODE_WIDTH: usize = 72;
+const COMMITS_SHOWN: usize = 5;
 const SPARK: [&str; 8] = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
@@ -261,7 +261,7 @@ fn write_trail_of(
 fn write_excerpt(rendered: &mut String, paint: &Paint<'_>, indent: usize, lines: &[Line]) {
     for line in lines {
         let (gutter, tone) = if line.changed {
-            (paint.plain(Tone::Moss, "▌"), Tone::Bone)
+            (paint.plain(Tone::Moss, "┃"), Tone::Bone)
         } else {
             (paint.plain(Tone::Dim, "│"), Tone::Dim)
         };

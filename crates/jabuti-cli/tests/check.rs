@@ -535,14 +535,14 @@ fn verbose_opens_with_the_commits_of_the_change_and_marks_the_lines_it_touched()
     assert!(output.contains("  grow wide\n  ┴\n"), "{output}");
     let excerpt = [
         "   1 │ fn wide() {",
-        "   2 ▌     let grown = 2;",
+        "   2 ┃     let grown = 2;",
         "   3 │     let value = 1;",
     ]
     .map(|line| format!("{:17}{line}\n", ""))
     .concat();
     assert!(output.contains(&excerpt), "{output}");
     assert!(
-        !terse.contains("grow wide") && !terse.contains('▌'),
+        !terse.contains("grow wide") && !terse.contains("let grown"),
         "{terse}"
     );
 }

@@ -1,6 +1,6 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 876
+assertion_line: 872
 expression: shown_escapes(&rendered)
 ---
 ␛[1;38;2;232;179;58m⬢␛[0m ␛[1;38;2;217;207;189mjabuti␛[0m  ␛[38;2;125;115;102msince main · 42 files · 378 units␛[0m
@@ -10,13 +10,11 @@ expression: shown_escapes(&rendered)
 
 ␛]8;;file:///work/%C3%BCn%C3%AFcode%20project/registry/src/ai.rs␛\␛[1;38;2;217;207;189mregistry/src/ai.rs␛[0m␛]8;;␛\
   ␛[38;2;125;115;102m:469␛[0m  ␛[38;2;232;179;58mremembered              ␛[0m  ␛[38;2;125;115;102mcognitive-complexity      ␛[0m  ␛[38;2;125;115;102m━━━━━━━━━␛[0m␛[38;2;232;179;58m┃␛[0m␛[38;2;226;85;42m━␛[0m␛[38;2;125;115;102m╌╌␛[0m  ␛[1;38;2;226;85;42m  8␛[0m␛[38;2;125;115;102m/7␛[0m
-     ␛[38;2;125;115;102m 468␛[0m ␛[38;2;125;115;102m│␛[0m
      ␛[38;2;125;115;102m 469␛[0m ␛[38;2;125;115;102m│␛[0m ␛[38;2;125;115;102mfn remembered(turns: &[Turn]) -> Vec<Turn> {␛[0m
-     ␛[38;2;125;115;102m 470␛[0m ␛[38;2;155;176;104m▌␛[0m ␛[38;2;217;207;189m    let kept = turns.len().min(KEPT);␛[0m
-     ␛[38;2;125;115;102m 471␛[0m ␛[38;2;155;176;104m▌␛[0m ␛[38;2;217;207;189m    turns[turns.len() - kept..].to_vec()␛[0m
+     ␛[38;2;125;115;102m 470␛[0m ␛[38;2;155;176;104m┃␛[0m ␛[38;2;217;207;189m    let kept = turns.len().min(KEPT);␛[0m
+     ␛[38;2;125;115;102m 471␛[0m ␛[38;2;155;176;104m┃␛[0m ␛[38;2;217;207;189m    turns[turns.len() - kept..].to_vec()␛[0m
 
   ␛[38;2;125;115;102m:525␛[0m  ␛[38;2;232;179;58mchat                    ␛[0m  ␛[38;2;125;115;102mfunction-lines            ␛[0m  ␛[38;2;125;115;102m━━━━━␛[0m␛[38;2;232;179;58m┃␛[0m␛[38;2;226;85;42m━━━━━␛[0m␛[38;2;125;115;102m╌╌␛[0m  ␛[1;38;2;226;85;42m108␛[0m␛[38;2;125;115;102m/60␛[0m
-     ␛[38;2;125;115;102m 524␛[0m ␛[38;2;125;115;102m│␛[0m ␛[38;2;125;115;102m#[instrument(skip(state))]␛[0m
      ␛[38;2;125;115;102m 525␛[0m ␛[38;2;125;115;102m│␛[0m ␛[38;2;125;115;102mpub async fn chat(state: State, body: Json<Ask>) -> Response {␛[0m
 
 ␛]8;;file:///work/%C3%BCn%C3%AFcode%20project/server/src/api/assistant.rs␛\␛[1;38;2;217;207;189mserver/src/api/assistant.rs␛[0m␛]8;;␛\

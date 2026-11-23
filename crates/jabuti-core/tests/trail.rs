@@ -30,13 +30,12 @@ fn finding(path: &str, start_line: u32, rule: Rule) -> Finding {
 }
 
 #[test]
-fn an_excerpt_is_the_line_before_a_unit_and_its_first_three_marked_where_changed() {
+fn an_excerpt_is_the_first_three_lines_of_a_unit_marked_where_changed() {
     let excerpt = trail::excerpt(SOURCE, 6, |number| number == 7);
 
     assert_eq!(
         excerpt,
         [
-            line(5, "", false),
             line(6, "fn tripled(x: u8) -> u8 {", false),
             line(7, "    x * 3", true),
             line(8, "}", false),
@@ -45,13 +44,10 @@ fn an_excerpt_is_the_line_before_a_unit_and_its_first_three_marked_where_changed
 }
 
 #[test]
-fn an_excerpt_of_a_unit_on_the_first_line_starts_there() {
-    let excerpt = trail::excerpt(SOURCE, 1, |_| false);
+fn an_excerpt_leaves_out_the_blank_lines_it_ends_on() {
+    let excerpt = trail::excerpt(SOURCE, 3, |_| false);
 
-    assert_eq!(
-        excerpt.iter().map(|line| line.number).collect::<Vec<_>>(),
-        [1, 2, 3]
-    );
+    assert_eq!(excerpt, [line(3, "    x * 2", false), line(4, "}", false)]);
 }
 
 #[test]

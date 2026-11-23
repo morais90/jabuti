@@ -822,7 +822,6 @@ fn trail() -> Trail {
             (
                 ("registry/src/ai.rs".to_owned(), 469),
                 vec![
-                    code(468, "", false),
                     code(469, "fn remembered(turns: &[Turn]) -> Vec<Turn> {", false),
                     code(470, "\tlet kept = turns.len().min(KEPT);", true),
                     code(471, "    turns[turns.len() - kept..].to_vec()", true),
@@ -830,14 +829,11 @@ fn trail() -> Trail {
             ),
             (
                 ("registry/src/ai.rs".to_owned(), 525),
-                vec![
-                    code(524, "#[instrument(skip(state))]", false),
-                    code(
-                        525,
-                        "pub async fn chat(state: State, body: Json<Ask>) -> Response {",
-                        false,
-                    ),
-                ],
+                vec![code(
+                    525,
+                    "pub async fn chat(state: State, body: Json<Ask>) -> Response {",
+                    false,
+                )],
             ),
         ]),
         commits: vec![
@@ -877,7 +873,7 @@ fn a_verbose_report_paints_changed_lines_apart_from_their_context() {
 }
 
 #[test]
-fn the_timeline_shows_ten_commits_and_counts_the_rest() {
+fn the_timeline_shows_five_commits_and_counts_the_rest() {
     let commits = |count: usize| Trail {
         excerpts: BTreeMap::new(),
         commits: (0..count)
@@ -899,9 +895,9 @@ fn the_timeline_shows_ten_commits_and_counts_the_rest() {
         (lines.len(), lines[lines.len() - 2].to_owned())
     };
 
-    assert_eq!(ending(10), (11, "  │ 0000009  work".to_owned()));
-    assert_eq!(ending(11), (12, "  │ 1 more commit".to_owned()));
-    assert_eq!(ending(12), (12, "  │ 2 more commits".to_owned()));
+    assert_eq!(ending(5), (6, "  │ 0000004  work".to_owned()));
+    assert_eq!(ending(6), (7, "  │ 1 more commit".to_owned()));
+    assert_eq!(ending(7), (7, "  │ 2 more commits".to_owned()));
 }
 
 #[test]
@@ -921,9 +917,9 @@ fn without_commits_in_the_change_there_is_no_timeline() {
 }
 
 #[test]
-fn a_long_line_of_code_is_clipped_to_eighty_columns() {
-    let long = "x".repeat(81);
-    let exact = "y".repeat(80);
+fn a_long_line_of_code_is_clipped_to_seventy_two_columns() {
+    let long = "x".repeat(73);
+    let exact = "y".repeat(72);
     let trail = Trail {
         excerpts: BTreeMap::from([(
             ("registry/src/ai.rs".to_owned(), 469),
@@ -943,7 +939,7 @@ fn a_long_line_of_code_is_clipped_to_eighty_columns() {
         "{rendered}"
     );
     assert!(
-        rendered.contains(&format!(" 470 │ {}…\n", "x".repeat(79))),
+        rendered.contains(&format!(" 470 │ {}…\n", "x".repeat(71))),
         "{rendered}"
     );
 }
@@ -965,7 +961,7 @@ fn code_and_commit_subjects_cannot_reach_the_terminal_as_control_sequences() {
     let rendered = report::human(&change(), &[], scanned(), 40, view);
 
     assert!(
-        rendered.contains(" 469 ▌ let bell = \"\u{fffd}\u{fffd}[2J\";\n"),
+        rendered.contains(" 469 ┃ let bell = \"\u{fffd}\u{fffd}[2J\";\n"),
         "{rendered}"
     );
     assert!(

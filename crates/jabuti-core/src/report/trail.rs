@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use crate::model::Finding;
 
-const BEFORE: u32 = 1;
 const AFTER: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,19 +34,23 @@ pub fn units(findings: &[Finding], limit: usize) -> Vec<(&str, u32)> {
 }
 
 pub fn excerpt(text: &str, start: u32, changed: impl Fn(u32) -> bool) -> Vec<Line> {
-    let first = start.saturating_sub(BEFORE).max(1);
     let last = start + AFTER;
 
-    text.lines()
+    let mut lines: Vec<Line> = text
+        .lines()
         .zip(1..)
-        .skip_while(|(_, number)| *number < first)
+        .skip_while(|(_, number)| *number < start)
         .take_while(|(_, number)| *number <= last)
         .map(|(text, number)| Line {
             number,
             text: text.to_owned(),
             changed: changed(number),
         })
-        .collect()
+        .collect();
+    while lines.last().is_some_and(|line| line.text.trim().is_empty()) {
+        lines.pop();
+    }
+    lines
 }
 
 pub fn commits(log: &str) -> Vec<Commit> {
