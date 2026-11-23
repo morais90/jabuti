@@ -1,0 +1,35 @@
+---
+source: crates/jabuti-core/tests/report.rs
+assertion_line: 863
+expression: rendered
+---
+⬢ jabuti  since main · 42 files · 378 units
+  ┬ 7f893ac  feat(registry): remember the last turns of a chat
+  │ 5792121  refactor: split the chat handler
+  ┴
+
+registry/src/ai.rs
+  :469  remembered                cognitive-complexity        ━━━━━━━━━┃━╌╌    8/7
+      468 │
+      469 │ fn remembered(turns: &[Turn]) -> Vec<Turn> {
+      470 ▌     let kept = turns.len().min(KEPT);
+      471 ▌     turns[turns.len() - kept..].to_vec()
+
+  :525  chat                      function-lines              ━━━━━┃━━━━━╌╌  108/60
+      524 │ #[instrument(skip(state))]
+      525 │ pub async fn chat(state: State, body: Json<Ask>) -> Response {
+
+server/src/api/assistant.rs
+  :564  turn                      cognitive-complexity        ━━┃━━━━━━━━╌╌   31/7
+                                  function-lines              ━━━┃━━━━━━━╌╌  167/60
+  :762  store                     parameters                  ━━━━━━━━━┃━━━    5/4
+
+server/src/api/policy.rs
+  :161  clippy::struct_excessiv…  suppression                 a linter diagnostic is suppressed instead of satisfied
+  :456                            duplicate-block             157 nodes repeated at server/src/storage.rs:115 (limit 120)
+  :897  updates                   function-lines              ━━━━━━━━━━┃━╌   61/60
+
+src/lib.rs
+  :3                              clippy/needless_range_loop  the loop variable is only used to index
+
+6 to fix · 3 warnings · seal 74d4·3192

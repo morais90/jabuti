@@ -2,12 +2,13 @@ mod check;
 mod config;
 mod inputs;
 
+use std::collections::BTreeMap;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use jabuti_core::catalog::Rule;
 use jabuti_core::{lang, report};
 
@@ -33,19 +34,25 @@ enum Command {
         action: Option<ToolsAction>,
     },
 
-    Check {
-        #[arg(default_value = ".")]
-        paths: Vec<PathBuf>,
+    Check(CheckArgs),
+}
 
-        #[arg(long, value_name = "REF")]
-        since: Option<String>,
+#[derive(Debug, Args)]
+struct CheckArgs {
+    #[arg(default_value = ".")]
+    paths: Vec<PathBuf>,
 
-        #[arg(long, value_enum)]
-        format: Option<Format>,
+    #[arg(long, value_name = "REF")]
+    since: Option<String>,
 
-        #[arg(long, default_value_t = report::DEFAULT_LIMIT)]
-        limit: usize,
-    },
+    #[arg(long, value_enum)]
+    format: Option<Format>,
+
+    #[arg(long, default_value_t = report::DEFAULT_LIMIT)]
+    limit: usize,
+
+    #[arg(short, long)]
+    verbose: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -79,12 +86,7 @@ fn run() -> Result<ExitCode> {
         Command::Tools {
             action: Some(ToolsAction::Install),
         } => install_tools(),
-        Command::Check {
-            paths,
-            since,
-            format,
-            limit,
-        } => check(&paths, since.as_deref(), format, limit),
+        Command::Check(arguments) => check(&arguments),
     }
 }
 
@@ -147,48 +149,63 @@ fn install_tools() -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn check(
-    roots: &[PathBuf],
-    since: Option<&str>,
-    format: Option<Format>,
-    limit: usize,
-) -> Result<ExitCode> {
+fn check(arguments: &CheckArgs) -> Result<ExitCode> {
+    let since = arguments.since.as_deref();
     let mut notices = Vec::new();
-    let verdict = check::verdict(roots, since, &mut notices);
+    let verdict = check::verdict(&arguments.paths, since, &mut notices);
     announce(notices);
 
-    let (root, outcome) = verdict?;
+    let verdict = verdict?;
     let term = std::env::var_os("TERM");
     let interactive = report::interactive(std::io::stdout().is_terminal(), term.as_deref());
     let no_color = std::env::var_os("NO_COLOR");
-    let format = format.unwrap_or(if interactive {
+    let format = arguments.format.unwrap_or(if interactive {
         Format::Human
     } else {
         Format::Agent
     });
-    let rhythm = match format {
-        Format::Human => {
-            inputs::history::rhythm(&root, &report::shown_files(&outcome.findings, limit))
-        }
-        Format::Agent | Format::Json | Format::Measures | Format::Sarif => None,
+    let extras = match format {
+        Format::Human => Extras::load(arguments, &verdict),
+        Format::Agent | Format::Json | Format::Measures | Format::Sarif => Extras::default(),
     };
     let request = Request {
         format,
-        limit,
+        limit: arguments.limit,
         view: report::View {
             since,
             color: report::colored(interactive, no_color.as_deref()),
-            links: Some(&root),
-            rhythm: rhythm.as_ref(),
+            links: Some(&verdict.root),
+            rhythm: extras.rhythm.as_ref(),
+            trail: extras.trail.as_ref(),
         },
     };
-    print!("{}", rendered(&request, &outcome));
+    print!("{}", rendered(&request, &verdict.outcome));
 
-    if report::has_errors(&outcome.findings) {
+    if report::has_errors(&verdict.outcome.findings) {
         return Ok(ExitCode::from(1));
     }
 
     Ok(ExitCode::SUCCESS)
+}
+
+#[derive(Default)]
+struct Extras {
+    rhythm: Option<BTreeMap<String, report::Rhythm>>,
+    trail: Option<report::trail::Trail>,
+}
+
+impl Extras {
+    fn load(arguments: &CheckArgs, verdict: &check::Verdict) -> Self {
+        let findings = &verdict.outcome.findings;
+        let shown = report::shown_files(findings, arguments.limit);
+        let units = report::trail::units(findings, arguments.limit);
+        Self {
+            rhythm: inputs::history::rhythm(&verdict.root, &shown),
+            trail: arguments
+                .verbose
+                .then(|| inputs::trail::load(&verdict.root, &units, verdict.changes.as_ref())),
+        }
+    }
 }
 
 fn announce(mut notices: Vec<String>) {

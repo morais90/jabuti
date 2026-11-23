@@ -250,6 +250,11 @@ seals reported different things, and two that print the same one almost certainl
 thing. Nothing in it depends on the clock, so the same input prints the same bytes, as in every other
 format.
 
+`-v` adds the code. Under each unit it prints the line before it and its first three, with the
+lines the change touched marked `▌` in the gutter, and with `--since` the report opens with the
+commits of the change, newest first, ten at most. It reads only the units on screen, and only in
+this format: the agent format already names the file and the line, which an agent can open itself.
+
 `--format agent` is the one built for an agent to read. Three others exist for programs.
 
 `--format json` carries the same findings with a schema version, so a build or a bot can consume

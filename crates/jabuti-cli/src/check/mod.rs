@@ -18,11 +18,17 @@ use crate::config::Settings;
 use crate::inputs::git::since::Changes;
 use crate::inputs::{history, layers, tools, workspace};
 
+pub(crate) struct Verdict {
+    pub(crate) root: PathBuf,
+    pub(crate) outcome: Outcome,
+    pub(crate) changes: Option<Changes>,
+}
+
 pub(crate) fn verdict(
     roots: &[PathBuf],
     since: Option<&str>,
     notices: &mut Vec<String>,
-) -> Result<(PathBuf, Outcome)> {
+) -> Result<Verdict> {
     let (root, settings) = workspace::discover()?;
     tools::known(&settings)?;
     let changes = since
@@ -53,7 +59,11 @@ pub(crate) fn verdict(
     }
     outcome.order();
 
-    Ok((root, outcome))
+    Ok(Verdict {
+        root,
+        outcome,
+        changes,
+    })
 }
 
 struct Run<'a> {

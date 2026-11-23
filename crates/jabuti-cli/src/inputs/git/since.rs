@@ -60,6 +60,17 @@ impl Changes {
         Ok(texts)
     }
 
+    pub(crate) fn commits(&self) -> Result<String> {
+        let range = format!("{}..HEAD", self.base);
+        let inside = self.relative(Path::new("")).unwrap_or_default();
+        let scope = format!(":(literal){}", inside.display());
+        let mut arguments = vec!["log", "--no-show-signature", "--format=%h%x00%s", &range];
+        if !inside.as_os_str().is_empty() {
+            arguments.extend(["--", &scope]);
+        }
+        super::run_at(&self.root, &arguments)
+    }
+
     pub(crate) fn diff(&self) -> &Diff {
         &self.diff
     }

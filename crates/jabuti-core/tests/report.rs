@@ -3,6 +3,7 @@ use std::ffi::OsStr;
 
 use jabuti_core::catalog::{Rule, RuleId, Severity, UnitKind};
 use jabuti_core::model::{Detail, Finding, Reading, Span, Unreadable};
+use jabuti_core::report::trail::{Commit, Line, Trail};
 use jabuti_core::report::{self, Outcome, Rhythm, Scanned};
 
 fn finding(severity: Severity, line: u32, subject: Option<&str>) -> Finding {
@@ -512,6 +513,7 @@ fn view(since: Option<&str>, color: bool) -> report::View<'_> {
         color,
         links: Some(std::path::Path::new("/work/ünïcode project")),
         rhythm: None,
+        trail: None,
     }
 }
 
@@ -797,4 +799,238 @@ fn the_note_of_what_was_withheld_lines_up_with_the_rows_under_a_rhythm() {
         rendered.contains("\n              7 more not shown."),
         "{rendered}"
     );
+}
+
+fn code(number: u32, text: &str, changed: bool) -> Line {
+    Line {
+        number,
+        text: text.to_owned(),
+        changed,
+    }
+}
+
+fn commit(hash: &str, subject: &str) -> Commit {
+    Commit {
+        hash: hash.to_owned(),
+        subject: subject.to_owned(),
+    }
+}
+
+fn trail() -> Trail {
+    Trail {
+        excerpts: BTreeMap::from([
+            (
+                ("registry/src/ai.rs".to_owned(), 469),
+                vec![
+                    code(468, "", false),
+                    code(469, "fn remembered(turns: &[Turn]) -> Vec<Turn> {", false),
+                    code(470, "\tlet kept = turns.len().min(KEPT);", true),
+                    code(471, "    turns[turns.len() - kept..].to_vec()", true),
+                ],
+            ),
+            (
+                ("registry/src/ai.rs".to_owned(), 525),
+                vec![
+                    code(524, "#[instrument(skip(state))]", false),
+                    code(
+                        525,
+                        "pub async fn chat(state: State, body: Json<Ask>) -> Response {",
+                        false,
+                    ),
+                ],
+            ),
+        ]),
+        commits: vec![
+            commit(
+                "7f893ac",
+                "feat(registry): remember the last turns of a chat",
+            ),
+            commit("5792121", "refactor: split the chat handler"),
+        ],
+    }
+}
+
+#[test]
+fn a_verbose_report_opens_with_the_commits_and_shows_the_code_of_each_unit() {
+    let trail = trail();
+    let view = report::View {
+        trail: Some(&trail),
+        ..view(Some("main"), false)
+    };
+
+    let rendered = report::human(&change(), &[], scanned(), 40, view);
+
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn a_verbose_report_paints_changed_lines_apart_from_their_context() {
+    let trail = trail();
+    let view = report::View {
+        trail: Some(&trail),
+        ..view(Some("main"), true)
+    };
+
+    let rendered = report::human(&change(), &[], scanned(), 40, view);
+
+    insta::assert_snapshot!(shown_escapes(&rendered));
+}
+
+#[test]
+fn the_timeline_shows_ten_commits_and_counts_the_rest() {
+    let commits = |count: usize| Trail {
+        excerpts: BTreeMap::new(),
+        commits: (0..count)
+            .map(|index| commit(&format!("{index:07}"), "work"))
+            .collect(),
+    };
+    let ending = |count: usize| {
+        let trail = commits(count);
+        let view = report::View {
+            trail: Some(&trail),
+            ..view(None, false)
+        };
+        let rendered = report::human(&change(), &[], scanned(), 40, view);
+        let lines: Vec<&str> = rendered
+            .lines()
+            .skip(1)
+            .take_while(|line| !line.is_empty())
+            .collect();
+        (lines.len(), lines[lines.len() - 2].to_owned())
+    };
+
+    assert_eq!(ending(10), (11, "  │ 0000009  work".to_owned()));
+    assert_eq!(ending(11), (12, "  │ 1 more commit".to_owned()));
+    assert_eq!(ending(12), (12, "  │ 2 more commits".to_owned()));
+}
+
+#[test]
+fn without_commits_in_the_change_there_is_no_timeline() {
+    let trail = Trail::default();
+    let view = report::View {
+        trail: Some(&trail),
+        ..view(None, false)
+    };
+
+    let rendered = report::human(&change(), &[], scanned(), 40, view);
+
+    assert!(
+        rendered.starts_with("⬢ jabuti  42 files · 378 units\n\n"),
+        "{rendered}"
+    );
+}
+
+#[test]
+fn a_long_line_of_code_is_clipped_to_eighty_columns() {
+    let long = "x".repeat(81);
+    let exact = "y".repeat(80);
+    let trail = Trail {
+        excerpts: BTreeMap::from([(
+            ("registry/src/ai.rs".to_owned(), 469),
+            vec![code(469, &exact, false), code(470, &long, false)],
+        )]),
+        commits: Vec::new(),
+    };
+    let view = report::View {
+        trail: Some(&trail),
+        ..view(None, false)
+    };
+
+    let rendered = report::human(&change(), &[], scanned(), 40, view);
+
+    assert!(
+        rendered.contains(&format!(" 469 │ {exact}\n")),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains(&format!(" 470 │ {}…\n", "x".repeat(79))),
+        "{rendered}"
+    );
+}
+
+#[test]
+fn code_and_commit_subjects_cannot_reach_the_terminal_as_control_sequences() {
+    let trail = Trail {
+        excerpts: BTreeMap::from([(
+            ("registry/src/ai.rs".to_owned(), 469),
+            vec![code(469, "let bell = \"\x07\x1b[2J\";", true)],
+        )]),
+        commits: vec![commit("7f893ac", "clear \x1b]0;title\x07 the screen")],
+    };
+    let view = report::View {
+        trail: Some(&trail),
+        ..view(None, false)
+    };
+
+    let rendered = report::human(&change(), &[], scanned(), 40, view);
+
+    assert!(
+        rendered.contains(" 469 ▌ let bell = \"\u{fffd}\u{fffd}[2J\";\n"),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains("7f893ac  clear \u{fffd}]0;title\u{fffd} the screen\n"),
+        "{rendered}"
+    );
+}
+
+#[test]
+fn code_cannot_reorder_itself_on_screen_with_bidirectional_controls() {
+    let trail = Trail {
+        excerpts: BTreeMap::from([(
+            ("registry/src/ai.rs".to_owned(), 469),
+            vec![code(
+                469,
+                "/*\u{202e} } if admin {\u{2066} */ \u{200f}x\u{2069}",
+                false,
+            )],
+        )]),
+        commits: Vec::new(),
+    };
+    let view = report::View {
+        trail: Some(&trail),
+        ..view(None, false)
+    };
+
+    let rendered = report::human(&change(), &[], scanned(), 40, view);
+
+    assert!(
+        rendered.contains(" 469 │ /*\u{fffd} } if admin {\u{fffd} */ \u{fffd}x\u{fffd}\n"),
+        "{rendered}"
+    );
+}
+
+#[test]
+fn a_clean_verbose_report_still_shows_the_commits_of_the_change() {
+    let trail = Trail {
+        excerpts: BTreeMap::new(),
+        commits: vec![commit("7f893ac", "feat: a clean change")],
+    };
+    let view = report::View {
+        trail: Some(&trail),
+        ..view(Some("main"), false)
+    };
+
+    let rendered = report::human(&[], &[], scanned(), 40, view);
+
+    assert_eq!(
+        rendered,
+        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal 517b·f003\n  ┬ 7f893ac  feat: a clean change\n  ┴\n"
+    );
+}
+
+#[test]
+fn a_unit_whose_code_could_not_be_read_leaves_no_gap_behind_it() {
+    let trail = Trail {
+        excerpts: BTreeMap::from([(("registry/src/ai.rs".to_owned(), 469), Vec::new())]),
+        commits: Vec::new(),
+    };
+    let view = report::View {
+        trail: Some(&trail),
+        ..view(None, false)
+    };
+
+    let rendered = report::human(&change(), &[], scanned(), 40, view);
+
+    assert!(rendered.contains("8/7\n  :525  chat"), "{rendered}");
 }

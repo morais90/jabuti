@@ -3,4 +3,5 @@ pub(crate) mod git;
 pub(crate) mod history;
 pub(crate) mod layers;
 pub(crate) mod tools;
+pub(crate) mod trail;
 pub(crate) mod workspace;

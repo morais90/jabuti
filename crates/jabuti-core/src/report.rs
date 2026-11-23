@@ -1,5 +1,6 @@
 mod human;
 mod sarif;
+pub mod trail;
 
 use std::fmt::Write;
 use std::path::Path;

@@ -501,3 +501,84 @@ fn the_human_format_draws_each_files_weekly_commits_counted_back_from_head() {
             "▁▁▁▁▁▁▁▁▁▁▁█  src/a\"[b].rs  1 commit in 12 weeks\n              :1  odd",
         ));
 }
+
+#[test]
+fn verbose_opens_with_the_commits_of_the_change_and_marks_the_lines_it_touched() {
+    let directory = project(&[
+        ("jabuti.toml", &error_on_long_functions(5)),
+        ("src/lib.rs", &function_of("wide", 20)),
+    ]);
+    git(&directory, &["init", "-q", "-b", "main"]);
+    git(&directory, &["config", "user.email", "test@example.com"]);
+    git(&directory, &["config", "user.name", "test"]);
+    commit_dated(&directory, "2026-01-01T12:00:00+00:00");
+    git(&directory, &["switch", "-q", "-c", "feature"]);
+    let grown = function_of("wide", 20).replacen("let value = 1;", "let grown = 2;", 1);
+    write(&directory, "src/lib.rs", &grown);
+    git(&directory, &["add", "-A"]);
+    git(
+        &directory,
+        &["-c", "commit.gpgsign=false", "commit", "-qm", "grow wide"],
+    );
+
+    let verbose = jabuti(&directory)
+        .args(["--since", "main", "--format", "human", "-v"])
+        .assert()
+        .code(1);
+    let output = String::from_utf8_lossy(&verbose.get_output().stdout).into_owned();
+    let quiet = jabuti(&directory)
+        .args(["--since", "main", "--format", "human"])
+        .assert()
+        .code(1);
+    let terse = String::from_utf8_lossy(&quiet.get_output().stdout).into_owned();
+
+    assert!(output.contains("  grow wide\n  ┴\n"), "{output}");
+    let excerpt = [
+        "   1 │ fn wide() {",
+        "   2 ▌     let grown = 2;",
+        "   3 │     let value = 1;",
+    ]
+    .map(|line| format!("{:17}{line}\n", ""))
+    .concat();
+    assert!(output.contains(&excerpt), "{output}");
+    assert!(
+        !terse.contains("grow wide") && !terse.contains('▌'),
+        "{terse}"
+    );
+}
+
+#[test]
+fn verbose_lists_only_the_commits_that_touched_the_project_checked() {
+    let directory = project(&[
+        ("app/jabuti.toml", &error_on_long_functions(5)),
+        ("app/src/lib.rs", &function_of("wide", 20)),
+        ("web/index.js", "export const a = 1;\n"),
+    ]);
+    git(&directory, &["init", "-q", "-b", "main"]);
+    git(&directory, &["config", "user.email", "test@example.com"]);
+    git(&directory, &["config", "user.name", "test"]);
+    commit_dated(&directory, "2026-01-01T12:00:00+00:00");
+    git(&directory, &["switch", "-q", "-c", "feature"]);
+    write(&directory, "web/index.js", "export const a = 2;\n");
+    git(&directory, &["add", "-A"]);
+    git(
+        &directory,
+        &["-c", "commit.gpgsign=false", "commit", "-qm", "web only"],
+    );
+    write(&directory, "app/src/lib.rs", &function_of("wide", 21));
+    git(&directory, &["add", "-A"]);
+    git(
+        &directory,
+        &["-c", "commit.gpgsign=false", "commit", "-qm", "app grows"],
+    );
+
+    let assert = jabuti(&directory)
+        .current_dir(directory.path().join("app"))
+        .args(["--since", "main", "--format", "human", "-v"])
+        .assert()
+        .code(1);
+    let output = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+
+    assert!(output.contains("  app grows\n  ┴\n"), "{output}");
+    assert!(!output.contains("web only"), "{output}");
+}

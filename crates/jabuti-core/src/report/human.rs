@@ -5,12 +5,15 @@ use std::fmt::Write;
 use std::path::{Component, Path};
 
 use super::sarif::encode_component;
+use super::trail::{Line, Trail};
 use super::{Rhythm, Scanned, WEEKS, count, json, plural};
 use crate::catalog::Severity;
 use crate::model::{Detail, Finding, Unreadable};
 
 const BAR_WIDTH: u32 = 12;
 const SUBJECT_WIDTH: usize = 24;
+const CODE_WIDTH: usize = 80;
+const COMMITS_SHOWN: usize = 10;
 const SPARK: [&str; 8] = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
@@ -21,6 +24,7 @@ pub struct View<'a> {
     pub color: bool,
     pub links: Option<&'a Path>,
     pub rhythm: Option<&'a BTreeMap<String, Rhythm>>,
+    pub trail: Option<&'a Trail>,
 }
 
 pub fn interactive(terminal: bool, term: Option<&OsStr>) -> bool {
@@ -38,6 +42,7 @@ enum Tone {
     Scale,
     Bone,
     Dim,
+    Moss,
 }
 
 impl Tone {
@@ -47,6 +52,7 @@ impl Tone {
             Self::Scale => (0xe2, 0x55, 0x2a),
             Self::Bone => (0xd9, 0xcf, 0xbd),
             Self::Dim => (0x7d, 0x73, 0x66),
+            Self::Moss => (0x9b, 0xb0, 0x68),
         }
     }
 
@@ -145,12 +151,15 @@ pub(super) fn render(
             scope(view),
             extent(scanned)
         );
-        let headline = format!("{}  {}\n", mark(&paint), paint.plain(Tone::Dim, &summary));
+        let mut headline = format!("{}  {}\n", mark(&paint), paint.plain(Tone::Dim, &summary));
+        write_commits(&mut headline, &paint);
         return headline + &unmeasured(&paint, unreadable, limit);
     }
 
     let heading = format!("{}{}", scope(view), extent(scanned));
-    let mut rendered = format!("{}  {}\n\n", mark(&paint), paint.plain(Tone::Dim, &heading));
+    let mut rendered = format!("{}  {}\n", mark(&paint), paint.plain(Tone::Dim, &heading));
+    write_commits(&mut rendered, &paint);
+    rendered.push('\n');
 
     let shown = &findings[..limit.min(findings.len())];
     write_files(&mut rendered, &paint, shown);
@@ -217,11 +226,101 @@ fn write_files(rendered: &mut String, paint: &Paint<'_>, shown: &[Finding]) {
 
 fn write_rows(rendered: &mut String, paint: &Paint<'_>, columns: &Columns, file: &[Finding]) {
     let mut previous: Option<&Finding> = None;
-    for finding in file {
+    for (index, finding) in file.iter().enumerate() {
         let repeated = previous.is_some_and(|before| same_unit(before, finding));
         write_row(rendered, paint, columns, finding, repeated);
         previous = Some(finding);
+
+        let next = file.get(index + 1);
+        if next.is_none_or(|after| after.span.start_line != finding.span.start_line) {
+            write_trail_of(rendered, paint, columns.indent + 3, finding, next.is_some());
+        }
     }
+}
+
+fn write_trail_of(
+    rendered: &mut String,
+    paint: &Paint<'_>,
+    indent: usize,
+    finding: &Finding,
+    followed: bool,
+) {
+    let key = (finding.path.clone(), finding.span.start_line);
+    let Some(lines) = paint.view.trail.and_then(|trail| trail.excerpts.get(&key)) else {
+        return;
+    };
+    if lines.is_empty() {
+        return;
+    }
+    write_excerpt(rendered, paint, indent, lines);
+    if followed {
+        rendered.push('\n');
+    }
+}
+
+fn write_excerpt(rendered: &mut String, paint: &Paint<'_>, indent: usize, lines: &[Line]) {
+    for line in lines {
+        let (gutter, tone) = if line.changed {
+            (paint.plain(Tone::Moss, "▌"), Tone::Bone)
+        } else {
+            (paint.plain(Tone::Dim, "│"), Tone::Dim)
+        };
+        let number = format!("{:>4}", line.number);
+        let text = clipped(line.text.trim_end());
+        let code = if text.is_empty() {
+            String::new()
+        } else {
+            format!(" {}", paint.plain(tone, &text))
+        };
+        writeln!(
+            rendered,
+            "{:indent$}{} {gutter}{code}",
+            "",
+            paint.plain(Tone::Dim, &number),
+        )
+        .expect("writing to a string never fails");
+    }
+}
+
+fn write_commits(rendered: &mut String, paint: &Paint<'_>) {
+    let commits = paint.view.trail.map_or(&[][..], |trail| &trail.commits);
+    if commits.is_empty() {
+        return;
+    }
+    for (index, commit) in commits.iter().take(COMMITS_SHOWN).enumerate() {
+        let branch = if index == 0 { "  ┬ " } else { "  │ " };
+        writeln!(
+            rendered,
+            "{}{}  {}",
+            paint.plain(Tone::Dim, branch),
+            paint.plain(Tone::Amber, &commit.hash),
+            paint.plain(Tone::Dim, &clipped(&commit.subject)),
+        )
+        .expect("writing to a string never fails");
+    }
+    if let Some(note) = more_commits(commits.len()) {
+        writeln!(rendered, "{}", paint.plain(Tone::Dim, &note))
+            .expect("writing to a string never fails");
+    }
+    writeln!(rendered, "{}", paint.plain(Tone::Dim, "  ┴"))
+        .expect("writing to a string never fails");
+}
+
+fn more_commits(count: usize) -> Option<String> {
+    match count.saturating_sub(COMMITS_SHOWN) {
+        0 => None,
+        1 => Some("  │ 1 more commit".to_owned()),
+        hidden => Some(format!("  │ {hidden} more commits")),
+    }
+}
+
+fn clipped(text: &str) -> String {
+    let expanded = text.replace('\t', "    ");
+    if expanded.chars().count() <= CODE_WIDTH {
+        return expanded;
+    }
+    let kept: String = expanded.chars().take(CODE_WIDTH - 1).collect();
+    format!("{kept}…")
 }
 
 fn indent(view: View<'_>) -> usize {
@@ -387,10 +486,14 @@ fn same_unit(left: &Finding, right: &Finding) -> bool {
         && left.span.start_line == right.span.start_line
 }
 
+fn reorders(character: char) -> bool {
+    matches!(character, '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+}
+
 fn printable(text: &str) -> String {
     text.chars()
         .map(|character| {
-            if character.is_control() {
+            if character.is_control() || reorders(character) {
                 char::REPLACEMENT_CHARACTER
             } else {
                 character
