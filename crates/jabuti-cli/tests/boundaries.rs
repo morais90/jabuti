@@ -62,8 +62,7 @@ fn first_segments(rest: &str) -> Vec<String> {
     match rest.strip_prefix('{') {
         Some(group) => group
             .split_once('}')
-            .map(|(inside, _)| inside)
-            .unwrap_or_default()
+            .map_or("", |(inside, _)| inside)
             .split(',')
             .map(|entry| leading_identifier(entry.trim()))
             .collect(),

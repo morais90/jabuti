@@ -33,8 +33,7 @@ fn rendered(facts: &FileFacts) -> String {
                 declared
                     .owner
                     .as_ref()
-                    .map(|owner| format!(" on {owner}"))
-                    .unwrap_or_default()
+                    .map_or_else(String::new, |owner| format!(" on {owner}"))
             )
         })
     }));
@@ -328,7 +327,7 @@ fn a_dependency_a_layer_was_allowed_to_have_is_not_reported() {
         &[("app", &["engine"]), ("engine", &[])],
     );
 
-    assert!(violations(&edges, &layers).is_empty());
+    assert_eq!(violations(&edges, &layers), []);
 }
 
 #[test]
@@ -336,7 +335,7 @@ fn a_file_in_no_layer_neither_violates_nor_is_violated() {
     let edges = index::edges(&sources_under("workspace", &lang::RUST));
     let layers = layered(&[("crates/app/src/main.rs", "app")], &[("app", &[])]);
 
-    assert!(violations(&edges, &layers).is_empty());
+    assert_eq!(violations(&edges, &layers), []);
 }
 
 #[test]
@@ -352,7 +351,7 @@ fn a_dependency_inside_one_layer_is_never_a_violation() {
         &[("everything", &[])],
     );
 
-    assert!(violations(&edges, &layers).is_empty());
+    assert_eq!(violations(&edges, &layers), []);
 }
 
 #[test]
