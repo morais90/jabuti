@@ -430,66 +430,73 @@ fn told(rule: Rule, path: &str, line: u32, subject: Option<&str>, message: &str)
     }
 }
 
+type Measured = (Rule, &'static str, u32, &'static str, (u32, u32));
+
+const MEASURED: [Measured; 6] = [
+    (
+        Rule::CognitiveComplexity,
+        "registry/src/ai.rs",
+        469,
+        "remembered",
+        (8, 7),
+    ),
+    (
+        Rule::FunctionLines,
+        "registry/src/ai.rs",
+        525,
+        "chat",
+        (108, 60),
+    ),
+    (
+        Rule::FunctionLines,
+        "server/src/api/assistant.rs",
+        564,
+        "turn",
+        (167, 60),
+    ),
+    (
+        Rule::CognitiveComplexity,
+        "server/src/api/assistant.rs",
+        564,
+        "turn",
+        (31, 7),
+    ),
+    (
+        Rule::Parameters,
+        "server/src/api/assistant.rs",
+        762,
+        "store",
+        (5, 4),
+    ),
+    (
+        Rule::FunctionLines,
+        "server/src/api/policy.rs",
+        897,
+        "updates",
+        (61, 60),
+    ),
+];
+
 fn change() -> Vec<Finding> {
-    let mut findings = vec![
-        measured(
-            Rule::CognitiveComplexity,
-            "registry/src/ai.rs",
-            469,
-            "remembered",
-            (8, 7),
-        ),
-        measured(
-            Rule::FunctionLines,
-            "registry/src/ai.rs",
-            525,
-            "chat",
-            (108, 60),
-        ),
-        measured(
-            Rule::FunctionLines,
-            "server/src/api/assistant.rs",
-            564,
-            "turn",
-            (167, 60),
-        ),
-        measured(
-            Rule::CognitiveComplexity,
-            "server/src/api/assistant.rs",
-            564,
-            "turn",
-            (31, 7),
-        ),
-        measured(
-            Rule::Parameters,
-            "server/src/api/assistant.rs",
-            762,
-            "store",
-            (5, 4),
-        ),
-        measured(
-            Rule::FunctionLines,
-            "server/src/api/policy.rs",
-            897,
-            "updates",
-            (61, 60),
-        ),
-        told(
-            Rule::Suppression,
-            "server/src/api/policy.rs",
-            161,
-            Some("clippy::struct_excessive_bools, reason = \"one switch per device\""),
-            "a linter diagnostic is suppressed instead of satisfied",
-        ),
-        told(
-            Rule::DuplicateBlock,
-            "server/src/api/policy.rs",
-            456,
-            None,
-            "157 nodes repeated at server/src/storage.rs:115 (limit 120)",
-        ),
-        tool_finding(),
-    ];
+    let mut findings: Vec<Finding> = MEASURED
+        .into_iter()
+        .map(|(rule, path, line, subject, values)| measured(rule, path, line, subject, values))
+        .collect();
+    findings.push(told(
+        Rule::Suppression,
+        "server/src/api/policy.rs",
+        161,
+        Some("clippy::struct_excessive_bools, reason = \"one switch per device\""),
+        "a linter diagnostic is suppressed instead of satisfied",
+    ));
+    findings.push(told(
+        Rule::DuplicateBlock,
+        "server/src/api/policy.rs",
+        456,
+        None,
+        "157 nodes repeated at server/src/storage.rs:115 (limit 120)",
+    ));
+    findings.push(tool_finding());
     findings.sort();
     findings
 }

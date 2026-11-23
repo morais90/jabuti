@@ -132,7 +132,6 @@ pub(super) fn render(
 ) -> String {
     let paint = Paint { view };
     let seal = seal(findings, unreadable, scanned);
-    let mut rendered = String::new();
 
     if findings.is_empty() {
         let summary = format!(
@@ -140,40 +139,15 @@ pub(super) fn render(
             scope(view),
             extent(scanned)
         );
-        writeln!(
-            rendered,
-            "{}  {}",
-            mark(&paint),
-            paint.plain(Tone::Dim, &summary)
-        )
-        .expect("writing to a string never fails");
-        rendered.push_str(&unmeasured(&paint, unreadable, limit));
-        return rendered;
+        let headline = format!("{}  {}\n", mark(&paint), paint.plain(Tone::Dim, &summary));
+        return headline + &unmeasured(&paint, unreadable, limit);
     }
 
     let heading = format!("{}{}", scope(view), extent(scanned));
-    writeln!(
-        rendered,
-        "{}  {}\n",
-        mark(&paint),
-        paint.plain(Tone::Dim, &heading)
-    )
-    .expect("writing to a string never fails");
+    let mut rendered = format!("{}  {}\n\n", mark(&paint), paint.plain(Tone::Dim, &heading));
 
     let shown = &findings[..limit.min(findings.len())];
-    let columns = Columns::of(shown);
-    for file in shown.chunk_by(|left, right| left.path == right.path) {
-        let path = paint.strong(Tone::Bone, &file[0].path);
-        writeln!(rendered, "{}", paint.linked(&file[0].path, path))
-            .expect("writing to a string never fails");
-        let mut previous: Option<&Finding> = None;
-        for finding in file {
-            let repeated = previous.is_some_and(|before| same_unit(before, finding));
-            write_row(&mut rendered, &paint, &columns, finding, repeated);
-            previous = Some(finding);
-        }
-        rendered.push('\n');
-    }
+    write_files(&mut rendered, &paint, shown);
 
     let hidden = findings.len() - shown.len();
     if hidden > 0 {
@@ -187,6 +161,22 @@ pub(super) fn render(
     rendered.push_str(&unmeasured(&paint, unreadable, limit));
 
     rendered
+}
+
+fn write_files(rendered: &mut String, paint: &Paint<'_>, shown: &[Finding]) {
+    let columns = Columns::of(shown);
+    for file in shown.chunk_by(|left, right| left.path == right.path) {
+        let path = paint.strong(Tone::Bone, &file[0].path);
+        writeln!(rendered, "{}", paint.linked(&file[0].path, path))
+            .expect("writing to a string never fails");
+        let mut previous: Option<&Finding> = None;
+        for finding in file {
+            let repeated = previous.is_some_and(|before| same_unit(before, finding));
+            write_row(rendered, paint, &columns, finding, repeated);
+            previous = Some(finding);
+        }
+        rendered.push('\n');
+    }
 }
 
 fn write_row(
