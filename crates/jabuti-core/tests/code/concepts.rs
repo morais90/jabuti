@@ -62,6 +62,8 @@ fn rust_bindings_map_each_shape_and_tag_test_declarations() {
             "error-panic unwrap 43..43 production",
             "error-panic unwrap 45..45 production",
             "error-panic unwrap 58..58 production",
+            "error-panic unwrap 62..62 production",
+            "error-panic unwrap 62..62 production",
         ]
     );
 }
@@ -112,6 +114,44 @@ fn a_user_binding_adds_a_project_api_without_replacing_built_ins() {
         [
             (Concept::ErrorDiscard, "discard".to_owned()),
             (Concept::ErrorPanic, "unwrap".to_owned()),
+        ]
+    );
+}
+
+#[rstest]
+#[case::rust(
+    &lang::RUST,
+    "fn live() {\n    pretty_assertions::assert_eq!(1, 1); pretty_assertions::assert_eq!(2, 2);\n}\n",
+    "pretty_assertions::assert_eq",
+    "assert_eq"
+)]
+#[case::typescript(
+    &lang::TYPESCRIPT,
+    "function live() {\n  expect(1); expect(2);\n}\n",
+    "expect",
+    "expect"
+)]
+#[case::kotlin(
+    &lang::KOTLIN,
+    "fun live() {\n    Assertions.assertTrue(a); Assertions.assertTrue(b)\n}\n",
+    "Assertions.assertTrue",
+    "assertTrue"
+)]
+fn a_user_binding_that_repeats_a_built_in_counts_each_call_once(
+    #[case] spec: &'static LangSpec,
+    #[case] source: &str,
+    #[case] bound: &str,
+    #[case] subject: &str,
+) {
+    let parsed = syntax::parse(source, spec).expect("source parses cleanly");
+    let mut bindings = ConceptBindings::default();
+    bindings.set(spec.id, Concept::Assertion, vec![bound.to_owned()]);
+
+    assert_eq!(
+        concept_pairs(&parsed, &bindings),
+        [
+            (Concept::Assertion, subject.to_owned()),
+            (Concept::Assertion, subject.to_owned()),
         ]
     );
 }

@@ -57,3 +57,7 @@ fn spelled<'a>(first: &'a mut String, second: &mut std::string::String) {
 const _: () = {
     write!(unknown, "line").unwrap();
 };
+
+fn paired() -> (u8, u8) {
+    (read().unwrap(), read().unwrap())
+}

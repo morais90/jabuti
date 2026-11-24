@@ -39,7 +39,6 @@ pub fn occurrences(
     });
     let mut found = Vec::new();
     let mut cleared = Vec::new();
-    let mut panics = Vec::new();
 
     parsed.for_each_match(&table.queries().concepts, |matched, query| {
         if let Some(position) = written_into_text(matched, query, parsed.source(), table) {
@@ -50,10 +49,12 @@ pub fn occurrences(
             captured_occurrence(matched, query, parsed.source())
         {
             let in_test = inside_test(node, parsed.source(), table);
-            panics.push((occurrence.concept == Concept::ErrorPanic).then_some(position));
-            found.push(Occurrence {
-                in_test,
-                ..occurrence
+            found.push(Located {
+                position,
+                occurrence: Occurrence {
+                    in_test,
+                    ..occurrence
+                },
             });
         }
 
@@ -61,26 +62,45 @@ pub fn occurrences(
             && let Some(call) = captured_call(matched, query)
         {
             let in_test = inside_test(call, parsed.source(), table);
-            let configured = configured.occurrences(call, parsed.source(), in_test);
-            panics.extend(configured.iter().map(|_| None));
-            found.extend(configured);
+            let position = call.end_byte();
+            found.extend(
+                configured
+                    .occurrences(call, parsed.source(), in_test)
+                    .into_iter()
+                    .map(|occurrence| Located {
+                        position,
+                        occurrence,
+                    }),
+            );
         }
     });
 
-    let mut found: Vec<Occurrence> = found
-        .into_iter()
-        .zip(panics)
-        .filter(|(_, position)| position.is_none_or(|position| !cleared.contains(&position)))
-        .map(|(occurrence, _)| occurrence)
-        .collect();
+    distinct(found, &cleared)
+}
+
+fn distinct(mut found: Vec<Located>, cleared: &[usize]) -> Vec<Occurrence> {
+    found.retain(|located| {
+        located.occurrence.concept != Concept::ErrorPanic || !cleared.contains(&located.position)
+    });
     found.sort_by(|left, right| {
-        left.span
-            .cmp(&right.span)
-            .then(left.concept.cmp(&right.concept))
-            .then(left.subject.cmp(&right.subject))
+        left.occurrence
+            .span
+            .cmp(&right.occurrence.span)
+            .then(left.occurrence.concept.cmp(&right.occurrence.concept))
+            .then(left.occurrence.subject.cmp(&right.occurrence.subject))
+            .then(left.position.cmp(&right.position))
     });
     found.dedup();
     found
+        .into_iter()
+        .map(|located| located.occurrence)
+        .collect()
+}
+
+#[derive(PartialEq)]
+struct Located {
+    position: usize,
+    occurrence: Occurrence,
 }
 
 fn captured_occurrence<'tree>(
@@ -111,7 +131,7 @@ fn captured_occurrence<'tree>(
             in_test: false,
         },
         node?,
-        subject.start_byte(),
+        subject.end_byte(),
     ))
 }
 
@@ -130,7 +150,7 @@ fn written_into_text(
     let target = captured("written_into")?;
     let cleared = captured("cleared")?;
 
-    buffers::holds_text(target, source, buffers).then(|| cleared.start_byte())
+    buffers::holds_text(target, source, buffers).then(|| cleared.end_byte())
 }
 
 fn captured_call<'tree>(matched: &QueryMatch<'_, 'tree>, query: &Query) -> Option<Node<'tree>> {
