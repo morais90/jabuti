@@ -39,8 +39,18 @@ $ jabuti check
 src/external.rs:65  clippy/struct_field_names  field name starts with the struct's name
 ```
 
-The identifier is `<tool>/<lint>`. A diagnostic the tool reports at warning or error level is a
-finding to fix like any other, and fails the run. Notes and help the tool attaches are not reported.
+The identifier is `<tool>/<lint>`. Which diagnostics count is covered under
+[what your configuration governs](#what-your-configuration-governs). Notes and help the tool attaches
+are not reported.
+
+A project can hold several Cargo workspaces, a server and a client side by side for example. clippy
+runs once in each workspace that holds a Rust file being checked, as cargo itself locates it, and the
+findings come back with paths relative to the project. A change that touches no Rust file does not
+run it at all.
+
+An enabled tool never does nothing in silence. When it does not answer in one of those places, or
+when no file being checked sits under the marker it needs, the check says so on standard error and
+goes on with the rest.
 
 ## Installing missing tools
 
@@ -72,14 +82,22 @@ start, exits unsuccessfully or leaves the tool unavailable, `jabuti tools instal
 
 ## What your configuration governs
 
-jabuti runs the tool in your project directory, so it reads your `clippy.toml`, your `[lints]`
+jabuti runs the tool in each Cargo workspace it checks, so it reads your `clippy.toml`, your `[lints]`
 section and your `#![allow]` attributes exactly as it would if you ran it yourself. A lint your
 project has deliberately allowed stays allowed.
 
-Which lints fire comes from your configuration, and jabuti adds none today: clippy runs with your
-configuration and nothing added. What it reports at warning or error level is a finding to fix, and
-there is no per-lint override in `jabuti.toml`. [Principles](principles.md#tools-are-curated-not-piped)
-says how this is meant to grow.
+Which lints fire comes from your configuration, and jabuti adds none today. Which of them fail is
+jabuti's decision:
+
+- A lint clippy turns on by default is something to fix at any level. jabuti reads that list from the
+  installed clippy (`clippy-driver -W help`, once per edition, since some lints turn on with a newer
+  edition), so it follows the toolchain the project uses.
+- A lint your project turned on beyond those keeps the level you gave it. As an error it is a finding
+  to fix; as a warning it is not reported.
+
+If the installed clippy cannot list its lints, every warning it reported is kept, so a broken listing
+can add findings but never hide one. There is no per-lint override in `jabuti.toml`.
+[Principles](principles.md#tools-are-curated-not-piped) says how this is meant to grow.
 
 ## Why they are off by default
 
@@ -105,6 +123,8 @@ instrumentation and writes an LCOV report to `target/jabuti/coverage.lcov`, and 
 reached. The tool knows how to produce coverage for one ecosystem; the rule knows what to make of it
 for any language, because LCOV and JaCoCo XML say the same thing whoever wrote them. A project that
 already produces coverage in its build can skip the tool and name its own report under `[coverage]`.
+The tool runs only when a check judges a change: a map of the whole repository has no new line to
+judge, so it skips the minutes the test run would cost.
 
 When jabuti itself runs inside an instrumented test run (its own suite under `cargo llvm-cov` is the
 case that matters), the enclosing run has installed itself as the compiler wrapper for every child

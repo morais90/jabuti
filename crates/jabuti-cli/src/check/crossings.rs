@@ -12,7 +12,7 @@ use jabuti_core::tools::coverage::Coverage;
 
 use super::plan::Plan;
 use crate::inputs::git::since::Changes;
-use crate::inputs::tools::Scan;
+use crate::inputs::tools::{self, Produced, Scan};
 use crate::inputs::{coverage, workspace};
 
 pub(crate) fn hotspots(plan: Plan<'_>, measured: &[Measured], policy: &Policy) -> Vec<Finding> {
@@ -50,39 +50,79 @@ pub(crate) struct Judged<'a> {
 pub(crate) fn uncovered(
     scan: &Scan<'_>,
     judged: Judged<'_>,
-    produced: Option<PathBuf>,
+    produced: &[Produced],
     notices: &mut Vec<String>,
 ) -> Vec<Finding> {
     if !scan.settings.policy.enabled(Rule::UncoveredNewCode) {
         return Vec::new();
     }
-    let configured = scan
-        .settings
-        .coverage
-        .as_ref()
-        .map(|report| scan.project.join(report));
-    let Some(report) = configured.or(produced) else {
+    let candidates = candidates(scan, judged.changes);
+    if candidates.is_empty() {
         return Vec::new();
+    }
+    let reports: Vec<(&Path, PathBuf)> = match &scan.settings.coverage {
+        Some(report) => vec![(scan.project, scan.project.join(report))],
+        None => produced
+            .iter()
+            .map(|made| (made.workspace.as_path(), made.report.clone()))
+            .collect(),
+    };
+    if reports.is_empty() {
+        notices.push(unevaluated(scan));
+    }
+
+    let mut found = Vec::new();
+    for (workspace, report) in reports {
+        let inside: Vec<&Candidate<'_>> = candidates
+            .iter()
+            .filter(|candidate| candidate.path.starts_with(workspace))
+            .collect();
+        match read_one(&report, &inside, scan, judged) {
+            Ok(stretches) => found.extend(stretches),
+            Err(reason) => {
+                notices.push(format!("{} skipped: {reason}", Rule::UncoveredNewCode.id()));
+            }
+        }
+    }
+
+    found
+}
+
+fn unevaluated(scan: &Scan<'_>) -> String {
+    let remedy = if tools::produces_coverage(scan.settings) {
+        ""
+    } else {
+        "; enable a coverage tool under [tools] or name a report under [coverage]"
     };
 
-    let candidates = candidates(scan, judged.changes);
-    let sources: Vec<(&Path, &str)> = candidates
+    format!(
+        "{} was not evaluated: no coverage report covers the changed files, so nothing says which new lines a test ran{remedy}",
+        Rule::UncoveredNewCode.id()
+    )
+}
+
+fn read_one(
+    report: &Path,
+    inside: &[&Candidate<'_>],
+    scan: &Scan<'_>,
+    judged: Judged<'_>,
+) -> Result<Vec<Finding>, String> {
+    let sources: Vec<(&Path, &str)> = inside
         .iter()
         .map(|candidate| (candidate.path, candidate.shown.as_str()))
         .collect();
-    let coverage = match coverage::read(&report, scan.project, &sources) {
-        Ok(coverage) => coverage,
-        Err(reason) => {
-            notices.push(format!("{} skipped: {reason}", Rule::UncoveredNewCode.id()));
-            return Vec::new();
-        }
-    };
+    let coverage = coverage::read(report, scan.project, &sources)?;
 
-    stretches_in(&candidates, &coverage, judged, &scan.settings.policy)
+    Ok(stretches_in(
+        inside,
+        &coverage,
+        judged,
+        &scan.settings.policy,
+    ))
 }
 
 fn stretches_in(
-    candidates: &[Candidate<'_>],
+    candidates: &[&Candidate<'_>],
     coverage: &Coverage,
     judged: Judged<'_>,
     policy: &Policy,

@@ -133,17 +133,16 @@ fn a_tool_that_cannot_be_found_says_how_to_install_it() {
 }
 
 #[test]
-fn a_tool_that_fails_without_reporting_anything_says_so_and_does_not_pass_silently() {
+fn a_workspace_cargo_cannot_read_is_skipped_with_the_reason_rather_than_silently() {
     let directory = project(&[
         ("jabuti.toml", CLIPPY_ON),
         ("Cargo.toml", "[package]\nthis is not valid toml at all\n"),
         ("src/lib.rs", "fn small() {}\n"),
     ]);
 
-    jabuti(&directory)
-        .assert()
-        .success()
-        .stderr(contains("clippy exited without reporting anything"));
+    jabuti(&directory).assert().success().stderr(contains(
+        "clippy skipped .: locating the cargo workspace exited with exit status: 101: ",
+    ));
 }
 
 #[test]
@@ -226,6 +225,108 @@ fn a_lint_in_a_workspace_member_outside_the_project_is_left_out() {
 }
 
 #[test]
+fn clippy_runs_in_every_cargo_workspace_that_holds_a_checked_file() {
+    let looping = "pub fn sum(values: &[i32]) -> i32 {\n    let mut total = 0;\n    for index in 0..values.len() {\n        total += values[index];\n    }\n    total\n}\n";
+    let directory = project(&[
+        ("jabuti.toml", CLIPPY_ON),
+        (
+            "services/billing/Cargo.toml",
+            "[package]\nname = \"billing\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        ),
+        ("services/billing/src/lib.rs", looping),
+        (
+            "clients/rust/Cargo.toml",
+            "[workspace]\nmembers = [\"sdk\"]\nresolver = \"2\"\n",
+        ),
+        (
+            "clients/rust/sdk/Cargo.toml",
+            "[package]\nname = \"sdk\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        ),
+        ("clients/rust/sdk/src/lib.rs", looping),
+    ]);
+    common::init_repository(&directory);
+
+    jabuti(&directory).arg("--all").assert().stdout(
+        contains("clients/rust/sdk/src/lib.rs:3  clippy/needless_range_loop").and(contains(
+            "services/billing/src/lib.rs:3  clippy/needless_range_loop",
+        )),
+    );
+}
+
+fn unwrapping(level: &str) -> tempfile::TempDir {
+    let directory = project(&[
+        ("jabuti.toml", CLIPPY_ON),
+        (
+            "Cargo.toml",
+            &format!(
+                "[package]\nname = \"opened\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lints.clippy]\nunwrap_used = \"{level}\"\n"
+            ),
+        ),
+        (
+            "src/lib.rs",
+            "pub fn first(values: &[i32]) -> i32 {\n    *values.first().unwrap()\n}\n",
+        ),
+    ]);
+    common::init_repository(&directory);
+    directory
+}
+
+#[test]
+fn a_lint_the_project_switched_on_as_a_warning_is_not_reported() {
+    let directory = unwrapping("warn");
+
+    jabuti(&directory)
+        .arg("--all")
+        .assert()
+        .success()
+        .stdout(contains("unwrap_used").not());
+}
+
+#[test]
+fn a_lint_the_project_switched_on_as_an_error_is_reported() {
+    let directory = unwrapping("deny");
+
+    jabuti(&directory)
+        .arg("--all")
+        .assert()
+        .stdout(contains("src/lib.rs:2  clippy/unwrap_used"));
+}
+
+#[test]
+fn an_enabled_tool_with_nothing_it_applies_to_says_so() {
+    let directory = project(&[
+        ("jabuti.toml", CLIPPY_ON),
+        ("src/lib.ts", "export const one = 1;\n"),
+    ]);
+    common::init_repository(&directory);
+
+    jabuti(&directory)
+        .arg("--all")
+        .assert()
+        .success()
+        .stderr("jabuti: clippy is enabled, but no rust file checked sits under a Cargo.toml\n");
+}
+
+#[test]
+fn a_cargo_project_holding_no_rust_file_checked_does_not_run_clippy() {
+    let directory = project(&[
+        ("jabuti.toml", CLIPPY_ON),
+        (
+            "Cargo.toml",
+            "[package]\nname = \"broken\"\nthis is not valid toml at all\n",
+        ),
+        ("web/app.ts", "export const one = 1;\n"),
+    ]);
+    common::init_repository(&directory);
+
+    jabuti(&directory)
+        .arg("--all")
+        .assert()
+        .success()
+        .stderr("jabuti: clippy is enabled, but no rust file checked sits under a Cargo.toml\n");
+}
+
+#[test]
 fn a_tool_that_finds_nothing_is_not_mistaken_for_a_tool_that_failed() {
     let directory = project(&[
         ("jabuti.toml", CLIPPY_ON),
@@ -297,6 +398,12 @@ for argument in "$@"; do
     printf '\t%s' "$argument" >> "$JABUTI_FAKE_LOG"
 done
 printf '\n' >> "$JABUTI_FAKE_LOG"
+
+if [ "$1" = "locate-project" ]; then
+    printf '%s/Cargo.toml\n' "$PWD"
+    exit 0
+fi
+
 printf 'cargo child stdout\n'
 printf 'cargo child stderr\n' >&2
 
@@ -312,6 +419,11 @@ if [ "$#" -eq 2 ] && [ "$1" = "llvm-cov" ] && [ "$2" = "--version" ]; then
         exit 0
     fi
     exit 1
+fi
+
+if [ "$1" = "clippy" ] && [ "$2" = "--workspace" ] && [ "$JABUTI_FAKE_MODE" = "warning" ]; then
+    printf '%s\n' '{"reason":"compiler-message","message":{"level":"warning","message":"a fake warning","code":{"code":"clippy::fake_lint"},"spans":[{"file_name":"src/lib.rs","line_start":1,"line_end":1,"is_primary":true}]}}'
+    exit 0
 fi
 
 if [ "$#" -eq 5 ] && [ "$1" = "install" ] && [ "$2" = "cargo-llvm-cov" ] && [ "$3" = "--version" ] && [ "$4" = "0.9.0" ] && [ "$5" = "--locked" ]; then
@@ -418,12 +530,16 @@ cargo\tllvm-cov\t--version\n";
         }
 
         fn check(&self) -> assert_cmd::Command {
+            self.check_in("normal")
+        }
+
+        fn check_in(&self, mode: &str) -> assert_cmd::Command {
             let mut command = jabuti(&self.project);
             command
                 .env("PATH", &self.bin)
                 .env("JABUTI_FAKE_LOG", &self.log)
                 .env("JABUTI_FAKE_STATE", &self.state)
-                .env("JABUTI_FAKE_MODE", "normal");
+                .env("JABUTI_FAKE_MODE", mode);
             command
         }
 
@@ -563,7 +679,7 @@ cargo\tllvm-cov\t--version\n";
     }
 
     #[test]
-    fn check_probes_but_never_provisions_missing_tools() {
+    fn check_probes_but_never_provisions_missing_tools_and_says_one_did_not_run() {
         let fake = FakeTools::new(true);
         fs::write(
             fake.project.path().join("jabuti.toml"),
@@ -575,11 +691,71 @@ cargo\tllvm-cov\t--version\n";
             .assert()
             .success()
             .stdout(contains("No findings").and(contains("child stdout").not()))
-            .stderr("");
+            .stderr(
+                "jabuti: clippy is enabled but does not answer in .; `jabuti tools install` run there provisions it\n",
+            );
+
+        assert_eq!(fake.recorded(), "cargo\tclippy\t--version\n");
+    }
+
+    fn every_warning_kept(driver: Option<&str>, reason: &str) {
+        let fake = FakeTools::new(true);
+        fake.mark_available("clippy");
+        if let Some(script) = driver {
+            executable(&fake.bin.join("clippy-driver"), script);
+        }
+        fs::write(
+            fake.project.path().join("jabuti.toml"),
+            "[tools.clippy]\nenabled = true\n",
+        )
+        .expect("configuration written");
+
+        fake.check_in("warning")
+            .arg("--all")
+            .assert()
+            .stdout(contains("src/lib.rs:1  clippy/fake_lint  a fake warning"))
+            .stderr(contains(format!(
+                "clippy did not list the lints it enables by default, so every warning it reported is kept: {reason}"
+            )));
+    }
+
+    #[test]
+    fn a_tool_that_cannot_list_its_default_lints_keeps_every_warning_and_says_so() {
+        every_warning_kept(None, "running clippy-driver");
+    }
+
+    #[test]
+    fn a_lint_listing_that_fails_keeps_every_warning_and_says_how_it_failed() {
+        every_warning_kept(
+            Some("#!/bin/sh\nexit 3\n"),
+            "clippy-driver exited with exit status: 3",
+        );
+    }
+
+    #[test]
+    fn a_lint_listing_that_names_no_level_keeps_every_warning() {
+        every_warning_kept(
+            Some("#!/bin/sh\nexit 0\n"),
+            "clippy-driver listed no lint levels",
+        );
+    }
+
+    #[test]
+    fn a_map_of_the_whole_project_never_runs_the_coverage_producer() {
+        let fake = FakeTools::new(true);
+        fake.mark_available("clippy");
+        fake.mark_available("cargo-llvm-cov");
+        fs::write(
+            fake.project.path().join("jabuti.toml"),
+            "[tools.clippy]\nenabled = true\n\n[tools.cargo-llvm-cov]\nenabled = true\n",
+        )
+        .expect("configuration written");
+
+        fake.check().arg("--all").assert().success();
 
         assert_eq!(
             fake.recorded(),
-            "cargo\tclippy\t--version\ncargo\tllvm-cov\t--version\n"
+            "cargo\tclippy\t--version\ncargo\tlocate-project\t--workspace\t--message-format\tplain\ncargo\tclippy\t--workspace\t--all-targets\t--message-format=json\t--quiet\n"
         );
     }
 

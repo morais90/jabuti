@@ -125,6 +125,9 @@ impl Run<'_> {
 }
 
 fn excluded_by_project(run: &Run<'_>, roots: &[PathBuf]) -> Result<Vec<LeftOut>> {
+    if run.settings.exclude.is_empty() {
+        return Ok(Vec::new());
+    }
     let excluded = workspace::excluded(roots, &run.settings.exclude, run.root)?;
     let named: BTreeSet<&PathBuf> = run.paths.iter().collect();
     let configured = run.root.join(crate::config::FILE_NAME);
@@ -190,7 +193,7 @@ fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
 
     outcome
         .findings
-        .extend(orchestrated(run, &measured, notices)?);
+        .extend(orchestrated(run, &measured, notices));
 
     let layers = layered(run, &extent, notices)?;
     let drawn = Drawn {
@@ -204,23 +207,20 @@ fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
     Ok(outcome)
 }
 
-fn orchestrated(
-    run: &Run<'_>,
-    measured: &[Measured],
-    notices: &mut Vec<String>,
-) -> Result<Vec<Finding>> {
+fn orchestrated(run: &Run<'_>, measured: &[Measured], notices: &mut Vec<String>) -> Vec<Finding> {
     let tools = tools::Scan {
         project: run.root,
         paths: run.paths,
+        touched: run.touched,
         settings: run.settings,
     };
-    let (mut found, produced) = tools::findings(&tools, notices)?;
+    let (mut found, produced) = tools::findings(&tools, notices);
     if let Some(changes) = run.changes {
         let judged = crossings::Judged { changes, measured };
-        found.extend(crossings::uncovered(&tools, judged, produced, notices));
+        found.extend(crossings::uncovered(&tools, judged, &produced, notices));
     }
 
-    Ok(found)
+    found
 }
 
 fn worsened(

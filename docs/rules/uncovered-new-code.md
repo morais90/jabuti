@@ -4,8 +4,9 @@ Reports a stretch of consecutive lines that this change added and that no test e
 
 Each uncovered stretch of new code is reported once, at its first line. The rule needs two things: a
 coverage report, either named under `[coverage] report` or produced by an enabled tool such as
-`cargo-llvm-cov`, and a change to judge. Without a report it stays quiet; under `--all` or outside git
-it does not run.
+`cargo-llvm-cov`, and a change to judge. Without a report the rule fails nothing and says, on
+standard error, that it was not evaluated. Under `--all` or outside git it does not run, and neither
+does the tool that produces the report, since there is no new line to judge.
 
 ## The idea
 

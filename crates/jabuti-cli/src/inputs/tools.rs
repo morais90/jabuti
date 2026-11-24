@@ -1,12 +1,15 @@
+use std::cell::OnceCell;
+use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
 
 use anyhow::{Context, Result, bail};
+use jabuti_core::lang::{self, LanguageId};
 use jabuti_core::model::Finding;
-use jabuti_core::tools::cargo_diagnostics;
 use jabuti_core::tools::coverage::Format;
+use jabuti_core::tools::{cargo_diagnostics, enabled_by_default};
 
 use crate::config::Settings;
 use crate::inputs::workspace;
@@ -28,6 +31,8 @@ pub(crate) struct Tool {
     provision: &'static [Provision],
     probe: &'static [&'static str],
     invoke: &'static [&'static str],
+    language: LanguageId,
+    levels: &'static [&'static [&'static str]],
     output: Output,
 }
 
@@ -46,6 +51,13 @@ pub(crate) static CLIPPY: Tool = Tool {
         "--all-targets",
         "--message-format=json",
         "--quiet",
+    ],
+    language: LanguageId::Rust,
+    levels: &[
+        &["clippy-driver", "--edition", "2015", "-W", "help"],
+        &["clippy-driver", "--edition", "2018", "-W", "help"],
+        &["clippy-driver", "--edition", "2021", "-W", "help"],
+        &["clippy-driver", "--edition", "2024", "-W", "help"],
     ],
     output: Output::Diagnostics,
 };
@@ -77,6 +89,8 @@ pub(crate) static LLVM_COV: Tool = Tool {
         "--lcov",
         "--output-path",
     ],
+    language: LanguageId::Rust,
+    levels: &[],
     output: Output::Coverage {
         file: "target/jabuti/coverage.lcov",
     },
@@ -92,12 +106,6 @@ pub(crate) enum Status {
     Unavailable,
     Disabled,
     Ready,
-}
-
-impl Status {
-    pub(crate) fn runnable(self) -> bool {
-        self == Self::Ready
-    }
 }
 
 impl Tool {
@@ -157,21 +165,39 @@ impl Tool {
         Ok(())
     }
 
-    pub(crate) fn run(&self, root: &Path, project: &Path) -> Result<Vec<Finding>, String> {
+    pub(crate) fn run(
+        &self,
+        root: &Path,
+        project: &Path,
+        notices: &mut Vec<String>,
+    ) -> Result<Vec<Finding>, String> {
         let (program, arguments) = self.invoke.split_first().ok_or("no command configured")?;
-        let arguments = self.arguments(arguments, project)?;
+        let arguments = self.arguments(arguments, root)?;
 
         let output = command(program, root)
             .args(arguments)
             .output()
             .map_err(|error| format!("running {}: {error}", self.name))?;
 
+        let defaults = OnceCell::new();
+        let asked = |lint: &str| {
+            defaults
+                .get_or_init(|| self.enabled_by_default(root))
+                .as_ref()
+                .map_or(true, |enabled| enabled.contains(lint))
+        };
         let findings = match self.output {
             Output::Diagnostics => {
-                cargo_diagnostics(self.name, &String::from_utf8_lossy(&output.stdout))
+                cargo_diagnostics(self.name, &String::from_utf8_lossy(&output.stdout), asked)
             }
             Output::Coverage { file: _ } => Vec::new(),
         };
+        if let Some(Err(reason)) = defaults.get() {
+            notices.push(format!(
+                "{} did not list the lints it enables by default, so every warning it reported is kept: {reason}",
+                self.name
+            ));
+        }
 
         if findings.is_empty() && !output.status.success() {
             return Err(format!(
@@ -187,13 +213,13 @@ impl Tool {
             return Ok(findings);
         }
 
-        Ok(located(findings, &workspace_root(root)?, project))
+        Ok(located(findings, root, project))
     }
 
-    fn arguments(&self, fixed: &[&str], project: &Path) -> Result<Vec<OsString>, String> {
+    fn arguments(&self, fixed: &[&str], root: &Path) -> Result<Vec<OsString>, String> {
         let mut arguments: Vec<OsString> = fixed.iter().map(OsString::from).collect();
 
-        if let Some(report) = self.produces(project) {
+        if let Some(report) = self.produces(root) {
             if let Some(directory) = report.parent() {
                 fs::create_dir_all(directory).map_err(|error| {
                     format!(
@@ -209,11 +235,85 @@ impl Tool {
         Ok(arguments)
     }
 
-    fn produces(&self, project: &Path) -> Option<PathBuf> {
+    fn produces(&self, root: &Path) -> Option<PathBuf> {
         match self.output {
             Output::Diagnostics => None,
-            Output::Coverage { file } => Some(project.join(file)),
+            Output::Coverage { file } => Some(root.join(file)),
         }
+    }
+
+    fn packages(&self, paths: &[&PathBuf], project: &Path) -> BTreeSet<PathBuf> {
+        paths
+            .iter()
+            .filter(|path| lang::detect(path).is_some_and(|spec| spec.id == self.language))
+            .filter_map(|path| {
+                path.ancestors()
+                    .skip(1)
+                    .take_while(|directory| directory.starts_with(project))
+                    .find(|directory| self.applies(directory))
+            })
+            .map(Path::to_path_buf)
+            .collect()
+    }
+
+    fn workspaces(
+        &self,
+        packages: BTreeSet<PathBuf>,
+        project: &Path,
+        notices: &mut Vec<String>,
+    ) -> BTreeSet<PathBuf> {
+        let mut roots = BTreeSet::new();
+        for package in packages {
+            let shown = place(&package, project);
+            if !self.responds(&package) {
+                notices.push(format!(
+                    "{} is enabled but does not answer in {shown}; `jabuti tools install` run there provisions it",
+                    self.name
+                ));
+                continue;
+            }
+            match workspace_root(&package) {
+                Ok(root) => {
+                    roots.insert(root);
+                }
+                Err(reason) => notices.push(format!("{} skipped {shown}: {reason}", self.name)),
+            }
+        }
+
+        roots
+    }
+
+    fn enabled_by_default(&self, root: &Path) -> Result<BTreeSet<String>, String> {
+        let mut enabled = BTreeSet::new();
+        for listing in self.levels {
+            enabled.extend(listed(listing, root)?);
+        }
+
+        Ok(enabled)
+    }
+
+    fn run_in(
+        &self,
+        roots: BTreeSet<PathBuf>,
+        scan: &Scan<'_>,
+        notices: &mut Vec<String>,
+    ) -> (Vec<Finding>, Vec<Produced>) {
+        let mut findings = Vec::new();
+        let mut produced = Vec::new();
+        for root in roots {
+            match self.run(&root, scan.project, notices) {
+                Ok(reported) => {
+                    findings.extend(admitted(reported, scan));
+                    produced.extend(self.produces(&root).map(|report| Produced {
+                        workspace: root,
+                        report,
+                    }));
+                }
+                Err(reason) => notices.push(reason),
+            }
+        }
+
+        (findings, produced)
     }
 
     fn responds(&self, root: &Path) -> bool {
@@ -228,23 +328,51 @@ impl Tool {
     }
 }
 
-fn workspace_root(root: &Path) -> Result<PathBuf, String> {
-    let output = command("cargo", root)
+fn place(directory: &Path, project: &Path) -> String {
+    let shown = workspace::display(directory, project);
+    if shown.is_empty() {
+        return ".".to_owned();
+    }
+
+    shown
+}
+
+fn listed(listing: &[&str], root: &Path) -> Result<BTreeSet<String>, String> {
+    let (program, arguments) = listing.split_first().ok_or("no listing configured")?;
+    let output = command(program, root)
+        .args(arguments)
+        .output()
+        .map_err(|error| format!("running {program}: {error}"))?;
+    let enabled = enabled_by_default(&String::from_utf8_lossy(&output.stdout));
+    if !output.status.success() {
+        return Err(format!("{program} exited with {}", output.status));
+    }
+    if enabled.is_empty() {
+        return Err(format!("{program} listed no lint levels"));
+    }
+
+    Ok(enabled)
+}
+
+fn workspace_root(package: &Path) -> Result<PathBuf, String> {
+    let output = command("cargo", package)
         .args(["locate-project", "--workspace", "--message-format", "plain"])
         .output()
         .map_err(|error| format!("locating the cargo workspace: {error}"))?;
     if !output.status.success() {
         return Err(format!(
-            "locating the cargo workspace exited with {}",
-            output.status
+            "locating the cargo workspace exited with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+                .lines()
+                .last()
+                .unwrap_or_default()
         ));
     }
 
     let manifest = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
-    manifest
-        .parent()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| format!("cargo located no workspace from {}", root.display()))
+
+    Ok(manifest.parent().unwrap_or(package).to_path_buf())
 }
 
 fn located(findings: Vec<Finding>, base: &Path, project: &Path) -> Vec<Finding> {
@@ -306,6 +434,11 @@ pub(crate) fn known(settings: &Settings) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn produces_coverage(settings: &Settings) -> bool {
+    ALL.iter()
+        .any(|tool| matches!(tool.output, Output::Coverage { .. }) && enabled(settings, tool.name))
+}
+
 pub(crate) fn enabled(settings: &Settings, name: &str) -> bool {
     settings.tools.get(name).copied().unwrap_or(false)
 }
@@ -313,30 +446,48 @@ pub(crate) fn enabled(settings: &Settings, name: &str) -> bool {
 pub(crate) struct Scan<'a> {
     pub(crate) project: &'a Path,
     pub(crate) paths: &'a [PathBuf],
+    pub(crate) touched: Option<&'a BTreeSet<PathBuf>>,
     pub(crate) settings: &'a Settings,
+}
+
+pub(crate) struct Produced {
+    pub(crate) workspace: PathBuf,
+    pub(crate) report: PathBuf,
 }
 
 pub(crate) fn findings(
     scan: &Scan<'_>,
     notices: &mut Vec<String>,
-) -> Result<(Vec<Finding>, Option<PathBuf>)> {
-    let here = env::current_dir()?;
+) -> (Vec<Finding>, Vec<Produced>) {
+    let checked: Vec<&PathBuf> = scan
+        .paths
+        .iter()
+        .filter(|path| scan.touched.is_none_or(|touched| touched.contains(*path)))
+        .collect();
     let mut findings = Vec::new();
-    let mut produced = None;
+    let mut produced = Vec::new();
 
     for tool in ALL.iter().filter(|tool| enabled(scan.settings, tool.name)) {
-        if !tool.status(&here, true).runnable() {
+        let measures_a_change = matches!(tool.output, Output::Coverage { .. });
+        if measures_a_change && scan.touched.is_none() {
             continue;
         }
-
-        match tool.run(&here, scan.project) {
-            Ok(reported) => findings.extend(admitted(reported, scan)),
-            Err(reason) => notices.push(reason),
+        let packages = tool.packages(&checked, scan.project);
+        if packages.is_empty() && scan.touched.is_none() {
+            notices.push(format!(
+                "{} is enabled, but no {} file checked sits under a {}",
+                tool.name,
+                tool.language.name(),
+                tool.applies_when.join(" or ")
+            ));
         }
-        produced = produced.or_else(|| tool.produces(scan.project));
+        let roots = tool.workspaces(packages, scan.project, notices);
+        let (reported, made) = tool.run_in(roots, scan, notices);
+        findings.extend(reported);
+        produced.extend(made);
     }
 
-    Ok((findings, produced))
+    (findings, produced)
 }
 
 fn admitted(reported: Vec<Finding>, scan: &Scan<'_>) -> Vec<Finding> {

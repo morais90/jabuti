@@ -1,15 +1,18 @@
 pub mod coverage;
 
+use std::collections::BTreeSet;
+
 use serde::Deserialize;
 
 use crate::catalog::RuleId;
 use crate::model::{Detail, Finding, Span};
 
-pub fn cargo_diagnostics(tool: &str, output: &str) -> Vec<Finding> {
+pub fn cargo_diagnostics(tool: &str, output: &str, asked: impl Fn(&str) -> bool) -> Vec<Finding> {
     let mut findings: Vec<Finding> = output
         .lines()
         .filter_map(|line| serde_json::from_str::<Line>(line).ok())
         .filter_map(|line| line.message)
+        .filter(|message| to_fix(message, &asked))
         .filter_map(|message| finding(tool, &message))
         .collect();
 
@@ -23,10 +26,30 @@ pub fn cargo_diagnostics(tool: &str, output: &str) -> Vec<Finding> {
     findings
 }
 
-fn finding(tool: &str, message: &Message) -> Option<Finding> {
-    if !reported(&message.level) {
-        return None;
+pub fn enabled_by_default(listing: &str) -> BTreeSet<String> {
+    listing
+        .lines()
+        .filter_map(|line| {
+            let mut columns = line.split_whitespace();
+            let name = columns.next()?;
+            let level = columns.next()?;
+
+            ON.contains(&level).then(|| name.replace('-', "_"))
+        })
+        .collect()
+}
+
+const ON: [&str; 3] = ["warn", "deny", "forbid"];
+
+fn to_fix(message: &Message, asked: impl Fn(&str) -> bool) -> bool {
+    match (message.level.as_str(), &message.code) {
+        ("error", _) => true,
+        ("warning", Some(code)) => asked(&code.id),
+        _ => false,
     }
+}
+
+fn finding(tool: &str, message: &Message) -> Option<Finding> {
     let lint = message.code.as_ref().map(|code| lint_name(&code.id))?;
     let span = message.spans.iter().find(|span| span.is_primary)?;
 
@@ -45,10 +68,6 @@ fn finding(tool: &str, message: &Message) -> Option<Finding> {
             message: message.text.clone(),
         },
     })
-}
-
-fn reported(level: &str) -> bool {
-    matches!(level, "error" | "warning")
 }
 
 fn lint_name(code: &str) -> String {

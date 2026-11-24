@@ -65,7 +65,7 @@ forbidden, and then `layer-violation` reports it and fails the run.
 rules run or their limits. A check judges a change by default and `--all` maps the repository
 without failing. The change reports what it made worse for the rules measured per file, while
 `duplicate-block` and the findings of orchestrated tools are still reported wherever they overlap a
-changed line, and a project with no coverage report is not yet told so. This section is the model
+changed line. This section is the model
 the next releases move to, and the documentation of each part changes with the release that ships
 it.
 
@@ -170,10 +170,11 @@ changes what is asked says so, and a verdict on unchanged code can move between 
 reason and no other.
 
 **Where this stands today.** clippy is the only orchestrated linter, and it runs with your project's
-configuration and nothing added. Every diagnostic it reports at warning or error level is a finding
-to fix. The curated sets described here are the standard this project holds
-itself to when it integrates a tool, not a description of what ships, and each one arrives with the
-release that adds it.
+configuration and nothing added. Its curated set is the lints clippy itself turns on by default,
+read from the installed clippy, so every diagnostic from one of them fails at any level. A lint the
+project turned on beyond them fails only as an error. The broader sets described here are the
+standard this project holds itself to when it integrates a tool, not a description of what ships,
+and each one arrives with the release that adds it.
 
 **When the rule is jabuti's instead.** Curation says how somebody else's tool gets run. The other half
 is knowing when not to. A rule belongs to jabuti when it needs two inputs that no single tool holds.

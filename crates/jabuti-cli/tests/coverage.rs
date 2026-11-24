@@ -209,7 +209,7 @@ fn a_configured_report_with_an_extension_nobody_reads_stops_the_run() {
 }
 
 #[test]
-fn without_a_report_the_rule_has_nothing_to_read_and_stays_quiet() {
+fn without_a_report_the_rule_says_it_was_not_evaluated_and_fails_nothing() {
     let directory = rust_repository("");
     write(&directory, "src/lib.rs", AFTER);
 
@@ -217,7 +217,9 @@ fn without_a_report_the_rule_has_nothing_to_read_and_stays_quiet() {
         .assert()
         .success()
         .stdout("No findings across 1 file and 2 units.\n")
-        .stderr("");
+        .stderr(
+            "jabuti: uncovered-new-code was not evaluated: no coverage report covers the changed files, so nothing says which new lines a test ran; enable a coverage tool under [tools] or name a report under [coverage]\n",
+        );
 }
 
 #[test]
@@ -358,7 +360,7 @@ fn a_producer_whose_tests_fail_says_so_and_the_rule_does_not_guess() {
         .stdout("No findings across 1 file and 2 units.\n")
         .stderr(
             contains("jabuti: cargo-llvm-cov exited without reporting anything").and(contains(
-                "jabuti: uncovered-new-code skipped: target/jabuti/coverage.lcov ",
+                "jabuti: uncovered-new-code was not evaluated: no coverage report covers the changed files, so nothing says which new lines a test ran\n",
             )),
         );
 

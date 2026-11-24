@@ -1,0 +1,26 @@
+
+Available lint options:
+    -W <foo>           Warn about <foo>
+    -A <foo>           Allow <foo>
+    -D <foo>           Deny <foo>
+    -F <foo>           Forbid <foo> (deny <foo> and all attempts to override)
+
+
+Lint checks provided by rustc:
+
+                                                       name  default  meaning
+                                                       ----  -------  -------
+                                                  dead-code  warn     detect unused, unexported items
+                                           unused-variables  warn     detect variables which are not used in any way
+                                        unconditional-panic  deny     operation will cause a panic at runtime
+                                        clippy::unwrap-used  allow    using `.unwrap()` on `Result` or `Option`, which should at least get a better message using `expect()`
+                                clippy::needless-range-loop  warn     for-looping over a range of indices where an iterator over items would do
+                                    clippy::approx-constant  deny     the approximate of a known float constant (in `std::fXX::consts`)
+Lint groups provided by rustc:
+
+                                          name  sub-lints
+                                          ----  ---------
+                                      warnings  all lints that are set to issue warnings
+                               deprecated-safe  deprecated-safe-2024
+                           future-incompatible  internal-eq-trait-method-impls, aarch64-softfloat-neon, ambiguous-associated-items
+                              clippy::pedantic  clippy::assert-is-empty, clippy::assigning-clones, clippy::ignore-without-reason

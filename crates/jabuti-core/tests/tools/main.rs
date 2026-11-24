@@ -1,17 +1,23 @@
 mod coverage;
 
+use std::collections::BTreeSet;
+
 use jabuti_core::catalog::RuleId;
 use jabuti_core::model::{Detail, Finding, Span};
 use jabuti_core::tools;
 
-fn diagnostics() -> Vec<Finding> {
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/tools/clippy/diagnostics.jsonl"
+fn recorded(name: &str) -> String {
+    let path = format!(
+        "{}/tests/fixtures/tools/clippy/{name}",
+        env!("CARGO_MANIFEST_DIR")
     );
-    let recorded = std::fs::read_to_string(path).expect("fixture exists");
+    std::fs::read_to_string(path).expect("fixture exists")
+}
 
-    tools::cargo_diagnostics("clippy", &recorded)
+fn diagnostics() -> Vec<Finding> {
+    let recorded = recorded("diagnostics.jsonl");
+
+    tools::cargo_diagnostics("clippy", &recorded, |_| true)
 }
 
 fn ids(findings: &[Finding]) -> Vec<String> {
@@ -70,5 +76,51 @@ fn a_message_with_nothing_to_anchor_it_is_left_out() {
 
 #[test]
 fn output_that_is_not_a_diagnostic_is_ignored_rather_than_failing() {
-    assert_eq!(tools::cargo_diagnostics("clippy", "not json at all\n"), []);
+    assert_eq!(
+        tools::cargo_diagnostics("clippy", "not json at all\n", |_| true),
+        []
+    );
+}
+
+#[test]
+fn a_warning_from_a_lint_the_tool_leaves_off_by_default_is_not_reported() {
+    let recorded = recorded("diagnostics.jsonl");
+
+    let found = tools::cargo_diagnostics("clippy", &recorded, |lint| {
+        lint != "clippy::needless_range_loop"
+    });
+
+    assert_eq!(ids(&found), ["clippy/unused_variables"]);
+}
+
+#[test]
+fn an_error_is_reported_whatever_the_lint() {
+    let recorded = recorded("diagnostics.jsonl");
+
+    let found = tools::cargo_diagnostics("clippy", &recorded, |_| false);
+
+    assert_eq!(ids(&found), ["clippy/unused_variables"]);
+}
+
+#[test]
+fn the_lints_a_tool_enables_by_default_are_read_from_its_listing() {
+    let enabled = tools::enabled_by_default(&recorded("lint-levels.txt"));
+
+    assert_eq!(
+        enabled,
+        BTreeSet::from([
+            "clippy::approx_constant".to_owned(),
+            "clippy::needless_range_loop".to_owned(),
+            "dead_code".to_owned(),
+            "unconditional_panic".to_owned(),
+            "unused_variables".to_owned(),
+        ])
+    );
+}
+
+#[test]
+fn a_forbidden_lint_counts_as_enabled_by_default() {
+    let enabled = tools::enabled_by_default("    some-lint  forbid    never\n");
+
+    assert_eq!(enabled, BTreeSet::from(["some_lint".to_owned()]));
 }
