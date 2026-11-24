@@ -75,6 +75,17 @@ Detection is syntactic. jabuti reads the shape of the code, not its types, so it
 whether `.ok()` was called on a `Result` or on something else that happens to have that method. This
 is what keeps the rule fast enough to run on every change.
 
+## Why writing into memory is left out
+
+A string held in memory always accepts text. Formatting into one can only fail when a value refuses
+to format itself, which is a bug in that value rather than a condition to handle, yet the language
+still returns a result that code has to unwrap. jabuti leaves that unwrap out when it can see that
+the target is a string in memory: the nearest declaration of the name before the write gives it that
+type, or builds it with a constructor that makes one, or it is a parameter of that type. A string
+that arrives some other way, such as a field or a value returned from another function, is still
+reported, because the declaration that would prove it is out of sight. Writing to a file or a
+terminal can fail and is always reported.
+
 ## Why test code is left out
 
 An `unwrap()` in a test is not a masked error. It is the assertion. Writing the handled version

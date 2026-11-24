@@ -67,7 +67,17 @@ pub(crate) struct Table {
     pub(crate) test_entry_markers: &'static [&'static str],
     pub(crate) language_specific_rules: &'static [crate::catalog::Rule],
     pub(crate) cognitive: CognitiveSpec,
+    pub(crate) text_buffers: Option<TextBuffers>,
     queries: LazyLock<Queries>,
+}
+
+#[derive(Debug)]
+pub(crate) struct TextBuffers {
+    pub(crate) type_name: &'static str,
+    pub(crate) builders: &'static [&'static str],
+    pub(crate) builder_fields: &'static [&'static str],
+    pub(crate) scope: &'static str,
+    pub(crate) declarations: &'static [&'static str],
 }
 
 impl Table {
@@ -99,6 +109,7 @@ static KOTLIN: Table = Table {
     decorators_within: &["modifiers", "annotation"],
     test_entry_markers: &["@Test", "@ParameterizedTest", "@RepeatedTest"],
     language_specific_rules: &[],
+    text_buffers: None,
     cognitive: CognitiveSpec {
         conditionals: &[ConditionalSpec {
             kind: "if_expression",
@@ -146,6 +157,18 @@ static RUST: Table = Table {
     decorators_within: &["inner_attribute_item"],
     test_entry_markers: &["test", "rstest", "test_case"],
     language_specific_rules: &[],
+    text_buffers: Some(TextBuffers {
+        type_name: "String",
+        builders: &[
+            "String::new",
+            "String::with_capacity",
+            "String::from",
+            "format",
+        ],
+        builder_fields: &["function", "macro"],
+        scope: "function_item",
+        declarations: &["parameter", "let_declaration"],
+    }),
     cognitive: CognitiveSpec {
         conditionals: &[ConditionalSpec {
             kind: "if_expression",
@@ -192,6 +215,7 @@ static TYPESCRIPT: Table = Table {
     decorators_within: &["decorator"],
     test_entry_markers: &[],
     language_specific_rules: &[],
+    text_buffers: None,
     cognitive: CognitiveSpec {
         conditionals: &[
             ConditionalSpec {
@@ -282,6 +306,9 @@ pub fn declared_node_kinds(language: LanguageId) -> Vec<(&'static str, bool)> {
             std::iter::once(boundary.kind).chain(boundary.parents.iter().copied())
         }))
         .chain(cognitive.boundaries.iter().copied())
+        .chain(table.text_buffers.iter().flat_map(|buffers| {
+            std::iter::once(buffers.scope).chain(buffers.declarations.iter().copied())
+        }))
         .chain(table.implicit_parameters.iter().copied())
         .chain(table.parameter_containers.iter().copied())
         .chain(table.implicit_parameter_patterns.iter().copied())

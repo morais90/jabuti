@@ -57,6 +57,11 @@ fn rust_bindings_map_each_shape_and_tag_test_declarations() {
             "error-panic unwrap 14..14 test",
             "suppression (dead_code) 17..17 production",
             "assertion assert 21..21 production",
+            "error-panic expect 29..29 production",
+            "error-panic unwrap 41..41 production",
+            "error-panic unwrap 43..43 production",
+            "error-panic unwrap 45..45 production",
+            "error-panic unwrap 58..58 production",
         ]
     );
 }

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use tree_sitter::{Node, Query, QueryMatch};
 
+use super::buffers;
 use super::lang::{self, Table};
 use crate::catalog::Concept;
 use crate::lang::LanguageId;
@@ -37,10 +38,19 @@ pub fn occurrences(
         aliases,
     });
     let mut found = Vec::new();
+    let mut cleared = Vec::new();
+    let mut panics = Vec::new();
 
     parsed.for_each_match(&table.queries().concepts, |matched, query| {
-        if let Some((occurrence, node)) = captured_occurrence(matched, query, parsed.source()) {
+        if let Some(position) = written_into_text(matched, query, parsed.source(), table) {
+            cleared.push(position);
+        }
+
+        if let Some((occurrence, node, position)) =
+            captured_occurrence(matched, query, parsed.source())
+        {
             let in_test = inside_test(node, parsed.source(), table);
+            panics.push((occurrence.concept == Concept::ErrorPanic).then_some(position));
             found.push(Occurrence {
                 in_test,
                 ..occurrence
@@ -51,10 +61,18 @@ pub fn occurrences(
             && let Some(call) = captured_call(matched, query)
         {
             let in_test = inside_test(call, parsed.source(), table);
-            found.extend(configured.occurrences(call, parsed.source(), in_test));
+            let configured = configured.occurrences(call, parsed.source(), in_test);
+            panics.extend(configured.iter().map(|_| None));
+            found.extend(configured);
         }
     });
 
+    let mut found: Vec<Occurrence> = found
+        .into_iter()
+        .zip(panics)
+        .filter(|(_, position)| position.is_none_or(|position| !cleared.contains(&position)))
+        .map(|(occurrence, _)| occurrence)
+        .collect();
     found.sort_by(|left, right| {
         left.span
             .cmp(&right.span)
@@ -69,7 +87,7 @@ fn captured_occurrence<'tree>(
     matched: &QueryMatch<'_, 'tree>,
     query: &Query,
     source: &str,
-) -> Option<(Occurrence, Node<'tree>)> {
+) -> Option<(Occurrence, Node<'tree>, usize)> {
     let mut concept = None;
     let mut subject = None;
     let mut node = None;
@@ -93,7 +111,26 @@ fn captured_occurrence<'tree>(
             in_test: false,
         },
         node?,
+        subject.start_byte(),
     ))
+}
+
+fn written_into_text(
+    matched: &QueryMatch<'_, '_>,
+    query: &Query,
+    source: &str,
+    table: &Table,
+) -> Option<usize> {
+    let buffers = table.text_buffers.as_ref()?;
+    let captured = |label: &str| {
+        matched.captures.iter().find_map(|capture| {
+            (query.capture_names()[capture.index as usize] == label).then_some(capture.node)
+        })
+    };
+    let target = captured("written_into")?;
+    let cleared = captured("cleared")?;
+
+    buffers::holds_text(target, source, buffers).then(|| cleared.start_byte())
 }
 
 fn captured_call<'tree>(matched: &QueryMatch<'_, 'tree>, query: &Query) -> Option<Node<'tree>> {

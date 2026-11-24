@@ -3,6 +3,15 @@
   (#any-of? @subject "unwrap" "expect")) @concept.error_panic
 
 (call_expression
+  function: (field_expression
+    value: (macro_invocation
+      macro: (identifier) @_macro
+      (token_tree . (identifier) @written_into))
+    field: (field_identifier) @cleared)
+  (#any-of? @_macro "write" "writeln")
+  (#any-of? @cleared "unwrap" "expect"))
+
+(call_expression
   function: (field_expression field: (field_identifier) @subject)
   (#eq? @subject "ok")) @concept.error_discard
 
