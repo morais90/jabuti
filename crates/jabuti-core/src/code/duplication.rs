@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::path::Path;
@@ -79,7 +80,93 @@ pub struct FileFragments {
     pub fragments: Vec<Fragment>,
 }
 
-pub fn duplicates(files: &[FileFragments], policy: &Policy) -> Vec<Finding> {
+pub type Blocks = BTreeMap<String, BTreeMap<u64, usize>>;
+
+pub fn blocks(files: &[FileFragments]) -> Blocks {
+    let mut counted = Blocks::new();
+    for file in files {
+        let held = counted.entry(file.path.clone()).or_default();
+        for fragment in &file.fragments {
+            *held.entry(fragment.hash).or_default() += 1;
+        }
+    }
+
+    counted
+}
+
+pub struct Before<'a> {
+    pub blocks: Blocks,
+    pub touches: &'a (dyn Fn(&str, Span) -> bool + Sync),
+}
+
+impl std::fmt::Debug for Before<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Before")
+            .field("blocks", &self.blocks)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Before<'_> {
+    fn added(&self, now: &Blocks, hash: u64) -> usize {
+        let total = |held: &Blocks| -> usize {
+            self.blocks
+                .keys()
+                .filter_map(|path| held.get(path)?.get(&hash))
+                .sum()
+        };
+
+        total(now).saturating_sub(total(&self.blocks))
+    }
+
+    fn written(&self, occurrence: &Occurrence) -> usize {
+        let span = occurrence.fragment.span;
+        (span.start_line..=span.end_line)
+            .filter(|line| {
+                (self.touches)(
+                    &occurrence.path,
+                    Span {
+                        start_line: *line,
+                        end_line: *line,
+                    },
+                )
+            })
+            .count()
+    }
+
+    fn select(
+        &self,
+        files: &[FileFragments],
+        found: Vec<(Occurrence, Twins)>,
+    ) -> Vec<(Occurrence, Twins)> {
+        let now = blocks(files);
+        let mut classes: BTreeMap<u64, Vec<(Occurrence, Twins)>> = BTreeMap::new();
+        for (occurrence, twins) in found {
+            if self.blocks.contains_key(&occurrence.path) {
+                classes
+                    .entry(occurrence.fragment.hash)
+                    .or_default()
+                    .push((occurrence, twins));
+            }
+        }
+
+        classes
+            .into_iter()
+            .flat_map(|(hash, mut class)| {
+                class.sort_by_key(|(occurrence, _)| Reverse(self.written(occurrence)));
+                class.truncate(self.added(&now, hash));
+                class
+            })
+            .collect()
+    }
+}
+
+pub fn duplicates(
+    files: &[FileFragments],
+    policy: &Policy,
+    before: Option<&Before<'_>>,
+) -> Vec<Finding> {
     let Some(config) = policy.active(Rule::DuplicateBlock) else {
         return Vec::new();
     };
@@ -100,7 +187,12 @@ pub fn duplicates(files: &[FileFragments], policy: &Policy) -> Vec<Finding> {
         .map(in_place_order)
         .collect();
 
-    let mut findings: Vec<Finding> = widest(repeated)
+    let found = widest(repeated);
+    let kept = match before {
+        Some(before) => before.select(files, found),
+        None => found,
+    };
+    let mut findings: Vec<Finding> = kept
         .into_iter()
         .map(|(occurrence, twins)| finding(&occurrence, &twins, config.limit))
         .collect();

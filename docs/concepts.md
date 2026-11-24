@@ -166,9 +166,15 @@ A renamed file is compared with the file it came from.
 This is also the setting that makes it practical to fail a build on findings. A function that was
 already too long stays quiet when someone fixes one line of it, and is reported when someone makes it
 longer, so you can turn the gate on today instead of waiting for a cleanup that never gets scheduled.
-`duplicate-block` and the findings of orchestrated tools are not compared yet: they are reported where
-they overlap a changed line. A file that did not parse at the reference cannot be compared either, so jabuti
-says so on stderr and reports only its findings on the lines the change touched.
+`duplicate-block` is compared by counting. Across the files the change touched, a block is reported
+only when there are now more copies of it than at the reference, and only as many as were added.
+When the change touched several copies, the ones it wrote the most lines of are reported, so an old
+copy stays quiet even when the change edits it, and a block moved from one file to another is not a
+new copy. A block that grew is a different block, and counts as new. The findings of orchestrated
+tools are not compared: they are reported where they overlap a changed line, because comparing them
+would mean running the tool a second time on the reference. A file that did not parse at the
+reference cannot be compared either, so jabuti says so on stderr and reports only its findings on
+the lines the change touched.
 
 ```console
 $ jabuti check --all

@@ -9,12 +9,15 @@ use anyhow::{Context, Result};
 use jabuti_core::authorship::{LeftOut, Origin};
 use jabuti_core::catalog::Input;
 use jabuti_core::code::Measured;
+use jabuti_core::code::duplication::Before;
+use jabuti_core::diff::Placement;
 use jabuti_core::graph::index::Source;
-use jabuti_core::model::Finding;
+use jabuti_core::model::{Finding, Span};
 use jabuti_core::policy::Layers;
 use jabuti_core::report::Outcome;
 use jabuti_core::{code, diff, graph};
 
+use self::examine::Base;
 use self::plan::Plan;
 use crate::config::Settings;
 use crate::inputs::git::since::{self, Changes};
@@ -112,6 +115,7 @@ impl Run<'_> {
             bindings: &self.settings.concepts,
             touched: self.touched,
             churn: self.churn,
+            before: None,
         }
     }
 
@@ -158,6 +162,16 @@ fn touched_by(changes: &Changes, paths: &[PathBuf]) -> BTreeSet<PathBuf> {
 struct Compared<'a> {
     changes: &'a Changes,
     texts: BTreeMap<PathBuf, String>,
+    base: Base,
+    placement: Placement,
+}
+
+impl Compared<'_> {
+    fn touches(&self, path: &str, span: Span) -> bool {
+        self.changes
+            .diff()
+            .touches(&self.placement.in_repository(Path::new(path)), span)
+    }
 }
 
 struct Drawn<'a> {
@@ -167,20 +181,29 @@ struct Drawn<'a> {
 }
 
 fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
-    let request = run.request();
+    let compared = match run.changes {
+        Some(changes) => Some(compare(run, changes)?),
+        None => None,
+    };
+    let touches = |path: &str, span: Span| {
+        compared
+            .as_ref()
+            .is_some_and(|compared| compared.touches(path, span))
+    };
+    let before = compared.as_ref().map(|compared| Before {
+        blocks: compared.base.blocks.clone(),
+        touches: &touches,
+    });
+    let request = code::Scan {
+        before: before.as_ref(),
+        ..run.request()
+    };
     let extent = run.extent(&request)?;
     let examined = examine::files(run, &extent, &request);
 
     let (mut outcome, measured) = code::scan(examined.reviewed, &request);
     outcome.unreadable = examined.unreadable;
     outcome.left_out = examined.left_out;
-    let compared = match run.changes {
-        Some(changes) => Some(Compared {
-            changes,
-            texts: changes.base_texts(run.paths, run.root)?,
-        }),
-        None => None,
-    };
     if let Some(compared) = &compared {
         let findings = std::mem::take(&mut outcome.findings);
         outcome.findings = worsened(run, compared, findings, notices);
@@ -223,13 +246,30 @@ fn orchestrated(run: &Run<'_>, measured: &[Measured], notices: &mut Vec<String>)
     found
 }
 
+fn compare<'a>(run: &Run<'_>, changes: &'a Changes) -> Result<Compared<'a>> {
+    let texts = changes.base_texts(run.paths, run.root)?;
+    let mut base = examine::base_findings(run, &texts, &run.request());
+    for path in run.touched.into_iter().flatten() {
+        base.blocks
+            .entry(workspace::display(path, run.root))
+            .or_default();
+    }
+
+    Ok(Compared {
+        changes,
+        texts,
+        base,
+        placement: changes.placement(run.paths),
+    })
+}
+
 fn worsened(
     run: &Run<'_>,
     compared: &Compared<'_>,
     findings: Vec<Finding>,
     notices: &mut Vec<String>,
 ) -> Vec<Finding> {
-    let base = examine::base_findings(run, &compared.texts, &run.request());
+    let base = &compared.base;
     for (path, reason) in &base.unread {
         notices.push(format!(
             "{path} could not be read as it was before the change ({reason}), so only its findings on lines the change touched are reported"

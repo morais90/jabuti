@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use jabuti_core::catalog::{Rule, UnitKind};
+use jabuti_core::code::duplication::{self, FileFragments};
 use jabuti_core::code::{self, Measured, Reviewed, Scan};
 use jabuti_core::lang;
 use jabuti_core::model::Span;
@@ -94,6 +95,7 @@ fn a_file_is_counted_measured_and_judged_whole() {
         bindings: &ConceptBindings::default(),
         touched: None,
         churn: &churn,
+        before: None,
     };
     let lib = text("src/lib.rs", GUARDED);
 
@@ -142,6 +144,7 @@ fn test_code_may_mask_an_error_and_a_file_git_never_saw_has_no_churn() {
         bindings: &ConceptBindings::default(),
         touched: None,
         churn: &BTreeMap::new(),
+        before: None,
     };
     let helper = text("tests/helper.rs", GUARDED);
 
@@ -179,6 +182,7 @@ fn only_the_touched_files_are_reviewed_unless_duplication_reads_them_all() {
             bindings: &ConceptBindings::default(),
             touched,
             churn: &BTreeMap::new(),
+            before: None,
         }
         .scope(&paths)
     };
@@ -201,6 +205,7 @@ fn an_untouched_file_feeds_duplication_without_being_counted_or_judged() {
         bindings: &ConceptBindings::default(),
         touched: Some(&touched),
         churn: &BTreeMap::new(),
+        before: None,
     };
     let files = [text("a.rs", DOUBLING), text("b.rs", DOUBLING)];
 
@@ -235,6 +240,7 @@ fn nothing_is_fragmented_while_duplication_is_switched_off() {
         bindings: &ConceptBindings::default(),
         touched: None,
         churn: &BTreeMap::new(),
+        before: None,
     };
     let files = [text("a.rs", DOUBLING), text("b.rs", DOUBLING)];
 
@@ -257,10 +263,11 @@ fn a_reviewed_file_hands_over_the_findings_it_judged() {
         bindings: &ConceptBindings::default(),
         touched: None,
         churn: &BTreeMap::new(),
+        before: None,
     };
     let lib = text("src/lib.rs", GUARDED);
 
-    let findings = reviewed(&lib, &request).into_findings();
+    let (findings, _) = reviewed(&lib, &request).into_parts();
 
     let mut fired: Vec<(String, Option<&str>)> = findings
         .iter()
@@ -278,6 +285,41 @@ fn a_reviewed_file_hands_over_the_findings_it_judged() {
 }
 
 #[test]
+fn a_reviewed_file_hands_over_its_findings_and_the_blocks_it_holds() {
+    let policy = policy(&[
+        (Rule::FunctionLines, 2, true),
+        (Rule::DuplicateBlock, 10, true),
+    ]);
+    let request = Scan {
+        policy: &policy,
+        bindings: &ConceptBindings::default(),
+        touched: None,
+        churn: &BTreeMap::new(),
+        before: None,
+    };
+    let lib = text("src/lib.rs", GUARDED);
+    let parsed = syntax::parse(&lib.source, lib.spec).expect("fixture parses cleanly");
+
+    let (findings, fragments) = reviewed(&lib, &request).into_parts();
+
+    let fired: BTreeSet<String> = findings.iter().map(|finding| finding.rule.id()).collect();
+    assert_eq!(
+        (fired, fragments),
+        (
+            BTreeSet::from([
+                "error-masking".to_owned(),
+                "function-lines".to_owned(),
+                "suppression".to_owned(),
+            ]),
+            Some(FileFragments {
+                path: "src/lib.rs".to_owned(),
+                fragments: duplication::fragments(&parsed, 10),
+            })
+        )
+    );
+}
+
+#[test]
 fn a_const_fn_is_measured_as_code_that_runs_at_compile_time() {
     let source = "const fn limit() -> u32 {\n    60\n}\n\nconst unsafe fn raw() -> u32 {\n    1\n}\n\nimpl Rule {\n    pub const fn id(self) -> u32 {\n        0\n    }\n}\n\nasync fn later() {}\n\nfn now() -> u32 {\n    limit()\n}\n";
     let policy = Policy::default();
@@ -286,6 +328,7 @@ fn a_const_fn_is_measured_as_code_that_runs_at_compile_time() {
         bindings: &ConceptBindings::default(),
         touched: None,
         churn: &BTreeMap::new(),
+        before: None,
     };
     let lib = text("src/lib.rs", source);
 

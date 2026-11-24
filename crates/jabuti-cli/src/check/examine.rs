@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use jabuti_core::authorship::{self, LeftOut, Origin};
 use jabuti_core::catalog::Input;
+use jabuti_core::code::duplication::{self, Blocks, FileFragments};
 use jabuti_core::graph::facts::{self, FileFacts};
 use jabuti_core::graph::index::Source;
 use jabuti_core::lang::{self, LangSpec, LanguageId};
@@ -203,6 +204,7 @@ impl Examined {
 #[derive(Default)]
 pub(super) struct Base {
     pub(super) findings: Vec<Finding>,
+    pub(super) blocks: Blocks,
     pub(super) unread: BTreeMap<String, String>,
 }
 
@@ -211,7 +213,8 @@ pub(super) fn base_findings(
     texts: &BTreeMap<PathBuf, String>,
     request: &code::Scan<'_>,
 ) -> Base {
-    let read: Vec<Result<Vec<Finding>, (String, String)>> = texts
+    type Read = Result<(Vec<Finding>, Option<FileFragments>), (String, String)>;
+    let read: Vec<Read> = texts
         .par_iter()
         .filter_map(|(shown, source)| {
             let spec = lang::detect(shown)?;
@@ -224,7 +227,7 @@ pub(super) fn base_findings(
             Some(match syntax::parse(&text.source, spec) {
                 Ok(parsed) => {
                     let aliases = graph::aliases(&parsed, spec.id, &run.settings.concepts);
-                    Ok(code::reviewed(&text, &parsed, &aliases, request).into_findings())
+                    Ok(code::reviewed(&text, &parsed, &aliases, request).into_parts())
                 }
                 Err(error) => Err((text.shown, error.to_string())),
             })
@@ -232,14 +235,19 @@ pub(super) fn base_findings(
         .collect();
 
     let mut base = Base::default();
+    let mut fragments = Vec::new();
     for file in read {
         match file {
-            Ok(findings) => base.findings.extend(findings),
+            Ok((findings, held)) => {
+                base.findings.extend(findings);
+                fragments.extend(held);
+            }
             Err((shown, reason)) => {
                 base.unread.insert(shown, reason);
             }
         }
     }
+    base.blocks = duplication::blocks(&fragments);
     base
 }
 

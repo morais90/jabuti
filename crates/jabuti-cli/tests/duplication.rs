@@ -1,6 +1,7 @@
 mod common;
 
 use common::{append, function_of, jabuti, repository, shaped_like, write};
+use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 
 #[test]
@@ -80,6 +81,81 @@ fn a_copy_that_predates_the_change_is_left_out() {
         .assert()
         .success()
         .stdout(contains("No findings"));
+}
+
+#[test]
+fn editing_a_file_that_already_held_the_copy_reports_nothing() {
+    let directory = repository(&[
+        (
+            "src/parser.rs",
+            &shaped_like("parse_header", "parts", "name"),
+        ),
+        ("src/reader.rs", &shaped_like("read_pair", "pieces", "key")),
+    ]);
+
+    append(&directory, "src/parser.rs", "\nfn added() {}\n");
+
+    jabuti(&directory)
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stdout(contains("No findings"));
+}
+
+#[test]
+fn editing_inside_a_copy_that_predates_the_change_reports_nothing() {
+    let directory = repository(&[
+        (
+            "src/parser.rs",
+            &shaped_like("parse_header", "parts", "name"),
+        ),
+        ("src/reader.rs", &shaped_like("read_pair", "pieces", "key")),
+    ]);
+
+    write(
+        &directory,
+        "src/parser.rs",
+        &shaped_like("parse_header", "parts", "label"),
+    );
+
+    jabuti(&directory)
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .success()
+        .stdout(contains("No findings"));
+}
+
+#[test]
+fn only_the_second_copy_is_reported_when_the_change_also_edits_the_first() {
+    let directory = repository(&[
+        (
+            "src/parser.rs",
+            &shaped_like("parse_header", "parts", "name"),
+        ),
+        ("src/reader.rs", &shaped_like("read_pair", "pieces", "key")),
+    ]);
+
+    write(
+        &directory,
+        "src/parser.rs",
+        &format!(
+            "{}\n{}",
+            shaped_like("parse_header", "parts", "label"),
+            shaped_like("parse_footer", "bits", "tail")
+        ),
+    );
+
+    jabuti(&directory)
+        .arg("--since")
+        .arg("HEAD")
+        .assert()
+        .code(1)
+        .stdout(
+            contains("src/parser.rs:14  duplicate-block")
+                .and(contains("src/parser.rs:1  duplicate-block").not()),
+        );
 }
 
 #[test]

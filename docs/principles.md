@@ -63,11 +63,10 @@ forbidden, and then `layer-violation` reports it and fails the run.
 
 **Where this stands today.** Every finding fails the check, and `jabuti.toml` no longer sets which
 rules run or their limits. A check judges a change by default and `--all` maps the repository
-without failing. The change reports what it made worse for the rules measured per file, while
-`duplicate-block` and the findings of orchestrated tools are still reported wherever they overlap a
-changed line. This section is the model
-the next releases move to, and the documentation of each part changes with the release that ships
-it.
+without failing. The change reports what it made worse, while the findings of orchestrated tools are
+still reported wherever they overlap a changed line, since comparing them would mean running each tool
+a second time on the reference. This section is the model the next releases move to, and the
+documentation of each part changes with the release that ships it.
 
 ## Every default is an opinion
 

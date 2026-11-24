@@ -1,5 +1,8 @@
+use std::collections::BTreeMap;
+
 use jabuti_core::catalog::Rule;
-use jabuti_core::code::duplication::{self, FileFragments};
+use jabuti_core::code::duplication::{self, Before, Blocks, FileFragments};
+use jabuti_core::model::Span;
 use jabuti_core::policy::{Policy, RuleConfig};
 
 use super::common::parse_fixture;
@@ -34,7 +37,7 @@ fn reporting_above(minimum: u32) -> Policy {
 }
 
 fn reported(files: &[FileFragments], minimum: u32) -> Vec<String> {
-    duplication::duplicates(files, &reporting_above(minimum))
+    duplication::duplicates(files, &reporting_above(minimum), None)
         .into_iter()
         .map(|finding| format!("{}:{}", finding.path, finding.span.start_line))
         .collect()
@@ -77,7 +80,7 @@ fn each_occurrence_is_told_where_its_twin_lives() {
         fragments("src/b.rs", RENAMED, 40),
     ];
 
-    let messages: Vec<String> = duplication::duplicates(&files, &reporting_above(40))
+    let messages: Vec<String> = duplication::duplicates(&files, &reporting_above(40), None)
         .into_iter()
         .map(|finding| match finding.detail {
             jabuti_core::model::Detail::Message { message } => message,
@@ -107,7 +110,7 @@ fn a_rule_switched_off_reports_nothing_however_much_is_repeated() {
         fragments("src/b.rs", RENAMED, 10),
     ];
 
-    assert_eq!(duplication::duplicates(&files, &policy), []);
+    assert_eq!(duplication::duplicates(&files, &policy, None), []);
 }
 
 #[test]
@@ -136,7 +139,7 @@ fn two_different_tokens_never_share_a_fingerprint() {
 }
 
 fn messages(files: &[FileFragments], minimum: u32) -> Vec<String> {
-    duplication::duplicates(files, &reporting_above(minimum))
+    duplication::duplicates(files, &reporting_above(minimum), None)
         .into_iter()
         .map(|finding| match finding.detail {
             jabuti_core::model::Detail::Message { message } => {
@@ -272,7 +275,98 @@ fn the_same_files_in_any_order_are_reported_the_same_way() {
     let policy = reporting_above(40);
 
     assert_eq!(
-        duplication::duplicates(&reversed, &policy),
-        duplication::duplicates(&files, &policy)
+        duplication::duplicates(&reversed, &policy, None),
+        duplication::duplicates(&files, &policy, None)
+    );
+}
+
+fn reported_since(files: &[FileFragments], blocks: Blocks, from_line: u32) -> Vec<String> {
+    let touches = |_: &str, span: Span| span.end_line >= from_line;
+    let before = Before {
+        blocks,
+        touches: &touches,
+    };
+
+    duplication::duplicates(files, &reporting_above(40), Some(&before))
+        .into_iter()
+        .map(|finding| format!("{}:{}", finding.path, finding.span.start_line))
+        .collect()
+}
+
+fn changed(files: &[FileFragments], new: &[&str]) -> Blocks {
+    let mut blocks = duplication::blocks(files);
+    for path in new {
+        blocks.insert((*path).to_owned(), BTreeMap::new());
+    }
+    blocks
+}
+
+#[test]
+fn a_file_counts_how_many_times_it_holds_each_block() {
+    let held = duplication::blocks(&[fragments("src/a.rs", HEADER, 40)]);
+    let once = duplication::fragments(&parse_fixture(HEADER), 40);
+    let expected: BTreeMap<u64, usize> = once.iter().map(|fragment| (fragment.hash, 1)).collect();
+
+    assert_eq!(held, Blocks::from([("src/a.rs".to_owned(), expected)]));
+}
+
+#[test]
+fn a_copy_each_file_already_held_is_not_reported() {
+    let files = [
+        fragments("src/a.rs", HEADER, 40),
+        fragments("src/b.rs", RENAMED, 40),
+    ];
+
+    assert_eq!(
+        reported_since(&files, changed(&files, &[]), 1),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn a_copy_landing_in_a_new_file_is_reported_there_and_not_at_its_twin() {
+    let files = [
+        fragments("src/a.rs", HEADER, 40),
+        fragments("src/b.rs", RENAMED, 40),
+    ];
+
+    assert_eq!(
+        reported_since(&files, changed(&[], &["src/b.rs"]), 1),
+        ["src/b.rs:1"]
+    );
+}
+
+#[test]
+fn a_block_moved_from_one_changed_file_to_another_is_not_a_new_copy() {
+    let before = changed(&[fragments("src/a.rs", HEADER, 40)], &["src/moved.rs"]);
+    let files = [
+        fragments("src/a.rs", UNRELATED, 40),
+        fragments("src/moved.rs", HEADER, 40),
+        fragments("src/b.rs", RENAMED, 40),
+    ];
+
+    assert_eq!(reported_since(&files, before, 1), Vec::<String>::new());
+}
+
+#[test]
+fn only_the_copy_the_change_added_is_reported_when_a_file_gains_one() {
+    let twice = format!("{HEADER}\n{RENAMED}");
+    let files = [fragments("src/a.rs", &twice, 40)];
+    let before = changed(&[fragments("src/a.rs", HEADER, 40)], &[]);
+
+    assert_eq!(reported_since(&files, before, 10), ["src/a.rs:10"]);
+}
+
+#[test]
+fn what_came_before_shows_its_blocks_and_hides_the_predicate() {
+    let touches = |_: &str, _: Span| true;
+    let before = Before {
+        blocks: changed(&[], &["src/a.rs"]),
+        touches: &touches,
+    };
+
+    assert_eq!(
+        format!("{before:?}"),
+        "Before { blocks: {\"src/a.rs\": {}}, .. }"
     );
 }

@@ -14,7 +14,7 @@ pub mod units;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use self::duplication::FileFragments;
+use self::duplication::{Before, FileFragments};
 use self::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use self::review::FileUnderReview;
 use self::units::Unit;
@@ -49,6 +49,7 @@ pub struct Scan<'a> {
     pub bindings: &'a ConceptBindings,
     pub touched: Option<&'a BTreeSet<PathBuf>>,
     pub churn: &'a BTreeMap<PathBuf, u32>,
+    pub before: Option<&'a Before<'a>>,
 }
 
 impl Scan<'_> {
@@ -123,8 +124,8 @@ fn compile_time(unit: &Unit) -> Vec<Span> {
 }
 
 impl Reviewed {
-    pub fn into_findings(self) -> Vec<Finding> {
-        self.findings
+    pub fn into_parts(self) -> (Vec<Finding>, Option<FileFragments>) {
+        (self.findings, self.fragments)
     }
 }
 
@@ -137,9 +138,11 @@ pub fn scan(reviewed: Vec<Reviewed>, request: &Scan<'_>) -> (Outcome, Vec<Measur
         .collect();
 
     let mut outcome = gather(covered(reviewed, request.touched));
-    outcome
-        .findings
-        .extend(duplication::duplicates(&repeated, request.policy));
+    outcome.findings.extend(duplication::duplicates(
+        &repeated,
+        request.policy,
+        request.before,
+    ));
 
     (outcome, measured)
 }

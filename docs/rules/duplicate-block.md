@@ -69,10 +69,13 @@ manual inspection record live in [`CALIBRATION.md`](../../CALIBRATION.md).
 ## Requirements and limits
 
 The rule compares files against each other, so jabuti reads every file in scope even when a check
-judges a change. Only findings that touch changed lines are reported, but the search itself
-has to see the whole picture, since a copy is only findable when its twin is also in view. Reading a
-file is not the same as counting it: the summary line and `--format measures` still cover only the
-change, so scoping a run means the same thing whether or not this rule is on.
+judges a change. Only a copy the change added is reported: the files it touched are compared with
+their versions at the reference, and a block they hold no more times than before stays quiet, even
+when the change edits it or moves it to another file. A block that grew is a different block, so
+growing a copy reports it. The search itself has to see the whole picture, since a copy is only
+findable when its twin is also in view. Reading a file is not the same as counting it: the summary
+line and `--format measures` still cover only the change, so scoping a run means the same thing
+whether or not this rule is on.
 
 Because the rule compares files against each other, a finding is about a pair of files rather than
 about one file in one language. It therefore belongs to the run rather than to a language, and has
