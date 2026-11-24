@@ -144,11 +144,14 @@ $ jabuti check --since v1.4.0
 
 Without `--since`, the change is worked out from where you are. On a branch other than the principal
 one, it is everything since the branch left it: the principal branch is the one `origin/HEAD` names,
-or else `main`, or else `master`. On the principal branch itself, it is what is not committed yet,
-which is the state an agent is usually in. A detached `HEAD`, as a continuous integration checkout
+or else `main`, or else `master`. On the principal branch itself, it is everything not pushed yet:
+the commits since its upstream, or since its copy on `origin` when no upstream is set, plus what is
+not committed. With neither, it is what is not committed yet. A branch that has no principal branch
+to leave from is treated the same way. A detached `HEAD`, as a continuous integration checkout
 usually has, is judged against the principal branch, and when there is none to find the check stops
-and asks for `--since` rather than judging nothing. Outside a git repository, or in one with no commits, there
-is nothing to compare against and every file counts as new. `--since` names the reference instead.
+and asks for `--since` rather than judging nothing. Outside a git repository, or in one with no
+commits, there is nothing to compare against and every file counts as new. `--since` names the
+reference instead.
 
 Only files that changed against the reference are analysed, and only what the change made worse is
 reported. Uncommitted edits and brand new files count as changed.

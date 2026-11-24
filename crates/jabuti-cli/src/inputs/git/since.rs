@@ -122,9 +122,9 @@ pub(crate) fn implied() -> Result<Option<String>> {
     let current = current.as_deref().map(str::trim);
 
     match (principal(), current) {
-        (Some(branch), Some(name)) if name == local(&branch) => Ok(Some("HEAD".to_owned())),
+        (Some(branch), Some(name)) if name == local(&branch) => tracked(name),
         (Some(branch), _) => Ok(Some(branch)),
-        (None, Some(_)) => Ok(Some("HEAD".to_owned())),
+        (None, Some(name)) => tracked(name),
         (None, None) => bail!(
             "HEAD is detached and no principal branch was found in origin/HEAD, main or master, so there is no telling what the change is. Name the reference it started from with --since, or list the whole repository with --all"
         ),
@@ -153,6 +153,37 @@ fn principal() -> Option<String> {
             .is_ok()
         })
         .map(str::to_owned)
+}
+
+fn tracked(branch: &str) -> Result<Option<String>> {
+    let upstream = super::run(&[
+        "for-each-ref",
+        "--format=%(upstream)",
+        &format!("refs/heads/{branch}"),
+    ])?;
+    let candidates = [
+        upstream.trim().to_owned(),
+        format!("refs/remotes/origin/{branch}"),
+    ];
+    let found = candidates
+        .into_iter()
+        .find(|reference| !reference.is_empty() && exists(reference));
+
+    Ok(Some(found.map_or_else(
+        || "HEAD".to_owned(),
+        |reference| shortened(&reference).to_owned(),
+    )))
+}
+
+fn exists(reference: &str) -> bool {
+    super::run(&["rev-parse", "--verify", "--quiet", reference]).is_ok()
+}
+
+fn shortened(reference: &str) -> &str {
+    reference
+        .strip_prefix("refs/remotes/")
+        .or_else(|| reference.strip_prefix("refs/heads/"))
+        .unwrap_or(reference)
 }
 
 fn local(branch: &str) -> &str {

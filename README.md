@@ -73,8 +73,8 @@ $ jabuti check
 ```
 
 A check judges the change you are making: on a branch, everything since it left the principal one;
-on the principal branch, what is not committed yet. `--since` names another reference, and `--all`
-lists the whole repository as a map that fails nothing.
+on the principal branch, everything not pushed yet, committed or not. `--since` names another
+reference, and `--all` lists the whole repository as a map that fails nothing.
 
 Only changed files are analysed, and within them only what the change made worse is reported: a new
 function over a limit, a function the change made longer or more complex, one more swallowed error.

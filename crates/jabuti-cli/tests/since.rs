@@ -354,7 +354,7 @@ fn all_and_since_cannot_be_asked_together() {
 }
 
 #[test]
-fn on_the_principal_branch_a_commit_not_pushed_yet_is_no_longer_the_change() {
+fn on_the_principal_branch_a_commit_not_pushed_yet_is_still_the_change() {
     let directory = repository(&[("src/lib.rs", "fn small() {}\n")]);
     git(
         &directory,
@@ -370,13 +370,47 @@ fn on_the_principal_branch_a_commit_not_pushed_yet_is_no_longer_the_change() {
     );
     write(&directory, "src/fresh.rs", &function_of("fresh", 70));
     commit(&directory, "fresh");
+    write(&directory, "src/later.rs", &function_of("later", 70));
 
     jabuti(&directory)
         .args(["--format", "human"])
         .assert()
-        .success()
-        .stdout(contains("since HEAD"))
-        .stdout(contains("fresh").not());
+        .code(1)
+        .stdout(contains("since origin/main"))
+        .stdout(contains(":1  fresh  function-lines"))
+        .stdout(contains(":1  later  function-lines"));
+}
+
+#[test]
+fn on_the_principal_branch_its_upstream_is_the_base_even_without_a_remote_head() {
+    let directory = repository(&[("src/lib.rs", "fn small() {}\n")]);
+    git(
+        &directory,
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    git(
+        &directory,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://example.invalid/repo.git",
+        ],
+    );
+    git(&directory, &["config", "branch.main.remote", "origin"]);
+    git(
+        &directory,
+        &["config", "branch.main.merge", "refs/heads/main"],
+    );
+    write(&directory, "src/fresh.rs", &function_of("fresh", 70));
+    commit(&directory, "fresh");
+
+    jabuti(&directory)
+        .args(["--format", "human"])
+        .assert()
+        .code(1)
+        .stdout(contains("since origin/main"))
+        .stdout(contains(":1  fresh  function-lines"));
 }
 
 #[test]
@@ -417,4 +451,98 @@ fn a_principal_branch_sharing_no_history_says_where_the_change_was_worked_out_fr
         .assert()
         .code(2)
         .stderr(contains("the change was worked out from main"));
+}
+
+#[test]
+fn a_branch_with_no_principal_branch_is_judged_against_its_upstream() {
+    let directory = repository(&[("src/lib.rs", "fn small() {}\n")]);
+    git(&directory, &["branch", "-q", "-m", "main", "trunk"]);
+    git(
+        &directory,
+        &["update-ref", "refs/remotes/origin/trunk", "HEAD"],
+    );
+    git(
+        &directory,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://example.invalid/repo.git",
+        ],
+    );
+    git(&directory, &["config", "branch.trunk.remote", "origin"]);
+    git(
+        &directory,
+        &["config", "branch.trunk.merge", "refs/heads/trunk"],
+    );
+    write(&directory, "src/fresh.rs", &function_of("fresh", 70));
+    commit(&directory, "fresh");
+
+    jabuti(&directory)
+        .args(["--format", "human"])
+        .assert()
+        .code(1)
+        .stdout(contains("since origin/trunk"))
+        .stdout(contains(":1  fresh  function-lines"));
+}
+
+#[test]
+fn an_upstream_that_no_longer_exists_leaves_the_uncommitted_work_as_the_change() {
+    let directory = repository(&[("src/lib.rs", "fn small() {}\n")]);
+    git(
+        &directory,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://example.invalid/repo.git",
+        ],
+    );
+    git(&directory, &["config", "branch.main.remote", "origin"]);
+    git(
+        &directory,
+        &["config", "branch.main.merge", "refs/heads/gone"],
+    );
+    write(&directory, "src/fresh.rs", &function_of("fresh", 70));
+
+    jabuti(&directory)
+        .args(["--format", "human"])
+        .assert()
+        .code(1)
+        .stdout(contains("since HEAD"))
+        .stdout(contains(":1  fresh  function-lines"));
+}
+
+#[test]
+fn on_the_principal_branch_its_remote_copy_is_the_base_with_nothing_else_configured() {
+    let directory = repository(&[("src/lib.rs", "fn small() {}\n")]);
+    git(
+        &directory,
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    write(&directory, "src/fresh.rs", &function_of("fresh", 70));
+    commit(&directory, "fresh");
+
+    jabuti(&directory)
+        .args(["--format", "human"])
+        .assert()
+        .code(1)
+        .stdout(contains("since origin/main"))
+        .stdout(contains(":1  fresh  function-lines"));
+}
+
+#[test]
+fn an_upstream_that_is_a_local_branch_is_named_as_that_branch() {
+    let directory = repository(&[("src/lib.rs", "fn small() {}\n")]);
+    git(&directory, &["branch", "-q", "base"]);
+    git(&directory, &["branch", "-q", "--set-upstream-to=base"]);
+    write(&directory, "src/fresh.rs", &function_of("fresh", 70));
+    commit(&directory, "fresh");
+
+    jabuti(&directory)
+        .args(["--format", "human"])
+        .assert()
+        .code(1)
+        .stdout(contains("since base "))
+        .stdout(contains(":1  fresh  function-lines"));
 }
