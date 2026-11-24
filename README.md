@@ -124,13 +124,15 @@ leave out, which tools to run, where the coverage report is, the layers of the c
 own wrappers around error handling:
 
 ```toml
-exclude = ["generated/**"]
+exclude = ["samples/**"]
 
 [tools.cargo-llvm-cov]
 enabled = true
 ```
 
-It does not choose which rules run or where their limits sit. Those are fixed by jabuti, and a
+Generated, vendored and translation files are recognised without being listed; `exclude` is for
+what jabuti cannot tell, and every file it leaves out is counted in the output. It does not choose
+which rules run or where their limits sit. Those are fixed by jabuti, and a
 `[rules]` or `[languages.<name>.rules]` table stops the run with exit `2` and says why.
 
 ## How it works

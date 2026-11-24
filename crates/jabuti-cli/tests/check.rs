@@ -59,17 +59,42 @@ fn a_file_that_does_not_parse_is_named_in_the_output_and_left_out_of_the_count()
 }
 
 #[test]
-fn an_excluded_path_is_not_analysed_at_all() {
+fn an_excluded_path_is_not_analysed_but_is_counted() {
     let directory = project(&[
-        ("jabuti.toml", "exclude = [\"generated/**\"]\n"),
+        ("jabuti.toml", "exclude = [\"samples/**\"]\n"),
         ("src/lib.rs", "fn small() {}\n"),
-        ("generated/tables.rs", &function_of("huge", 400)),
+        ("samples/tables.rs", &function_of("huge", 400)),
     ]);
 
+    jabuti(&directory).assert().success().stdout(
+        "No findings across 1 file and 1 unit.\n\n\
+             1 file left out: 1 excluded by jabuti.toml.\n",
+    );
+}
+
+#[test]
+fn a_change_counts_only_the_files_it_touched_among_those_left_out() {
+    let directory = repository(&[
+        ("jabuti.toml", "exclude = [\"samples/**\"]\n"),
+        ("src/lib.rs", "fn small() {}\n"),
+        ("src/api/types.gen.rs", "fn generated() {}\n"),
+        ("samples/tables.rs", "fn sample() {}\n"),
+    ]);
+    write(&directory, "src/lib.rs", "fn small() {}\n\nfn other() {}\n");
+    write(
+        &directory,
+        "samples/tables.rs",
+        "fn sample() {}\n\nfn more() {}\n",
+    );
+
     jabuti(&directory)
+        .args(["--format", "agent"])
         .assert()
         .success()
-        .stdout("No findings across 1 file and 1 unit.\n");
+        .stdout(
+            "No findings across 1 file and 2 units.\n\n\
+             1 file left out: 1 excluded by jabuti.toml.\n",
+        );
 }
 
 #[test]
@@ -537,7 +562,7 @@ fn files_nobody_wrote_by_hand_are_left_out_and_counted() {
         .success()
         .stdout(
             "No findings across 1 file and 1 unit.\n\n\
-             5 files left out as not written by hand: 3 generated, 2 translations.\n",
+             5 files left out: 3 generated, 2 translations.\n",
         );
 }
 
@@ -576,7 +601,7 @@ fn a_translation_checked_alone_is_still_known_by_the_set_beside_it() {
         .success()
         .stdout(
             "No findings across 0 files and 0 units.\n\n\
-             1 file left out as not written by hand: 1 translation.\n",
+             1 file left out: 1 translation.\n",
         );
 }
 
@@ -597,6 +622,56 @@ fn a_vendored_file_that_is_not_text_is_left_out_rather_than_unreadable() {
         .success()
         .stdout(
             "No findings across 1 file and 1 unit.\n\n\
-             1 file left out as not written by hand: 1 vendored.\n",
+             1 file left out: 1 vendored.\n",
         );
+}
+
+#[test]
+fn a_directory_excluded_by_name_has_each_of_its_files_counted() {
+    let directory = project(&[
+        ("jabuti.toml", "exclude = [\"samples\", \"fixtures/\"]\n"),
+        ("src/lib.rs", "fn small() {}\n"),
+        ("samples/one.rs", &function_of("huge", 400)),
+        ("samples/deep/two.rs", &function_of("vast", 400)),
+        ("fixtures/three.rs", &function_of("wide", 400)),
+    ]);
+
+    jabuti(&directory).assert().success().stdout(
+        "No findings across 1 file and 1 unit.\n\n\
+             3 files left out: 3 excluded by jabuti.toml.\n",
+    );
+}
+
+#[test]
+fn an_excluded_file_named_on_the_command_line_is_checked() {
+    let directory = project(&[
+        ("jabuti.toml", "exclude = [\"samples/**\"]\n"),
+        ("samples/big.rs", &function_of("huge", 70)),
+    ]);
+
+    binary(&directory)
+        .args(["check", "samples/big.rs", "--format", "agent"])
+        .assert()
+        .code(1)
+        .stdout(
+            "1 finding to fix across 1 file and 1 unit.\n\n\
+             samples/big.rs:1  function-lines  huge  measured 72, limit 60\n",
+        );
+}
+
+#[test]
+fn a_change_to_what_is_excluded_counts_every_file_it_leaves_out() {
+    let directory = repository(&[
+        ("jabuti.toml", ""),
+        ("src/lib.rs", "fn small() {}\n"),
+        ("src/legacy/old.rs", "fn old() {}\n"),
+        ("src/legacy/older.rs", "fn older() {}\n"),
+    ]);
+    write(&directory, "jabuti.toml", "exclude = [\"src/legacy/**\"]\n");
+
+    jabuti(&directory)
+        .args(["--format", "agent"])
+        .assert()
+        .success()
+        .stdout(contains("2 files left out: 2 excluded by jabuti.toml.\n"));
 }

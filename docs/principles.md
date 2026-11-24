@@ -120,18 +120,22 @@ given a way to mark one as accepted, will mark it, with a reason that sounds rig
 **What jabuti does not measure, it decides.** Some files are not code a person wrote: generated
 sources, vendored dependencies, lockfiles, the translations of an interface whose every file repeats
 the same keys. Measuring them reports something nobody can act on. jabuti recognises them itself, from
-the markers they carry and where they live, and leaves them out. A project does not list them, because
-a list a project keeps is an exception by another name.
+the markers they carry and where they live, and leaves them out, so a project does not have to list
+them.
 
 **A suppression is a finding.** The same holds for the tools jabuti runs. Switching off one of their
 checks for a line is reported as a finding of its own, whatever reason is written next to it.
 
-**A project can tell jabuti more, never ask it to look less.** Some checks need a fact only the
-project holds. `layer-violation` has nothing to enforce until the project declares which parts of it
-may depend on which, and that declaration adds a constraint rather than lifting one. That is what
-`jabuti.toml` is for, and the only thing it is for. A `[rules]` table, which would change which
-rules run or their limits, is rejected with an error that says why, rather than ignored, because a
-setting that silently does nothing is worse than one that is refused.
+**A project can leave out a path, never a rule.** Some facts only the project holds.
+`layer-violation` has nothing to enforce until the project declares which parts of it may depend on
+which. And some files are not the project's code in ways no marker shows, such as a generator that
+leaves no trace or a directory of sample data, so the owner of the project can take a path out of the
+check. That is what `jabuti.toml` is for. Leaving a path out takes it away from every rule at once,
+which makes it a decision about what the project is rather than a way around one finding, and every
+file it leaves out is counted in the output, so whoever reviews the change sees it. Nothing finer is
+offered: a `[rules]` table, which would change which rules run or their limits, is rejected with an
+error that says why, rather than ignored, because a setting that silently does nothing is worse than
+one that is refused.
 
 ## Tools are curated, not piped
 

@@ -85,7 +85,7 @@ the directory holding it. A path given on the command line that lies outside tha
 and one that does not exist is an error rather than an empty report:
 
 ```toml
-exclude = ["generated/**"]
+exclude = ["samples/**"]
 
 [coverage]
 report = "target/coverage/lcov.info"
@@ -94,7 +94,8 @@ report = "target/coverage/lcov.info"
 domain = { paths = ["src/domain/**"], depends_on = [] }
 ```
 
-The file holds what only the project knows: `exclude`, which tools run under `[tools.<name>]`, the
+The file holds what only the project knows: `exclude`, for paths that are not the project's code in
+a way jabuti cannot recognise on its own, which tools run under `[tools.<name>]`, the
 coverage report under `[coverage]`, the layers under `[layers]`, and the project's own wrappers under
 `[languages.<name>.concepts]`. Which rules run and where their limits sit are fixed by jabuti. A
 `[rules]` or `[languages.<name>.rules]` table stops the run with exit `2` and says why.

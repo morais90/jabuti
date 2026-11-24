@@ -1236,6 +1236,7 @@ fn left_out_files() -> Vec<LeftOut> {
         left("ui/i18n/en.ts", Origin::Translation),
         left("ui/i18n/pt-BR.ts", Origin::Translation),
         left("vendor/zlib/inflate.rs", Origin::Vendored),
+        left("fixtures/sample.rs", Origin::Excluded),
     ]
 }
 
@@ -1274,7 +1275,7 @@ fn the_agent_report_counts_the_files_left_out_by_origin() {
 
     assert_eq!(
         report::agent(judgement, 20),
-        "No findings across 42 files and 378 units.\n\n5 files left out as not written by hand: 2 generated, 1 vendored, 2 translations.\n"
+        "No findings across 42 files and 378 units.\n\n6 files left out: 2 generated, 1 vendored, 2 translations, 1 excluded by jabuti.toml.\n"
     );
 }
 
@@ -1286,10 +1287,7 @@ fn one_file_left_out_is_named_in_the_singular() {
         ..judged(&[], &[])
     };
 
-    assert!(
-        report::agent(judgement, 20)
-            .ends_with("\n1 file left out as not written by hand: 1 translation.\n")
-    );
+    assert!(report::agent(judgement, 20).ends_with("\n1 file left out: 1 translation.\n"));
 }
 
 #[test]
@@ -1327,8 +1325,8 @@ fn the_human_report_counts_the_files_left_out() {
     assert_eq!(
         [
             report::human(clean, 20, view(None, false))
-                .contains("nothing to fix · 42 files · 378 units · 5 left out (2 generated, 1 vendored, 2 translations) · seal"),
-            report::human(failing, 20, view(None, false)).contains("1 to fix · 5 left out (2 generated, 1 vendored, 2 translations) · seal"),
+                .contains("nothing to fix · 42 files · 378 units · 6 left out (2 generated, 1 vendored, 2 translations, 1 excluded by jabuti.toml) · seal"),
+            report::human(failing, 20, view(None, false)).contains("1 to fix · 6 left out (2 generated, 1 vendored, 2 translations, 1 excluded by jabuti.toml) · seal"),
         ],
         [true, true]
     );
@@ -1389,12 +1387,12 @@ fn sarif_notes_each_file_left_out_after_the_unreadable_ones() {
             ),
             (
                 "note".to_owned(),
-                "left out as generated".to_owned(),
+                "left out: generated".to_owned(),
                 "api/types.gen.ts".to_owned()
             ),
             (
                 "note".to_owned(),
-                "left out as vendored".to_owned(),
+                "left out: vendored".to_owned(),
                 "vendor/zlib/inflate.rs".to_owned()
             ),
         ]

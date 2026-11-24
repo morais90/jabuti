@@ -54,6 +54,9 @@ fn a_header_that_says_the_file_is_generated_marks_it_generated(#[case] source: &
 #[case::a_doc_comment_about_something_else(
     "//! Wraps the client the server publishes.\n\npub fn shown() {}\n"
 )]
+#[case::a_doc_comment_that_mentions_generated_code(
+    "//! Helpers for auto-generated request ids.\n\npub fn next() {}\n"
+)]
 #[case::a_warning_that_is_not_about_generation(
     "// Do not edit these defaults without updating the configuration guide.\nexport const limit = 3;\n"
 )]
@@ -70,6 +73,18 @@ fn only_the_directories_of_a_path_place_it_and_not_its_own_name() {
             origin_of("src/generated.ts", WRITTEN),
         ],
         [None, None]
+    );
+}
+
+#[test]
+fn a_vendor_directory_below_the_root_is_code_named_for_sellers() {
+    assert_eq!(
+        [
+            origin_of("src/vendor/payouts.rs", WRITTEN),
+            origin_of("app/vendored/terms.kt", WRITTEN),
+            origin_of("vendored/zlib/inflate.rs", WRITTEN),
+        ],
+        [None, None, Some(Origin::Vendored)]
     );
 }
 
@@ -166,7 +181,16 @@ fn a_translation_is_told_apart_only_when_its_set_names_it() {
 fn each_origin_publishes_the_id_its_report_uses() {
     assert_eq!(
         Origin::ALL.map(Origin::id),
-        ["generated", "vendored", "translation"]
+        ["generated", "vendored", "translation", "excluded"]
+    );
+    assert_eq!(
+        Origin::ALL.map(Origin::described),
+        [
+            "generated",
+            "vendored",
+            "a translation",
+            "excluded by jabuti.toml"
+        ]
     );
 }
 

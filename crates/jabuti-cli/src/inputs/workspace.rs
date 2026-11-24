@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use ignore::WalkBuilder;
-use ignore::overrides::OverrideBuilder;
+use ignore::overrides::{Override, OverrideBuilder};
 use jabuti_core::lang;
 
 use crate::config::{self, Settings};
@@ -13,33 +13,9 @@ pub(crate) fn sources(
     exclude: &[String],
     project: &Path,
 ) -> Result<Vec<PathBuf>> {
-    let absolute: Vec<PathBuf> = roots
-        .iter()
-        .map(|root| inside(root, project))
-        .collect::<Result<_>>()?;
-    let Some((first, rest)) = absolute.split_first() else {
-        return Ok(Vec::new());
-    };
-
-    let mut overrides = OverrideBuilder::new(project);
-    for pattern in exclude {
-        overrides
-            .add(&format!("!{pattern}"))
-            .with_context(|| format!("invalid exclude pattern {pattern}"))?;
-    }
-
-    let mut builder = WalkBuilder::new(first);
-    builder.overrides(overrides.build()?);
-    for root in rest {
-        builder.add(root);
-    }
-
-    let mut paths: Vec<PathBuf> = builder
-        .build()
-        .flatten()
-        .map(ignore::DirEntry::into_path)
-        .filter(|path| path.is_file() && lang::detect(path).is_some())
-        .collect();
+    let mut builder = walker(roots, project)?;
+    builder.overrides(overrides(exclude, project)?);
+    let mut paths = readable(&builder);
 
     paths.sort_by_key(|path| (path.is_symlink(), path.clone()));
 
@@ -47,6 +23,61 @@ pub(crate) fn sources(
     paths.retain(|path| seen.insert(canonical(path)));
 
     Ok(paths)
+}
+
+pub(crate) fn excluded(
+    roots: &[PathBuf],
+    exclude: &[String],
+    project: &Path,
+) -> Result<Vec<PathBuf>> {
+    let matcher = overrides(exclude, project)?;
+    let mut excluded: Vec<PathBuf> = readable(&walker(roots, project)?)
+        .into_iter()
+        .filter(|path| {
+            path.ancestors()
+                .take_while(|ancestor| *ancestor != project)
+                .any(|ancestor| matcher.matched(ancestor, ancestor != path).is_ignore())
+        })
+        .collect();
+    excluded.sort();
+    excluded.dedup();
+
+    Ok(excluded)
+}
+
+fn walker(roots: &[PathBuf], project: &Path) -> Result<WalkBuilder> {
+    let absolute: Vec<PathBuf> = roots
+        .iter()
+        .map(|root| inside(root, project))
+        .collect::<Result<_>>()?;
+    let first = absolute.first().map_or(project, PathBuf::as_path);
+
+    let mut builder = WalkBuilder::new(first);
+    for root in absolute.iter().skip(1) {
+        builder.add(root);
+    }
+
+    Ok(builder)
+}
+
+fn overrides(exclude: &[String], project: &Path) -> Result<Override> {
+    let mut overrides = OverrideBuilder::new(project);
+    for pattern in exclude {
+        overrides
+            .add(&format!("!{pattern}"))
+            .with_context(|| format!("invalid exclude pattern {pattern}"))?;
+    }
+
+    Ok(overrides.build()?)
+}
+
+fn readable(builder: &WalkBuilder) -> Vec<PathBuf> {
+    builder
+        .build()
+        .flatten()
+        .map(ignore::DirEntry::into_path)
+        .filter(|path| path.is_file() && lang::detect(path).is_some())
+        .collect()
 }
 
 pub(crate) fn extended(

@@ -237,7 +237,7 @@ fn notifications<'a>(
         .chain(left_out.iter().map(|file| Notification {
             level: "note",
             message: Message {
-                text: Cow::Owned(format!("left out as {}", file.origin.id())),
+                text: Cow::Owned(format!("left out: {}", file.origin.described())),
             },
             locations: [location(&file.path, None)],
         }))

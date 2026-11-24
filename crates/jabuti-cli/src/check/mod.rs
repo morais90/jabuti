@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use jabuti_core::authorship::{LeftOut, Origin};
 use jabuti_core::catalog::Input;
 use jabuti_core::code::Measured;
 use jabuti_core::graph::index::Source;
@@ -75,6 +76,7 @@ pub(crate) fn verdict(
     };
 
     let mut outcome = judged(&run, notices)?;
+    outcome.left_out.extend(excluded_by_project(&run, roots)?);
     if let Some(changes) = run.changes {
         changes
             .diff()
@@ -120,6 +122,26 @@ impl Run<'_> {
 
         workspace::extended(self.paths, &self.settings.exclude, self.root)
     }
+}
+
+fn excluded_by_project(run: &Run<'_>, roots: &[PathBuf]) -> Result<Vec<LeftOut>> {
+    let excluded = workspace::excluded(roots, &run.settings.exclude, run.root)?;
+    let named: BTreeSet<&PathBuf> = run.paths.iter().collect();
+    let configured = run.root.join(crate::config::FILE_NAME);
+    let shown = |path: &PathBuf| {
+        let reconfigured = |changes: &Changes| changes.covers(&configured);
+        run.changes
+            .is_none_or(|changes| reconfigured(changes) || changes.covers(path))
+    };
+
+    Ok(excluded
+        .iter()
+        .filter(|path| !named.contains(path) && shown(path))
+        .map(|path| LeftOut {
+            path: workspace::display(path, run.root),
+            origin: Origin::Excluded,
+        })
+        .collect())
 }
 
 fn touched_by(changes: &Changes, paths: &[PathBuf]) -> BTreeSet<PathBuf> {

@@ -17,6 +17,7 @@ use crate::inputs::workspace;
 
 #[derive(Debug)]
 struct File<T> {
+    path: PathBuf,
     shown: String,
     language: LanguageId,
     origin: Option<Origin>,
@@ -75,6 +76,7 @@ fn examine_one<T>(
 
     let Ok(source) = std::fs::read_to_string(path) else {
         return Some(File {
+            path: path.to_path_buf(),
             shown,
             language: spec.id,
             origin: placed,
@@ -93,6 +95,7 @@ fn examine_one<T>(
     };
 
     Some(File {
+        path: path.to_path_buf(),
         shown,
         language: spec.id,
         origin,
@@ -149,16 +152,23 @@ pub(super) fn files(run: &Run<'_>, extent: &[PathBuf], request: &code::Scan<'_>)
         opaque: Vec::new(),
         left_out: Vec::new(),
     };
+    let asked: BTreeSet<&PathBuf> = run.paths.iter().collect();
+    let in_scope = |path: &PathBuf| {
+        asked.contains(path) && run.touched.is_none_or(|touched| touched.contains(path))
+    };
     for file in corpus {
-        examined.take(file, graphed);
+        let in_scope = in_scope(&file.path);
+        examined.take(file, in_scope, graphed);
     }
 
     examined
 }
 
 impl Examined {
-    fn take(&mut self, file: File<Derived>, graphed: bool) {
-        if let Some(origin) = file.origin {
+    fn take(&mut self, file: File<Derived>, in_scope: bool, graphed: bool) {
+        if let Some(origin) = file.origin
+            && in_scope
+        {
             self.left_out.push(LeftOut {
                 path: file.shown.clone(),
                 origin,

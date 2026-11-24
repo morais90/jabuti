@@ -147,7 +147,7 @@ fn set_aside(left_out: &[LeftOut]) -> String {
     }
 
     format!(
-        "\n{} left out as not written by hand: {}.\n",
+        "\n{} left out: {}.\n",
         plural(left_out.len(), "file"),
         origins(left_out)
     )
@@ -160,6 +160,7 @@ pub(super) fn origins(left_out: &[LeftOut]) -> String {
             let count = left_out.iter().filter(|file| file.origin == origin).count();
             (count > 0).then(|| match origin {
                 Origin::Translation => plural(count, "translation"),
+                Origin::Excluded => format!("{count} excluded by jabuti.toml"),
                 Origin::Generated | Origin::Vendored => format!("{count} {}", origin.id()),
             })
         })
