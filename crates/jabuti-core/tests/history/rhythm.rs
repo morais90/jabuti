@@ -21,7 +21,7 @@ fn each_commit_lands_in_the_week_it_was_written_counting_back_from_head() {
     .concat();
 
     assert_eq!(
-        rhythm::read(&log, HEAD),
+        rhythm::read(&log, HEAD).expect("the log is well formed"),
         BTreeMap::from([
             (
                 "src/busy.rs".to_owned(),
@@ -48,7 +48,10 @@ fn a_commit_written_before_the_weeks_drawn_is_not_counted() {
     .concat();
 
     assert_eq!(
-        rhythm::read(&log, HEAD).keys().collect::<Vec<_>>(),
+        rhythm::read(&log, HEAD)
+            .expect("the log is well formed")
+            .keys()
+            .collect::<Vec<_>>(),
         ["src/new.rs"]
     );
 }
@@ -58,7 +61,7 @@ fn a_commit_dated_after_head_belongs_to_the_latest_week() {
     let log = commit(-WEEK, &["src/skewed.rs"]);
 
     assert_eq!(
-        rhythm::read(&log, HEAD)["src/skewed.rs"].weeks,
+        rhythm::read(&log, HEAD).expect("the log is well formed")["src/skewed.rs"].weeks,
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
     );
 }
@@ -68,7 +71,10 @@ fn a_name_git_would_quote_is_read_exactly_as_written() {
     let log = commit(0, &["src/a\"b\\c.rs", "app/[id]/page.ts"]);
 
     assert_eq!(
-        rhythm::read(&log, HEAD).keys().collect::<Vec<_>>(),
+        rhythm::read(&log, HEAD)
+            .expect("the log is well formed")
+            .keys()
+            .collect::<Vec<_>>(),
         ["app/[id]/page.ts", "src/a\"b\\c.rs"]
     );
 }
@@ -85,4 +91,30 @@ fn a_rhythm_counts_the_commits_of_every_week() {
     };
 
     assert_eq!(rhythm.commits(), 6);
+}
+
+#[test]
+fn a_commit_time_that_is_not_a_number_is_refused() {
+    let log = "\u{1}soon\0\nsrc/a.rs\0";
+
+    assert_eq!(
+        rhythm::read(log, HEAD),
+        Err(rhythm::MalformedLog("soon".to_owned()))
+    );
+}
+
+#[test]
+fn a_head_far_in_the_past_opens_the_window_at_the_earliest_time() {
+    assert_eq!(rhythm::window(i64::MIN + 1), i64::MIN);
+}
+
+#[test]
+fn a_commit_far_before_head_is_left_out_rather_than_overflowing() {
+    let log = format!("\u{1}{}\0\nsrc/a.rs\0", i64::MIN);
+
+    assert!(
+        rhythm::read(&log, i64::MAX)
+            .expect("the log is well formed")
+            .is_empty()
+    );
 }

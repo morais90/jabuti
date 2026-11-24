@@ -483,3 +483,33 @@ fn a_misspelled_table_in_the_configuration_stops_the_run_instead_of_being_ignore
         .code(2)
         .stderr(contains("unknown field `layer`"));
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_terminal_is_shown_the_human_format_without_asking() {
+    let directory = project(&[("src/lib.rs", &function_of("wide", 70))]);
+    let command = format!("'{}' check .", env!("CARGO_BIN_EXE_jabuti"));
+
+    let output = std::process::Command::new("script")
+        .args(["--quiet", "--command", &command, "/dev/null"])
+        .current_dir(directory.path())
+        .env("TERM", "xterm-256color")
+        .env("NO_COLOR", "1")
+        .output()
+        .expect("script from util-linux runs the check in a terminal");
+    let shown = String::from_utf8_lossy(&output.stdout);
+
+    assert!(shown.contains("⬢ jabuti  1 file · 1 unit"), "{shown}");
+}
+
+#[test]
+fn a_clean_change_in_a_repository_is_one_line_in_the_human_format() {
+    let directory = repository(&[("src/lib.rs", "fn small() {}\n")]);
+    write(&directory, "src/lib.rs", "fn small() {}\n\nfn other() {}\n");
+
+    jabuti(&directory)
+        .args(["--format", "human"])
+        .assert()
+        .success()
+        .stdout(contains("since HEAD · nothing to fix · 1 file · 2 units"));
+}

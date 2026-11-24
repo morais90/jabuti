@@ -168,7 +168,8 @@ This is also the setting that makes it practical to fail a build on findings. A 
 already too long stays quiet when someone fixes one line of it, and is reported when someone makes it
 longer, so you can turn the gate on today instead of waiting for a cleanup that never gets scheduled.
 `duplicate-block` and the findings of orchestrated tools are not compared yet: they are reported where
-they overlap a changed line.
+they overlap a changed line. A file that did not parse at the reference cannot be compared either, so jabuti
+says so on stderr and reports only its findings on the lines the change touched.
 
 ```console
 $ jabuti check --all

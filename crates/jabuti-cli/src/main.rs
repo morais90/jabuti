@@ -172,7 +172,7 @@ fn check(arguments: &CheckArgs) -> Result<ExitCode> {
         Format::Agent
     });
     let extras = match format {
-        Format::Human => Extras::load(arguments, &verdict),
+        Format::Human => Extras::load(arguments, &verdict)?,
         Format::Agent | Format::Json | Format::Measures | Format::Sarif => Extras::default(),
     };
     let request = Request {
@@ -202,16 +202,19 @@ struct Extras {
 }
 
 impl Extras {
-    fn load(arguments: &CheckArgs, verdict: &check::Verdict) -> Self {
+    fn load(arguments: &CheckArgs, verdict: &check::Verdict) -> Result<Self> {
         let findings = &verdict.outcome.findings;
         let shown = report::shown_files(&verdict.outcome.judgement(), arguments.limit);
         let units = report::trail::units(findings, arguments.limit);
-        Self {
-            rhythm: inputs::history::rhythm(&verdict.root, &shown),
-            trail: arguments
-                .verbose
-                .then(|| inputs::trail::load(&verdict.root, &units, verdict.changes.as_ref())),
-        }
+        let rhythm = inputs::history::rhythm(&verdict.root, &shown)?;
+        let trail = if arguments.verbose {
+            let changes = verdict.changes.as_ref();
+            Some(inputs::trail::load(&verdict.root, &units, changes)?)
+        } else {
+            None
+        };
+
+        Ok(Self { rhythm, trail })
     }
 }
 

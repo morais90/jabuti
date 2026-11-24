@@ -63,12 +63,16 @@ pub(crate) fn commits(history: Option<&Churn>, paths: &[PathBuf]) -> BTreeMap<Pa
         .collect()
 }
 
-pub(crate) fn rhythm(root: &Path, paths: &[&str]) -> Option<BTreeMap<String, Rhythm>> {
+pub(crate) fn rhythm(root: &Path, paths: &[&str]) -> Result<Option<BTreeMap<String, Rhythm>>> {
+    let git = |arguments: &[&str]| crate::inputs::git::run_at(root, arguments);
     if paths.is_empty() {
-        return None;
+        return Ok(None);
     }
-    let head = crate::inputs::git::run_at(root, &["log", "-1", "--format=%ct"]).ok()?;
-    let head = head.trim().parse::<i64>().ok()?;
+    if git(&["rev-parse", "--verify", "--quiet", "HEAD"]).is_err() {
+        return Ok(None);
+    }
+    let head = git(&["log", "-1", "--no-show-signature", "--format=%ct"])?;
+    let head: i64 = head.trim().parse()?;
     let since = format!("--since=@{}", rhythm::window(head));
     let mut arguments = vec![
         "--literal-pathspecs",
@@ -82,7 +86,7 @@ pub(crate) fn rhythm(root: &Path, paths: &[&str]) -> Option<BTreeMap<String, Rhy
         "--",
     ];
     arguments.extend_from_slice(paths);
-    let log = crate::inputs::git::run_at(root, &arguments).ok()?;
+    let log = git(&arguments)?;
 
-    Some(rhythm::read(&log, head))
+    Ok(Some(rhythm::read(&log, head)?))
 }

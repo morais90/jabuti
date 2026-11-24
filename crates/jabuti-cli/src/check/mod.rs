@@ -103,6 +103,15 @@ struct Run<'a> {
 }
 
 impl Run<'_> {
+    fn request(&self) -> code::Scan<'_> {
+        code::Scan {
+            policy: &self.settings.policy,
+            bindings: &self.settings.concepts,
+            touched: self.touched,
+            churn: self.churn,
+        }
+    }
+
     fn extent(&self, request: &code::Scan<'_>) -> Result<Vec<PathBuf>> {
         if !self.plan.reads(Input::Graph) {
             return Ok(request.scope(self.paths).into_iter().collect());
@@ -120,30 +129,34 @@ fn touched_by(changes: &Changes, paths: &[PathBuf]) -> BTreeSet<PathBuf> {
         .collect()
 }
 
+struct Compared<'a> {
+    changes: &'a Changes,
+    texts: BTreeMap<PathBuf, String>,
+}
+
+struct Drawn<'a> {
+    sources: &'a [Source],
+    opaque: &'a [String],
+    layers: Option<&'a Layers>,
+}
+
 fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
-    let request = code::Scan {
-        policy: &run.settings.policy,
-        bindings: &run.settings.concepts,
-        touched: run.touched,
-        churn: run.churn,
-    };
+    let request = run.request();
     let extent = run.extent(&request)?;
     let examined = examine::files(run, &extent, &request);
 
     let (mut outcome, measured) = code::scan(examined.reviewed, &request);
     outcome.unreadable = examined.unreadable;
-    let base_texts = match run.changes {
-        Some(changes) => changes.base_texts(run.paths, run.root)?,
-        None => BTreeMap::new(),
-    };
-    if let Some(changes) = run.changes {
-        outcome.findings = worsened(
-            run,
+    let compared = match run.changes {
+        Some(changes) => Some(Compared {
             changes,
-            &request,
-            &base_texts,
-            std::mem::take(&mut outcome.findings),
-        );
+            texts: changes.base_texts(run.paths, run.root)?,
+        }),
+        None => None,
+    };
+    if let Some(compared) = &compared {
+        let findings = std::mem::take(&mut outcome.findings);
+        outcome.findings = worsened(run, compared, findings, notices);
     }
     outcome.findings.extend(crossings::hotspots(
         run.plan,
@@ -156,13 +169,13 @@ fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
         .extend(orchestrated(run, &measured, notices)?);
 
     let layers = layered(run, &extent, notices)?;
-    outcome.findings.extend(graphed(
-        run,
-        &examined.sources,
-        &examined.opaque,
-        layers.as_ref(),
-        &base_texts,
-    ));
+    let drawn = Drawn {
+        sources: &examined.sources,
+        opaque: &examined.opaque,
+        layers: layers.as_ref(),
+    };
+    let base_texts = compared.map_or_else(BTreeMap::new, |compared| compared.texts);
+    outcome.findings.extend(graphed(run, &drawn, &base_texts));
 
     Ok(outcome)
 }
@@ -188,30 +201,30 @@ fn orchestrated(
 
 fn worsened(
     run: &Run<'_>,
-    changes: &Changes,
-    request: &code::Scan<'_>,
-    base_texts: &BTreeMap<PathBuf, String>,
+    compared: &Compared<'_>,
     findings: Vec<Finding>,
+    notices: &mut Vec<String>,
 ) -> Vec<Finding> {
-    let unhistoried = code::Scan {
-        churn: &BTreeMap::new(),
-        ..*request
-    };
-    let base = examine::base_findings(run, base_texts, &unhistoried);
-    let placement = changes.placement(run.paths);
-
+    let base = examine::base_findings(run, &compared.texts, &run.request());
+    for (path, reason) in &base.unread {
+        notices.push(format!(
+            "{path} could not be read as it was before the change ({reason}), so only its findings on lines the change touched are reported"
+        ));
+    }
+    let placement = compared.changes.placement(run.paths);
+    let diff = compared.changes.diff();
     let place = |finding: &Finding| placement.in_repository(Path::new(&finding.path));
+    let touches = |finding: &Finding| diff.touches(&place(finding), finding.span);
 
-    diff::worsened(
-        findings,
-        &base,
-        |finding| changes.diff().touches(&place(finding), finding.span),
-        |finding| {
-            changes
-                .diff()
-                .moved(&place(finding), finding.span.start_line)
-        },
-    )
+    let (unread, readable): (Vec<Finding>, Vec<Finding>) = findings
+        .into_iter()
+        .partition(|finding| base.unread.contains_key(&finding.path));
+    let mut kept = diff::worsened(readable, &base.findings, touches, |finding| {
+        diff.moved(&place(finding), finding.span.start_line)
+    });
+    kept.extend(unread.into_iter().filter(|finding| touches(finding)));
+
+    kept
 }
 
 fn layered(run: &Run<'_>, extent: &[PathBuf], notices: &mut Vec<String>) -> Result<Option<Layers>> {
@@ -224,9 +237,7 @@ fn layered(run: &Run<'_>, extent: &[PathBuf], notices: &mut Vec<String>) -> Resu
 
 fn graphed(
     run: &Run<'_>,
-    sources: &[Source],
-    opaque: &[String],
-    layers: Option<&Layers>,
+    drawn: &Drawn<'_>,
     base_texts: &BTreeMap<PathBuf, String>,
 ) -> Vec<Finding> {
     let base = if run.plan.reads(Input::BaseRevision) {
@@ -243,11 +254,11 @@ fn graphed(
 
     graph::findings(&graph::Scan {
         requested: &requested,
-        sources,
-        opaque,
+        sources: drawn.sources,
+        opaque: drawn.opaque,
         base: &base,
         policy: &run.settings.policy,
         compared: run.changes.is_some(),
-        layers,
+        layers: drawn.layers,
     })
 }

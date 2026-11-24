@@ -144,12 +144,18 @@ pub(super) fn files(run: &Run<'_>, extent: &[PathBuf], request: &code::Scan<'_>)
     examined
 }
 
+#[derive(Default)]
+pub(super) struct Base {
+    pub(super) findings: Vec<Finding>,
+    pub(super) unread: BTreeMap<String, String>,
+}
+
 pub(super) fn base_findings(
     run: &Run<'_>,
     texts: &BTreeMap<PathBuf, String>,
     request: &code::Scan<'_>,
-) -> Vec<Finding> {
-    texts
+) -> Base {
+    let read: Vec<Result<Vec<Finding>, (String, String)>> = texts
         .par_iter()
         .filter_map(|(shown, source)| {
             let spec = lang::detect(shown)?;
@@ -159,12 +165,26 @@ pub(super) fn base_findings(
                 spec,
                 source: source.clone(),
             };
-            let parsed = syntax::parse(&text.source, spec).ok()?;
-            let aliases = graph::aliases(&parsed, spec.id, &run.settings.concepts);
-            Some(code::reviewed(&text, &parsed, &aliases, request).into_findings())
+            Some(match syntax::parse(&text.source, spec) {
+                Ok(parsed) => {
+                    let aliases = graph::aliases(&parsed, spec.id, &run.settings.concepts);
+                    Ok(code::reviewed(&text, &parsed, &aliases, request).into_findings())
+                }
+                Err(error) => Err((text.shown, error.to_string())),
+            })
         })
-        .flatten()
-        .collect()
+        .collect();
+
+    let mut base = Base::default();
+    for file in read {
+        match file {
+            Ok(findings) => base.findings.extend(findings),
+            Err((shown, reason)) => {
+                base.unread.insert(shown, reason);
+            }
+        }
+    }
+    base
 }
 
 pub(super) fn base_sources(texts: &BTreeMap<PathBuf, String>) -> BTreeMap<PathBuf, Option<Source>> {

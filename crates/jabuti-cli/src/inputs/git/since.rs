@@ -118,8 +118,8 @@ pub(crate) fn implied() -> Result<Option<String>> {
     if super::run(&["rev-parse", "--verify", "--quiet", "HEAD"]).is_err() {
         return Ok(None);
     }
-    let current = super::run(&["symbolic-ref", "--quiet", "--short", "HEAD"]).ok();
-    let current = current.as_deref().map(str::trim);
+    let current = super::run(&["branch", "--show-current"])?;
+    let current = Some(current.trim()).filter(|name| !name.is_empty());
 
     match (principal(), current) {
         (Some(branch), Some(name)) if name == local(&branch) => tracked(name),

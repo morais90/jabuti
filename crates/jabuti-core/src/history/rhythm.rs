@@ -7,21 +7,25 @@ const COMMIT: char = '\u{1}';
 
 pub const FORMAT: &str = "--format=%x01%at";
 
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("git gave a commit time that is not a number: {0}")]
+pub struct MalformedLog(pub String);
+
 pub fn window(head: i64) -> i64 {
-    let weeks = i64::try_from(WEEKS).expect("the weeks drawn fit in an i64");
-    head - WEEK_SECONDS * weeks
+    let weeks = i64::try_from(WEEKS).unwrap_or(i64::MAX);
+    head.saturating_sub(WEEK_SECONDS.saturating_mul(weeks))
 }
 
-pub fn read(log: &str, head: i64) -> BTreeMap<String, Rhythm> {
+pub fn read(log: &str, head: i64) -> Result<BTreeMap<String, Rhythm>, MalformedLog> {
     let mut rhythms: BTreeMap<String, Rhythm> = BTreeMap::new();
     let mut week = None;
 
     for token in log.split('\0').filter(|token| !token.is_empty()) {
         if let Some(stamp) = token.strip_prefix(COMMIT) {
-            week = stamp
+            let time = stamp
                 .parse::<i64>()
-                .ok()
-                .and_then(|time| week_of(head, time));
+                .map_err(|_| MalformedLog(stamp.to_owned()))?;
+            week = week_of(head, time);
             continue;
         }
         let Some(index) = week else {
@@ -31,11 +35,13 @@ pub fn read(log: &str, head: i64) -> BTreeMap<String, Rhythm> {
         rhythms.entry(path.to_owned()).or_default().weeks[index] += 1;
     }
 
-    rhythms
+    Ok(rhythms)
 }
 
 fn week_of(head: i64, time: i64) -> Option<usize> {
-    let age = (head - time).max(0) / WEEK_SECONDS;
-    let age = usize::try_from(age).ok()?;
-    WEEKS.checked_sub(age + 1)
+    let age = head.saturating_sub(time).max(0) / WEEK_SECONDS;
+    (0..WEEKS)
+        .rev()
+        .zip(0_i64..)
+        .find_map(|(index, weeks_ago)| (weeks_ago == age).then_some(index))
 }

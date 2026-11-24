@@ -233,20 +233,24 @@ fn write_files(rendered: &mut String, paint: &Paint<'_>, shown: &[Finding], note
     for file in files {
         let path = file.path;
         let heading = paint.linked(path, paint.strong(Tone::Bone, path));
-        match paint.view.rhythm {
+        let line = match paint.view.rhythm {
             Some(_) => {
                 let pulse = rhythm(path);
-                writeln!(
-                    rendered,
+                format!(
                     "{}  {heading}  {}",
                     spark(paint, &pulse.weeks, busiest),
                     paint.plain(Tone::Dim, &changed(pulse.commits()))
                 )
             }
-            None => writeln!(rendered, "{heading}"),
-        }
-        .expect("writing to a string never fails");
-        write_rows(rendered, paint, &columns, file.findings);
+            None => heading,
+        };
+        rendered.push_str(&line);
+        rendered.push('\n');
+        let rows = Rows {
+            paint,
+            columns: &columns,
+        };
+        rows.write(rendered, file.findings);
         write_context(rendered, paint, columns.indent, &file.context);
         rendered.push('\n');
     }
@@ -263,37 +267,39 @@ fn write_context(rendered: &mut String, paint: &Paint<'_>, indent: usize, contex
     }
 }
 
-fn write_rows(rendered: &mut String, paint: &Paint<'_>, columns: &Columns, file: &[Finding]) {
-    let mut previous: Option<&Finding> = None;
-    for (index, finding) in file.iter().enumerate() {
-        let repeated = previous.is_some_and(|before| same_unit(before, finding));
-        write_row(rendered, paint, columns, finding, repeated);
-        previous = Some(finding);
-
-        let next = file.get(index + 1);
-        if next.is_none_or(|after| after.span.start_line != finding.span.start_line) {
-            write_trail_of(rendered, paint, columns.indent + 3, finding, next.is_some());
-        }
-    }
+struct Rows<'a> {
+    paint: &'a Paint<'a>,
+    columns: &'a Columns,
 }
 
-fn write_trail_of(
-    rendered: &mut String,
-    paint: &Paint<'_>,
-    indent: usize,
-    finding: &Finding,
-    followed: bool,
-) {
-    let key = (finding.path.clone(), finding.span.start_line);
-    let Some(lines) = paint.view.trail.and_then(|trail| trail.excerpts.get(&key)) else {
-        return;
-    };
-    if lines.is_empty() {
-        return;
+impl Rows<'_> {
+    fn write(&self, rendered: &mut String, file: &[Finding]) {
+        let mut previous: Option<&Finding> = None;
+        for (index, finding) in file.iter().enumerate() {
+            let repeated = previous.is_some_and(|before| same_unit(before, finding));
+            self.write_row(rendered, finding, repeated);
+            previous = Some(finding);
+
+            let next = file.get(index + 1);
+            if next.is_none_or(|after| after.span.start_line != finding.span.start_line) {
+                self.write_trail_of(rendered, finding, next.is_some());
+            }
+        }
     }
-    write_excerpt(rendered, paint, indent, lines);
-    if followed {
-        rendered.push('\n');
+
+    fn write_trail_of(&self, rendered: &mut String, finding: &Finding, followed: bool) {
+        let key = (finding.path.clone(), finding.span.start_line);
+        let trail = self.paint.view.trail;
+        let Some(lines) = trail.and_then(|trail| trail.excerpts.get(&key)) else {
+            return;
+        };
+        if lines.is_empty() {
+            return;
+        }
+        write_excerpt(rendered, self.paint, self.columns.indent + 3, lines);
+        if followed {
+            rendered.push('\n');
+        }
     }
 }
 
@@ -383,49 +389,46 @@ fn changed(commits: u32) -> String {
     format!("{} in {WEEKS} weeks", plural(commits as usize, "commit"))
 }
 
-fn write_row(
-    rendered: &mut String,
-    paint: &Paint<'_>,
-    columns: &Columns,
-    finding: &Finding,
-    repeated: bool,
-) {
-    let (place, name) = if repeated {
-        (String::new(), String::new())
-    } else {
-        (location(finding), subject(finding))
-    };
-    let place = format!("{place:<width$}", width = columns.location);
-    let name = format!("{name:<width$}", width = columns.subject);
-    let rule = format!("{:<width$}", finding.rule.id(), width = columns.rule);
+impl Rows<'_> {
+    fn write_row(&self, rendered: &mut String, finding: &Finding, repeated: bool) {
+        let (paint, columns) = (self.paint, self.columns);
+        let (place, name) = if repeated {
+            (String::new(), String::new())
+        } else {
+            (location(finding), subject(finding))
+        };
+        let place = format!("{place:<width$}", width = columns.location);
+        let name = format!("{name:<width$}", width = columns.subject);
+        let rule = format!("{:<width$}", finding.rule.id(), width = columns.rule);
 
-    write!(
-        rendered,
-        "{:indent$}{}  {}  {}  ",
-        "",
-        paint.plain(Tone::Dim, &place),
-        paint.plain(Tone::Amber, &name),
-        paint.plain(Tone::Dim, &rule),
-        indent = columns.indent,
-    )
-    .expect("writing to a string never fails");
+        write!(
+            rendered,
+            "{:indent$}{}  {}  {}  ",
+            "",
+            paint.plain(Tone::Dim, &place),
+            paint.plain(Tone::Amber, &name),
+            paint.plain(Tone::Dim, &rule),
+            indent = columns.indent,
+        )
+        .expect("writing to a string never fails");
 
-    let tone = Tone::Scale;
-    match &finding.detail {
-        Detail::Threshold { measured, limit } => {
-            let value = format!("{measured:>width$}", width = columns.measured);
-            write!(
-                rendered,
-                "{}  {}{}",
-                bar(paint, tone, *measured, *limit),
-                paint.strong(tone, &value),
-                paint.plain(Tone::Dim, &format!("/{limit}")),
-            )
-            .expect("writing to a string never fails");
+        let tone = Tone::Scale;
+        match &finding.detail {
+            Detail::Threshold { measured, limit } => {
+                let value = format!("{measured:>width$}", width = columns.measured);
+                write!(
+                    rendered,
+                    "{}  {}{}",
+                    bar(paint, tone, *measured, *limit),
+                    paint.strong(tone, &value),
+                    paint.plain(Tone::Dim, &format!("/{limit}")),
+                )
+                .expect("writing to a string never fails");
+            }
+            Detail::Message { message } => rendered.push_str(&paint.plain(tone, message)),
         }
-        Detail::Message { message } => rendered.push_str(&paint.plain(tone, message)),
+        rendered.push('\n');
     }
-    rendered.push('\n');
 }
 
 fn bar(paint: &Paint<'_>, tone: Tone, measured: u32, limit: u32) -> String {

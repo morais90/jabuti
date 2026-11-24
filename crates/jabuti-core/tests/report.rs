@@ -383,7 +383,9 @@ fn an_outcome_puts_its_findings_readings_and_unreadable_files_in_one_order() {
     );
 }
 
-fn measured(rule: Rule, path: &str, line: u32, subject: &str, values: (u32, u32)) -> Finding {
+type Told = (Rule, &'static str, u32, Option<&'static str>, &'static str);
+
+fn measured((rule, path, line, subject, values): Measured) -> Finding {
     Finding {
         rule: RuleId::Native(rule),
         path: path.to_owned(),
@@ -399,7 +401,7 @@ fn measured(rule: Rule, path: &str, line: u32, subject: &str, values: (u32, u32)
     }
 }
 
-fn told(rule: Rule, path: &str, line: u32, subject: Option<&str>, message: &str) -> Finding {
+fn told((rule, path, line, subject, message): Told) -> Finding {
     Finding {
         rule: RuleId::Native(rule),
         path: path.to_owned(),
@@ -462,24 +464,21 @@ const MEASURED: [Measured; 6] = [
 ];
 
 fn change() -> Vec<Finding> {
-    let mut findings: Vec<Finding> = MEASURED
-        .into_iter()
-        .map(|(rule, path, line, subject, values)| measured(rule, path, line, subject, values))
-        .collect();
-    findings.push(told(
+    let mut findings: Vec<Finding> = MEASURED.into_iter().map(measured).collect();
+    findings.push(told((
         Rule::Suppression,
         "server/src/api/policy.rs",
         161,
         Some("clippy::struct_excessive_bools, reason = \"one switch per device\""),
         "a linter diagnostic is suppressed instead of satisfied",
-    ));
-    findings.push(told(
+    )));
+    findings.push(told((
         Rule::DuplicateBlock,
         "server/src/api/policy.rs",
         456,
         None,
         "157 nodes repeated at server/src/storage.rs:115 (limit 120)",
-    ));
+    )));
     findings.push(tool_finding());
     findings.sort();
     findings
@@ -649,13 +648,13 @@ fn a_terminal_that_declares_itself_dumb_is_not_read_by_a_person() {
 
 #[test]
 fn text_taken_from_the_repository_cannot_drive_the_terminal() {
-    let findings = [told(
+    let findings = [told((
         Rule::Suppression,
         "src/\x1b[2Jlib.rs",
         3,
         Some("dead_code, reason = \"\x1b]52;c;aGk=\x07\""),
         "a linter diagnostic is suppressed instead of satisfied",
-    )];
+    ))];
 
     let rendered = report::human(judged(&findings, &[]), 40, view(Some("\x1bmain"), true));
 
@@ -665,20 +664,20 @@ fn text_taken_from_the_repository_cannot_drive_the_terminal() {
 #[test]
 fn findings_without_a_subject_on_one_line_each_keep_their_line() {
     let findings = [
-        told(
+        told((
             Rule::DuplicateBlock,
             "src/lib.rs",
             1,
             None,
             "157 nodes repeated at src/main.rs:4",
-        ),
-        told(
+        )),
+        told((
             Rule::Assertion,
             "src/lib.rs",
             1,
             None,
             "the test runs and asserts nothing",
-        ),
+        )),
     ];
 
     let rendered = report::human(judged(&findings, &[]), 40, view(None, false));
@@ -689,8 +688,8 @@ fn findings_without_a_subject_on_one_line_each_keep_their_line() {
 #[test]
 fn two_units_sharing_a_name_each_keep_their_own_line_and_name() {
     let findings = [
-        measured(Rule::Parameters, "src/lib.rs", 12, "new", (6, 4)),
-        measured(Rule::Parameters, "src/lib.rs", 48, "new", (5, 4)),
+        measured((Rule::Parameters, "src/lib.rs", 12, "new", (6, 4))),
+        measured((Rule::Parameters, "src/lib.rs", 48, "new", (5, 4))),
     ];
 
     let rendered = report::human(judged(&findings, &[]), 40, view(None, false));
@@ -700,13 +699,13 @@ fn two_units_sharing_a_name_each_keep_their_own_line_and_name() {
 
 #[test]
 fn a_human_report_ends_with_how_many_findings_there_are_to_fix() {
-    let findings = [measured(
+    let findings = [measured((
         Rule::FunctionLines,
         "src/lib.rs",
         1,
         "wide",
         (22, 5),
-    )];
+    ))];
 
     let rendered = report::human(judged(&findings, &[]), 40, view(None, false));
 
@@ -733,13 +732,13 @@ fn quiet_weeks_are_dimmed_and_busy_ones_painted() {
         rhythm: Some(&rhythms),
         ..view(None, true)
     };
-    let findings = [measured(
+    let findings = [measured((
         Rule::Parameters,
         "registry/src/ai.rs",
         223,
         "bill",
         (5, 4),
-    )];
+    ))];
 
     let rendered = report::human(judged(&findings, &[]), 40, view);
 
@@ -1188,4 +1187,26 @@ fn the_human_report_counts_withheld_notes_of_context_too() {
         rendered.contains("  2 more not shown. Narrow the scope with a path argument.\n"),
         "{rendered}"
     );
+}
+
+#[test]
+fn a_blank_line_of_code_under_a_unit_ends_at_its_gutter() {
+    let trail = Trail {
+        excerpts: BTreeMap::from([(
+            ("registry/src/ai.rs".to_owned(), 469),
+            vec![
+                code(469, "fn remembered(turns: &[Turn]) -> Vec<Turn> {", false),
+                code(470, "", false),
+            ],
+        )]),
+        commits: Vec::new(),
+    };
+    let view = report::View {
+        trail: Some(&trail),
+        ..view(None, false)
+    };
+
+    let rendered = report::human(judged(&change(), &[]), 40, view);
+
+    assert!(rendered.contains("      470 │\n"), "{rendered}");
 }

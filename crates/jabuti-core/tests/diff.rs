@@ -283,36 +283,31 @@ fn a_unit_the_base_never_had_over_its_limit_is_reported() {
     );
 }
 
-#[test]
-fn units_sharing_a_name_are_compared_in_the_order_they_appear() {
+fn two_units_named_new(base: [u32; 2], current: [u32; 2]) -> Vec<Finding> {
     let base = [
-        measured(Rule::Parameters, "new", 1, 8),
-        measured(Rule::Parameters, "new", 30, 5),
+        measured(Rule::Parameters, "new", 1, base[0]),
+        measured(Rule::Parameters, "new", 30, base[1]),
     ];
     let current = vec![
-        measured(Rule::Parameters, "new", 1, 6),
-        measured(Rule::Parameters, "new", 30, 7),
+        measured(Rule::Parameters, "new", 1, current[0]),
+        measured(Rule::Parameters, "new", 30, current[1]),
     ];
 
+    diff::worsened(current, &base, anywhere, unmoved)
+}
+
+#[test]
+fn units_sharing_a_name_are_compared_in_the_order_they_appear() {
     assert_eq!(
-        diff::worsened(current, &base, anywhere, unmoved),
+        two_units_named_new([8, 5], [6, 7]),
         [measured(Rule::Parameters, "new", 30, 7)]
     );
 }
 
 #[test]
 fn a_unit_sharing_its_name_with_one_that_grew_keeps_its_own_comparison() {
-    let base = [
-        measured(Rule::Parameters, "new", 1, 8),
-        measured(Rule::Parameters, "new", 30, 5),
-    ];
-    let current = vec![
-        measured(Rule::Parameters, "new", 1, 8),
-        measured(Rule::Parameters, "new", 30, 9),
-    ];
-
     assert_eq!(
-        diff::worsened(current, &base, anywhere, unmoved),
+        two_units_named_new([8, 5], [8, 9]),
         [measured(Rule::Parameters, "new", 30, 9)]
     );
 }
@@ -430,4 +425,20 @@ fn a_line_of_the_base_is_moved_by_every_hunk_above_it() {
         [1, 2, 7, 13, 14, 14, 15, 21, 22, 23]
     );
     assert_eq!(diff.moved(Path::new("src/other.rs"), 9), 9);
+}
+
+#[test]
+fn a_hunk_before_any_file_header_is_ignored() {
+    let diff = Diff::parse("@@ -1,2 +1,3 @@\n+fn added() {}\n");
+
+    assert_eq!(diff, Diff::default());
+}
+
+#[test]
+fn a_hunk_header_that_cannot_be_read_marks_nothing_as_touched() {
+    let diff = Diff::parse("--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ unreadable @@\n");
+
+    assert!(!diff.covers(Path::new("src/lib.rs")));
+    assert!(!diff.touches(Path::new("src/lib.rs"), lines(1, 1_000)));
+    assert_eq!(diff.moved(Path::new("src/lib.rs"), 7), 7);
 }

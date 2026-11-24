@@ -1,6 +1,7 @@
 mod common;
 
-use common::{jabuti, project};
+use common::{function_of, jabuti, project, repository, write};
+use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 
 const MASKED: &str = "fn live() {\n    let value = read().unwrap();\n}\n";
@@ -87,4 +88,39 @@ fn a_concept_binding_without_paths_is_rejected() {
     jabuti(&directory).assert().code(2).stderr(contains(
         "concept error-discard must name at least one non-empty API path",
     ));
+}
+
+#[test]
+fn a_second_occurrence_of_what_was_already_there_is_reported_where_it_was_added() {
+    let directory = repository(&[("src/live.rs", MASKED)]);
+    write(
+        &directory,
+        "src/live.rs",
+        "fn live() {\n    let value = read().unwrap();\n    let other = read().unwrap();\n}\n",
+    );
+
+    jabuti(&directory).assert().code(1).stdout(
+        "1 finding to fix across 1 file and 1 unit.\n\n\
+         src/live.rs:3  error-masking  unwrap  the failure becomes a panic\n",
+    );
+}
+
+#[test]
+fn a_file_that_did_not_parse_before_the_change_is_judged_on_the_lines_it_touched() {
+    let broken = format!("{}\nfn broken( {{}}\n", function_of("legacy", 70));
+    let directory = repository(&[("src/live.rs", &broken)]);
+    let fixed = format!(
+        "{}\nfn fixed() {{\n    let value = read().unwrap();\n}}\n",
+        function_of("legacy", 70)
+    );
+    write(&directory, "src/live.rs", &fixed);
+
+    jabuti(&directory)
+        .assert()
+        .code(1)
+        .stdout(contains("error-masking  unwrap"))
+        .stdout(contains("legacy").not())
+        .stderr(contains(
+            "src/live.rs could not be read as it was before the change (unreadable syntax from line",
+        ));
 }
