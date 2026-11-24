@@ -80,6 +80,7 @@ pub(crate) fn verdict(
             .diff()
             .trim(&mut outcome.findings, &changes.placement(run.paths));
     }
+    outcome.leave_out_unauthored();
     outcome.set_context_apart();
     outcome.order();
 
@@ -147,6 +148,7 @@ fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
 
     let (mut outcome, measured) = code::scan(examined.reviewed, &request);
     outcome.unreadable = examined.unreadable;
+    outcome.left_out = examined.left_out;
     let compared = match run.changes {
         Some(changes) => Some(Compared {
             changes,

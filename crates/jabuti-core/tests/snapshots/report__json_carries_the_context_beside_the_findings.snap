@@ -1,16 +1,17 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 1100
+assertion_line: 1109
 expression: "report::json(with_context(&[], &context))"
 ---
 {
-  "schema": 5,
+  "schema": 6,
   "summary": {
     "files": 42,
     "units": 378,
     "findings": 0,
     "context": 1,
-    "unreadable": 0
+    "unreadable": 0,
+    "left_out": 0
   },
   "findings": [],
   "context": [
@@ -27,5 +28,6 @@ expression: "report::json(with_context(&[], &context))"
       }
     }
   ],
-  "unreadable": []
+  "unreadable": [],
+  "left_out": []
 }

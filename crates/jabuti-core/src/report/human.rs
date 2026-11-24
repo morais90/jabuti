@@ -7,6 +7,7 @@ use std::path::{Component, Path};
 use super::sarif::encode_component;
 use super::trail::{Line, Trail};
 use super::{Judgement, Rhythm, Scanned, WEEKS, json, plural, write_detail};
+use crate::authorship::LeftOut;
 use crate::model::{Detail, Finding, Unreadable};
 
 const BAR_WIDTH: u32 = 12;
@@ -133,12 +134,18 @@ pub(super) fn render(judgement: Judgement<'_>, limit: usize, view: View<'_>) -> 
         findings,
         context,
         unreadable,
+        left_out,
         scanned,
     } = judgement;
 
     if findings.is_empty() && context.is_empty() {
+        let set_aside = if left_out.is_empty() {
+            String::new()
+        } else {
+            format!(" · {}", set_aside(left_out))
+        };
         let summary = format!(
-            "{}nothing to fix · {} · seal {seal}",
+            "{}nothing to fix · {}{set_aside} · seal {seal}",
             scope(view),
             extent(scanned)
         );
@@ -449,11 +456,16 @@ fn bar(paint: &Paint<'_>, tone: Tone, measured: u32, limit: u32) -> String {
     )
 }
 
+fn set_aside(left_out: &[LeftOut]) -> String {
+    format!("{} left out ({})", left_out.len(), super::origins(left_out))
+}
+
 fn footer(paint: &Paint<'_>, judgement: Judgement<'_>, seal: &str) -> String {
     let Judgement {
         findings,
         context,
         unreadable,
+        left_out,
         ..
     } = judgement;
     let mut notes = Vec::new();
@@ -468,6 +480,9 @@ fn footer(paint: &Paint<'_>, judgement: Judgement<'_>, seal: &str) -> String {
     }
     if !unreadable.is_empty() {
         notes.push(format!("{} unreadable", unreadable.len()));
+    }
+    if !left_out.is_empty() {
+        notes.push(set_aside(left_out));
     }
     notes.push(format!("seal {seal}"));
 

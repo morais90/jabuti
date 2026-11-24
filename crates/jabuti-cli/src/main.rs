@@ -238,7 +238,9 @@ fn rendered(request: &Request<'_>, outcome: &report::Outcome) -> String {
         Format::Human => report::human(outcome.judgement(), request.limit, request.view),
         Format::Agent => report::agent(outcome.judgement(), request.limit),
         Format::Json => report::json(outcome.judgement()),
-        Format::Measures => report::measures(&outcome.readings, &outcome.unreadable),
+        Format::Measures => {
+            report::measures(&outcome.readings, &outcome.unreadable, &outcome.left_out)
+        }
         Format::Sarif => report::sarif(outcome.judgement()),
     }
 }

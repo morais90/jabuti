@@ -6,6 +6,7 @@ use std::path::Path;
 use serde::Serialize;
 
 use super::Judgement;
+use crate::authorship::LeftOut;
 use crate::catalog::RuleId;
 use crate::model::{Detail, Finding, Unreadable};
 
@@ -144,7 +145,10 @@ pub(super) fn render(judgement: Judgement<'_>) -> String {
             },
             invocations: [Invocation {
                 execution_successful: true,
-                tool_execution_notifications: notifications(judgement.unreadable),
+                tool_execution_notifications: notifications(
+                    judgement.unreadable,
+                    judgement.left_out,
+                ),
             }],
             results,
         }],
@@ -210,7 +214,10 @@ fn identified_rules(findings: &[Finding]) -> Vec<IdentifiedRule<'_>> {
     identified
 }
 
-fn notifications(unreadable: &[Unreadable]) -> Vec<Notification<'_>> {
+fn notifications<'a>(
+    unreadable: &'a [Unreadable],
+    left_out: &'a [LeftOut],
+) -> Vec<Notification<'a>> {
     let mut files: Vec<&Unreadable> = unreadable.iter().collect();
     files.sort_unstable_by(|left, right| {
         left.path
@@ -227,6 +234,13 @@ fn notifications(unreadable: &[Unreadable]) -> Vec<Notification<'_>> {
             },
             locations: [location(&file.path, None)],
         })
+        .chain(left_out.iter().map(|file| Notification {
+            level: "note",
+            message: Message {
+                text: Cow::Owned(format!("left out as {}", file.origin.id())),
+            },
+            locations: [location(&file.path, None)],
+        }))
         .collect()
 }
 

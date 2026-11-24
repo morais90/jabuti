@@ -1,16 +1,17 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 318
+assertion_line: 319
 expression: rendered
 ---
 {
-  "schema": 5,
+  "schema": 6,
   "summary": {
     "files": 42,
     "units": 378,
     "findings": 0,
     "context": 0,
-    "unreadable": 1
+    "unreadable": 1,
+    "left_out": 0
   },
   "findings": [],
   "context": [],
@@ -19,5 +20,6 @@ expression: rendered
       "path": "src/theme.kt",
       "reason": "unreadable syntax from line 51"
     }
-  ]
+  ],
+  "left_out": []
 }

@@ -1,7 +1,14 @@
 use std::path::{Path, PathBuf};
 
-const KERNEL: [&str; 7] = [
-    "catalog", "diff", "lang", "model", "policy", "report", "syntax",
+const KERNEL: [&str; 8] = [
+    "authorship",
+    "catalog",
+    "diff",
+    "lang",
+    "model",
+    "policy",
+    "report",
+    "syntax",
 ];
 const CONTEXTS: [&str; 5] = ["code", "crossings", "graph", "history", "tools"];
 const CROSSINGS: &str = "crossings";

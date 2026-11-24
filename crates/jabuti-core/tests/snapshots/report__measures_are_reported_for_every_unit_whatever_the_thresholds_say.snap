@@ -1,10 +1,10 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 245
+assertion_line: 247
 expression: rendered
 ---
 {
-  "schema": 5,
+  "schema": 6,
   "measures": [
     {
       "path": "src/lib.rs",
@@ -17,5 +17,6 @@ expression: rendered
       }
     }
   ],
-  "unreadable": []
+  "unreadable": [],
+  "left_out": []
 }

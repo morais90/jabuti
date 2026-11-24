@@ -1,6 +1,6 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 1131
+assertion_line: 1140
 expression: "report::human(with_context(&[], &context), 40, view(None, false))"
 ---
 ⬢ jabuti  42 files · 378 units
@@ -8,4 +8,4 @@ expression: "report::human(with_context(&[], &context), 40, view(None, false))"
 src/report.rs
   ◇ new-dependency  now depends on src/git.rs
 
-nothing to fix · 1 note · seal c8e8·2743
+nothing to fix · 1 note · seal 7be0·ec96

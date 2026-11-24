@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
+use jabuti_core::authorship::{LeftOut, Origin};
 use jabuti_core::catalog::{Rule, RuleId, UnitKind};
 use jabuti_core::model::{Detail, Finding, Reading, Span, Unreadable};
 use jabuti_core::report::trail::{Commit, Line, Trail};
@@ -240,6 +241,7 @@ fn measures_are_reported_for_every_unit_whatever_the_thresholds_say() {
             values: BTreeMap::from([("parameters", 5), ("lines", 3)]),
         }],
         &[],
+        &[],
     );
 
     insta::assert_snapshot!(rendered);
@@ -320,7 +322,7 @@ fn the_json_report_carries_every_unreadable_file_and_counts_them_in_the_summary(
 
 #[test]
 fn measures_name_the_files_no_measurement_could_be_taken_from() {
-    let rendered = report::measures(&[], &[unreadable("src/theme.kt", 51)]);
+    let rendered = report::measures(&[], &[unreadable("src/theme.kt", 51)], &[]);
 
     insta::assert_snapshot!(rendered);
 }
@@ -355,6 +357,10 @@ fn an_outcome_puts_its_findings_readings_and_unreadable_files_in_one_order() {
         ],
         scanned: scanned(),
         unreadable: vec![unreadable("src/theme.kt", 51), unreadable("src/app.ts", 3)],
+        left_out: vec![
+            left("ui/i18n/pt-BR.ts", Origin::Translation),
+            left("api/types.gen.ts", Origin::Generated),
+        ],
     };
 
     outcome.order();
@@ -379,6 +385,10 @@ fn an_outcome_puts_its_findings_readings_and_unreadable_files_in_one_order() {
             ],
             scanned: scanned(),
             unreadable: vec![unreadable("src/app.ts", 3), unreadable("src/theme.kt", 51)],
+            left_out: vec![
+                left("api/types.gen.ts", Origin::Generated),
+                left("ui/i18n/pt-BR.ts", Origin::Translation),
+            ],
         }
     );
 }
@@ -493,6 +503,7 @@ fn judged<'a>(findings: &'a [Finding], unreadable: &'a [Unreadable]) -> report::
         findings,
         context: &[],
         unreadable,
+        left_out: &[],
         scanned: scanned(),
     }
 }
@@ -579,7 +590,7 @@ fn a_clean_human_run_is_one_line_naming_the_scope_and_its_seal() {
 
     assert_eq!(
         rendered,
-        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal 40f3·adcd\n"
+        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal 51ff·28ef\n"
     );
 }
 
@@ -981,7 +992,7 @@ fn a_clean_verbose_report_still_shows_the_commits_of_the_change() {
 
     assert_eq!(
         rendered,
-        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal 40f3·adcd\n  ┬ 7f893ac  feat: a clean change\n  ┴\n"
+        "⬢ jabuti  since main · nothing to fix · 42 files · 378 units · seal 51ff·28ef\n  ┬ 7f893ac  feat: a clean change\n  ┴\n"
     );
 }
 
@@ -1209,4 +1220,183 @@ fn a_blank_line_of_code_under_a_unit_ends_at_its_gutter() {
     let rendered = report::human(judged(&change(), &[]), 40, view);
 
     assert!(rendered.contains("      470 │\n"), "{rendered}");
+}
+
+fn left(path: &str, origin: Origin) -> LeftOut {
+    LeftOut {
+        path: path.to_owned(),
+        origin,
+    }
+}
+
+fn left_out_files() -> Vec<LeftOut> {
+    vec![
+        left("api/client.gen.ts", Origin::Generated),
+        left("api/types.gen.ts", Origin::Generated),
+        left("ui/i18n/en.ts", Origin::Translation),
+        left("ui/i18n/pt-BR.ts", Origin::Translation),
+        left("vendor/zlib/inflate.rs", Origin::Vendored),
+    ]
+}
+
+#[test]
+fn nothing_reported_on_a_file_left_out_survives_into_the_outcome() {
+    let mut outcome = Outcome {
+        findings: vec![finding(12, Some("parse")), tool_finding()],
+        context: vec![note("src/a.rs"), note("src/lib.rs")],
+        readings: vec![
+            reading("src/a.rs", 1, UnitKind::File),
+            reading("src/lib.rs", 1, UnitKind::File),
+        ],
+        left_out: vec![left("src/lib.rs", Origin::Generated)],
+        ..Outcome::default()
+    };
+
+    outcome.leave_out_unauthored();
+
+    assert_eq!(
+        (outcome.findings, outcome.context, outcome.readings),
+        (
+            vec![finding(12, Some("parse"))],
+            vec![note("src/a.rs")],
+            vec![reading("src/a.rs", 1, UnitKind::File)],
+        )
+    );
+}
+
+#[test]
+fn the_agent_report_counts_the_files_left_out_by_origin() {
+    let left_out = left_out_files();
+    let judgement = report::Judgement {
+        left_out: &left_out,
+        ..judged(&[], &[])
+    };
+
+    assert_eq!(
+        report::agent(judgement, 20),
+        "No findings across 42 files and 378 units.\n\n5 files left out as not written by hand: 2 generated, 1 vendored, 2 translations.\n"
+    );
+}
+
+#[test]
+fn one_file_left_out_is_named_in_the_singular() {
+    let left_out = vec![left("ui/i18n/en.ts", Origin::Translation)];
+    let judgement = report::Judgement {
+        left_out: &left_out,
+        ..judged(&[], &[])
+    };
+
+    assert!(
+        report::agent(judgement, 20)
+            .ends_with("\n1 file left out as not written by hand: 1 translation.\n")
+    );
+}
+
+#[test]
+fn the_json_report_lists_each_file_left_out_with_its_origin() {
+    let left_out = vec![left("api/types.gen.ts", Origin::Generated)];
+    let judgement = report::Judgement {
+        left_out: &left_out,
+        ..judged(&[], &[])
+    };
+    let parsed: serde_json::Value =
+        serde_json::from_str(&report::json(judgement)).expect("the report is JSON");
+
+    assert_eq!(
+        (&parsed["summary"]["left_out"], &parsed["left_out"]),
+        (
+            &serde_json::json!(1),
+            &serde_json::json!([{ "path": "api/types.gen.ts", "origin": "generated" }])
+        )
+    );
+}
+
+#[test]
+fn the_human_report_counts_the_files_left_out() {
+    let left_out = left_out_files();
+    let clean = report::Judgement {
+        left_out: &left_out,
+        ..judged(&[], &[])
+    };
+    let findings = [finding(12, Some("parse"))];
+    let failing = report::Judgement {
+        left_out: &left_out,
+        ..judged(&findings, &[])
+    };
+
+    assert_eq!(
+        [
+            report::human(clean, 20, view(None, false))
+                .contains("nothing to fix · 42 files · 378 units · 5 left out (2 generated, 1 vendored, 2 translations) · seal"),
+            report::human(failing, 20, view(None, false)).contains("1 to fix · 5 left out (2 generated, 1 vendored, 2 translations) · seal"),
+        ],
+        [true, true]
+    );
+}
+
+#[test]
+fn measures_name_the_files_left_out() {
+    let left_out = vec![left("api/types.gen.ts", Origin::Generated)];
+    let parsed: serde_json::Value =
+        serde_json::from_str(&report::measures(&[], &[], &left_out)).expect("the report is JSON");
+
+    assert_eq!(
+        parsed["left_out"],
+        serde_json::json!([{ "path": "api/types.gen.ts", "origin": "generated" }])
+    );
+}
+
+#[test]
+fn sarif_notes_each_file_left_out_after_the_unreadable_ones() {
+    let left_out = vec![
+        left("api/types.gen.ts", Origin::Generated),
+        left("vendor/zlib/inflate.rs", Origin::Vendored),
+    ];
+    let unreadable = [unreadable("src/theme.kt", 51)];
+    let judgement = report::Judgement {
+        left_out: &left_out,
+        ..judged(&[], &unreadable)
+    };
+    let parsed: serde_json::Value =
+        serde_json::from_str(&report::sarif(judgement)).expect("the report is JSON");
+    let notes: Vec<(String, String, String)> =
+        parsed["runs"][0]["invocations"][0]["toolExecutionNotifications"]
+            .as_array()
+            .expect("notifications are a list")
+            .iter()
+            .map(|note| {
+                (
+                    note["level"].as_str().unwrap_or_default().to_owned(),
+                    note["message"]["text"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned(),
+                    note["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned(),
+                )
+            })
+            .collect();
+
+    assert_eq!(
+        notes,
+        [
+            (
+                "warning".to_owned(),
+                "unreadable syntax from line 51".to_owned(),
+                "src/theme.kt".to_owned()
+            ),
+            (
+                "note".to_owned(),
+                "left out as generated".to_owned(),
+                "api/types.gen.ts".to_owned()
+            ),
+            (
+                "note".to_owned(),
+                "left out as vendored".to_owned(),
+                "vendor/zlib/inflate.rs".to_owned()
+            ),
+        ]
+    );
 }

@@ -1,3 +1,4 @@
+pub mod authorship;
 pub mod catalog;
 pub mod code;
 pub mod crossings;

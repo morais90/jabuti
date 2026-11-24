@@ -1,6 +1,6 @@
 ---
 source: crates/jabuti-core/tests/report.rs
-assertion_line: 843
+assertion_line: 852
 expression: shown_escapes(&rendered)
 ---
 ␛[1;38;2;232;179;58m⬢␛[0m ␛[1;38;2;217;207;189mjabuti␛[0m  ␛[38;2;125;115;102msince main · 42 files · 378 units␛[0m
@@ -30,4 +30,4 @@ expression: shown_escapes(&rendered)
 ␛]8;;file:///work/%C3%BCn%C3%AFcode%20project/src/lib.rs␛\␛[1;38;2;217;207;189msrc/lib.rs␛[0m␛]8;;␛\
   ␛[38;2;125;115;102m:3  ␛[0m  ␛[38;2;232;179;58m                        ␛[0m  ␛[38;2;125;115;102mclippy/needless_range_loop␛[0m  ␛[38;2;226;85;42mthe loop variable is only used to index␛[0m
 
-␛[1;38;2;26;20;16;48;2;226;85;42m 9 to fix ␛[0m  ␛[38;2;125;115;102mseal bcd5·ff7d␛[0m
+␛[1;38;2;26;20;16;48;2;226;85;42m 9 to fix ␛[0m  ␛[38;2;125;115;102mseal 314a·d3b5␛[0m

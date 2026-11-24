@@ -1,7 +1,8 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use jabuti_core::authorship::{self, LeftOut, Origin};
 use jabuti_core::catalog::Input;
 use jabuti_core::graph::facts::{self, FileFacts};
 use jabuti_core::graph::index::Source;
@@ -18,6 +19,7 @@ use crate::inputs::workspace;
 struct File<T> {
     shown: String,
     language: LanguageId,
+    origin: Option<Origin>,
     outcome: Result<T, Rejected>,
 }
 
@@ -30,46 +32,75 @@ struct Rejected {
 fn examine<T: Send>(
     paths: &[PathBuf],
     project: &Path,
-    derive: impl Fn(&Text, &Parsed<'_>) -> T + Sync,
+    derive: impl Fn(&Text, &Parsed<'_>, Option<Origin>) -> T + Sync,
 ) -> Vec<File<T>> {
+    let translations = translations(paths, project);
+
     paths
         .par_iter()
-        .filter_map(|path| examine_one(path, project, &derive))
+        .filter_map(|path| examine_one(path, project, &translations, &derive))
         .collect()
+}
+
+fn translations(paths: &[PathBuf], project: &Path) -> BTreeSet<PathBuf> {
+    let directories: BTreeSet<PathBuf> = paths
+        .iter()
+        .map(|path| PathBuf::from(workspace::display(path, project)))
+        .filter_map(|shown| shown.parent().map(Path::to_path_buf))
+        .filter(|directory| authorship::holds_translations(directory))
+        .collect();
+    let siblings: Vec<PathBuf> = directories
+        .iter()
+        .flat_map(|directory| {
+            std::fs::read_dir(project.join(directory))
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(move |entry| directory.join(entry.file_name()))
+        })
+        .collect();
+
+    authorship::translations(siblings.iter().map(PathBuf::as_path))
 }
 
 fn examine_one<T>(
     path: &Path,
     project: &Path,
-    derive: &impl Fn(&Text, &Parsed<'_>) -> T,
+    translations: &BTreeSet<PathBuf>,
+    derive: &impl Fn(&Text, &Parsed<'_>, Option<Origin>) -> T,
 ) -> Option<File<T>> {
     let spec = lang::detect(path)?;
     let shown = workspace::display(path, project);
+    let placed = authorship::placed(Path::new(&shown), translations);
 
-    let outcome = match std::fs::read_to_string(path) {
-        Ok(source) => derived(
-            Text {
-                path: path.to_path_buf(),
-                shown: shown.clone(),
-                spec,
-                source,
-            },
-            derive,
-        ),
-        Err(_) => Err(Rejected {
-            reason: "the file could not be read".to_owned(),
-            text: None,
-        }),
+    let Ok(source) = std::fs::read_to_string(path) else {
+        return Some(File {
+            shown,
+            language: spec.id,
+            origin: placed,
+            outcome: Err(Rejected {
+                reason: "the file could not be read".to_owned(),
+                text: None,
+            }),
+        });
+    };
+    let origin = authorship::origin(Path::new(&shown), &source, translations);
+    let text = Text {
+        path: path.to_path_buf(),
+        shown: shown.clone(),
+        spec,
+        source,
     };
 
     Some(File {
         shown,
         language: spec.id,
-        outcome,
+        origin,
+        outcome: derived(text, |text, parsed| derive(text, parsed, origin)),
     })
 }
 
-fn derived<T>(text: Text, derive: &impl Fn(&Text, &Parsed<'_>) -> T) -> Result<T, Rejected> {
+fn derived<T>(text: Text, derive: impl Fn(&Text, &Parsed<'_>) -> T) -> Result<T, Rejected> {
     match syntax::parse(&text.source, text.spec) {
         Ok(parsed) => Ok(derive(&text, &parsed)),
         Err(reason) => Err(Rejected {
@@ -92,6 +123,7 @@ pub(super) struct Examined {
     pub(super) sources: Vec<Source>,
     pub(super) unreadable: Vec<Unreadable>,
     pub(super) opaque: Vec<String>,
+    pub(super) left_out: Vec<LeftOut>,
 }
 
 struct Derived {
@@ -102,8 +134,8 @@ struct Derived {
 pub(super) fn files(run: &Run<'_>, extent: &[PathBuf], request: &code::Scan<'_>) -> Examined {
     let reviewed = request.scope(run.paths);
     let graphed = run.plan.reads(Input::Graph);
-    let corpus = examine(extent, run.root, |text, parsed| Derived {
-        review: reviewed.contains(&text.path).then(|| {
+    let corpus = examine(extent, run.root, |text, parsed, origin| Derived {
+        review: (origin.is_none() && reviewed.contains(&text.path)).then(|| {
             let aliases = graph::aliases(parsed, text.spec.id, &run.settings.concepts);
             code::reviewed(text, parsed, &aliases, request)
         }),
@@ -115,33 +147,47 @@ pub(super) fn files(run: &Run<'_>, extent: &[PathBuf], request: &code::Scan<'_>)
         sources: Vec::new(),
         unreadable: Vec::new(),
         opaque: Vec::new(),
+        left_out: Vec::new(),
     };
     for file in corpus {
+        examined.take(file, graphed);
+    }
+
+    examined
+}
+
+impl Examined {
+    fn take(&mut self, file: File<Derived>, graphed: bool) {
+        if let Some(origin) = file.origin {
+            self.left_out.push(LeftOut {
+                path: file.shown.clone(),
+                origin,
+            });
+        }
         match file.outcome {
             Ok(derived) => {
-                examined.reviewed.extend(derived.review);
-                examined.sources.extend(
+                self.reviewed.extend(derived.review);
+                self.sources.extend(
                     derived
                         .facts
                         .map(|facts| source(&file.shown, file.language, facts)),
                 );
             }
             Err(rejected) => {
-                examined.unreadable.push(Unreadable {
-                    path: file.shown.clone(),
-                    reason: rejected.reason,
-                });
-                examined.opaque.extend(rejected.text);
+                if file.origin.is_none() {
+                    self.unreadable.push(Unreadable {
+                        path: file.shown.clone(),
+                        reason: rejected.reason,
+                    });
+                }
+                self.opaque.extend(rejected.text);
                 if graphed {
-                    examined
-                        .sources
+                    self.sources
                         .push(source(&file.shown, file.language, FileFacts::default()));
                 }
             }
         }
     }
-
-    examined
 }
 
 #[derive(Default)]

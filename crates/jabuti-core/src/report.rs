@@ -2,12 +2,14 @@ mod human;
 mod sarif;
 pub mod trail;
 
+use std::collections::BTreeSet;
 use std::fmt::Write;
 use std::path::Path;
 
 use serde::Serialize;
 
 pub use self::human::{View, colored, interactive};
+use crate::authorship::{LeftOut, Origin};
 use crate::model::{Detail, Finding, Reading, Unreadable};
 
 pub const DEFAULT_LIMIT: usize = 40;
@@ -23,7 +25,7 @@ impl Rhythm {
         self.weeks.iter().sum()
     }
 }
-pub const SCHEMA: u32 = 5;
+pub const SCHEMA: u32 = 6;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Scanned {
@@ -38,6 +40,7 @@ pub struct Outcome {
     pub readings: Vec<Reading>,
     pub scanned: Scanned,
     pub unreadable: Vec<Unreadable>,
+    pub left_out: Vec<LeftOut>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -45,6 +48,7 @@ pub struct Judgement<'a> {
     pub findings: &'a [Finding],
     pub context: &'a [Finding],
     pub unreadable: &'a [Unreadable],
+    pub left_out: &'a [LeftOut],
     pub scanned: Scanned,
 }
 
@@ -54,6 +58,7 @@ impl Outcome {
             findings: &self.findings,
             context: &self.context,
             unreadable: &self.unreadable,
+            left_out: &self.left_out,
             scanned: self.scanned,
         }
     }
@@ -66,6 +71,18 @@ impl Outcome {
         self.context.extend(context);
     }
 
+    pub fn leave_out_unauthored(&mut self) {
+        let left_out: BTreeSet<&str> = self
+            .left_out
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect();
+        let authored = |path: &str| !left_out.contains(path);
+        self.findings.retain(|finding| authored(&finding.path));
+        self.context.retain(|finding| authored(&finding.path));
+        self.readings.retain(|reading| authored(&reading.path));
+    }
+
     pub fn order(&mut self) {
         self.findings.sort();
         self.context.sort();
@@ -73,6 +90,7 @@ impl Outcome {
             .sort_by(|left, right| Path::new(&left.path).cmp(Path::new(&right.path)));
         self.unreadable
             .sort_by(|left, right| left.path.cmp(&right.path));
+        self.left_out.sort();
     }
 }
 
@@ -89,6 +107,7 @@ pub fn agent(judgement: Judgement<'_>, limit: usize) -> String {
             .expect("writing to a string never fails");
         write_context(&mut rendered, judgement.context, limit);
         rendered.push_str(&self::unreadable(unreadable, limit));
+        rendered.push_str(&set_aside(judgement.left_out));
 
         return rendered;
     }
@@ -117,8 +136,35 @@ pub fn agent(judgement: Judgement<'_>, limit: usize) -> String {
 
     write_context(&mut rendered, judgement.context, limit);
     rendered.push_str(&self::unreadable(unreadable, limit));
+    rendered.push_str(&set_aside(judgement.left_out));
 
     rendered
+}
+
+fn set_aside(left_out: &[LeftOut]) -> String {
+    if left_out.is_empty() {
+        return String::new();
+    }
+
+    format!(
+        "\n{} left out as not written by hand: {}.\n",
+        plural(left_out.len(), "file"),
+        origins(left_out)
+    )
+}
+
+pub(super) fn origins(left_out: &[LeftOut]) -> String {
+    Origin::ALL
+        .into_iter()
+        .filter_map(|origin| {
+            let count = left_out.iter().filter(|file| file.origin == origin).count();
+            (count > 0).then(|| match origin {
+                Origin::Translation => plural(count, "translation"),
+                Origin::Generated | Origin::Vendored => format!("{count} {}", origin.id()),
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn write_context(rendered: &mut String, context: &[Finding], limit: usize) {
@@ -235,6 +281,7 @@ struct Report<'a> {
     findings: &'a [Finding],
     context: &'a [Finding],
     unreadable: &'a [Unreadable],
+    left_out: &'a [LeftOut],
 }
 
 #[derive(Debug, Serialize)]
@@ -244,6 +291,7 @@ struct Summary {
     findings: usize,
     context: usize,
     unreadable: usize,
+    left_out: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -251,6 +299,7 @@ struct Measurements<'a> {
     schema: u32,
     measures: &'a [Reading],
     unreadable: &'a [Unreadable],
+    left_out: &'a [LeftOut],
 }
 
 pub fn json(judgement: Judgement<'_>) -> String {
@@ -262,10 +311,12 @@ pub fn json(judgement: Judgement<'_>) -> String {
             findings: judgement.findings.len(),
             context: judgement.context.len(),
             unreadable: judgement.unreadable.len(),
+            left_out: judgement.left_out.len(),
         },
         findings: judgement.findings,
         context: judgement.context,
         unreadable: judgement.unreadable,
+        left_out: judgement.left_out,
     };
 
     rendered(&report)
@@ -279,11 +330,12 @@ pub fn sarif(judgement: Judgement<'_>) -> String {
     sarif::render(judgement)
 }
 
-pub fn measures(readings: &[Reading], unreadable: &[Unreadable]) -> String {
+pub fn measures(readings: &[Reading], unreadable: &[Unreadable], left_out: &[LeftOut]) -> String {
     rendered(&Measurements {
         schema: SCHEMA,
         measures: readings,
         unreadable,
+        left_out,
     })
 }
 
