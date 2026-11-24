@@ -58,12 +58,11 @@ by name.
 | [`speculative-api`](rules/speculative-api.md) | `shape` | none | on a change |
 | [`uncovered-new-code`](rules/uncovered-new-code.md) | `completeness` | none | on a change, with a coverage report |
 | [`file-lines`](rules/file-lines.md) | `shape` | 1000 | off |
-| [`cyclomatic-complexity`](rules/cyclomatic-complexity.md) | `shape` | 10 | off |
 
 Every finding is something to fix, and any finding fails the run. Rules marked "on a change" compare
-against an earlier revision, so they skip `--all` and repositories without git. The last two are off
-and cannot be turned on; their measures still appear in `--format measures`, and their pages explain
-why.
+against an earlier revision, so they skip `--all` and repositories without git. The last one is off
+and cannot be turned on until its limit is calibrated; its measure still appears in
+`--format measures`.
 
 Two rules report context instead of findings. Context is shown beside the findings and never fails
 the run, because it describes something worth knowing that is not a defect on its own.

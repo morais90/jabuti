@@ -9,12 +9,12 @@ measured and appears in `--format measures`.
 
 ## Why it is off
 
-File length does not separate healthy from unhealthy code on its own. A large file made of small,
-closely related implementations can remain coherent; a smaller file doing unrelated jobs can be hard
-to change. No single line boundary distinguishes those cases.
-
-The distribution that informed the limit and the decision to leave the rule off lives in
-[`CALIBRATION.md`](../../CALIBRATION.md).
+The rule belongs in the catalog because an agent extends the file it is in rather than opening a new
+one, and a file of small functions can still be too large to hold in mind. Its limit has not been
+calibrated yet, and a limit nobody can defend is worse than none: a large file of closely related
+implementations can stay coherent while a smaller one doing unrelated jobs is hard to change, so the
+number has to come from measured code. The rule stays off until it does, and
+[`CALIBRATION.md`](../../CALIBRATION.md) will record the distribution it comes from.
 
 Where the measure does earn its place is inside composite rules. A large module with many methods
 and one complex central method is a real finding, and size is one of its terms. Reported that way,

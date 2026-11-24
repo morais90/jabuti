@@ -13,7 +13,6 @@ kotlin     speculative-api        on      0
 kotlin     suppression            on      0
 kotlin     uncovered-new-code     on      0
 kotlin     cognitive-complexity   on      7
-kotlin     cyclomatic-complexity  off     10
 kotlin     file-lines             off     1000
 kotlin     function-lines         on      47
 kotlin     parameters             on      4
@@ -27,7 +26,6 @@ rust       speculative-api        on      0
 rust       suppression            on      0
 rust       uncovered-new-code     on      0
 rust       cognitive-complexity   on      7
-rust       cyclomatic-complexity  off     10
 rust       file-lines             off     1000
 rust       function-lines         on      60
 rust       parameters             on      4
@@ -41,7 +39,6 @@ typescript speculative-api        on      0
 typescript suppression            on      0
 typescript uncovered-new-code     on      0
 typescript cognitive-complexity   on      18
-typescript cyclomatic-complexity  off     13
 typescript file-lines             off     1000
 typescript function-lines         on      71
 typescript parameters             on      4

@@ -212,12 +212,6 @@ fn a_language_can_carry_a_limit_of_its_own() {
         Some(18)
     );
     assert_eq!(
-        policy
-            .config_for(LanguageId::TypeScript, Rule::CyclomaticComplexity)
-            .map(|config| config.limit),
-        Some(13)
-    );
-    assert_eq!(
         policy.config_for(LanguageId::TypeScript, Rule::Parameters),
         policy.config(Rule::Parameters)
     );
@@ -311,14 +305,9 @@ fn a_file_and_a_function_are_measured_on_different_things() {
 }
 
 #[test]
-fn a_measure_is_reported_even_when_its_rule_is_switched_off() {
+fn a_measure_no_rule_limits_is_still_reported() {
     let readings = readings_for("fn one(v: i32) -> i32 {\n    if v > 0 { 1 } else { 0 }\n}\n");
 
-    assert_eq!(
-        Policy::default()
-            .config(Rule::CyclomaticComplexity)
-            .map(|config| config.enabled),
-        Some(false)
-    );
+    assert_eq!(Rule::from_id("cyclomatic-complexity"), None);
     assert_eq!(readings[1].values.get("cyclomatic-complexity"), Some(&2));
 }

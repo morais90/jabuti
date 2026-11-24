@@ -45,10 +45,10 @@ fn only_a_rule_that_reports_is_active() {
             policy.active(Rule::DuplicateBlock),
             policy.active(Rule::FileLines),
             policy.active_for(LanguageId::TypeScript, Rule::FunctionLines),
-            policy.active_for(LanguageId::Rust, Rule::CyclomaticComplexity),
+            policy.active_for(LanguageId::Rust, Rule::Parameters),
             policy.active(RuleId::parse("clippy/unwrap_used").expect("a tool lint")),
         ],
-        [active(120), None, active(71), None, None,]
+        [active(120), None, active(71), active(4), None,]
     );
 }
 
@@ -127,6 +127,7 @@ fn concept_bindings_report_global_and_per_language_emptiness() {
 #[test]
 fn a_rule_is_enabled_where_any_language_reports_it() {
     let mut policy = Policy::default();
+    let before = policy.enabled(Rule::FileLines);
     policy.set_for(
         LanguageId::Kotlin,
         Rule::FileLines,
@@ -138,11 +139,7 @@ fn a_rule_is_enabled_where_any_language_reports_it() {
     let asked = |rule| policy.enabled(rule);
 
     assert_eq!(
-        [
-            asked(Rule::FunctionLines),
-            asked(Rule::CyclomaticComplexity),
-            asked(Rule::FileLines),
-        ],
-        [true, false, true]
+        [before, asked(Rule::FunctionLines), asked(Rule::FileLines)],
+        [false, true, true]
     );
 }

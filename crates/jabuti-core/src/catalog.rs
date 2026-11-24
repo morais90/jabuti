@@ -65,14 +65,13 @@ pub enum Rule {
     Suppression,
     UncoveredNewCode,
     CognitiveComplexity,
-    CyclomaticComplexity,
     FileLines,
     FunctionLines,
     Parameters,
 }
 
 impl Rule {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 13] = [
         Self::Assertion,
         Self::DuplicateBlock,
         Self::ErrorMasking,
@@ -83,7 +82,6 @@ impl Rule {
         Self::Suppression,
         Self::UncoveredNewCode,
         Self::CognitiveComplexity,
-        Self::CyclomaticComplexity,
         Self::FileLines,
         Self::FunctionLines,
         Self::Parameters,
@@ -101,7 +99,6 @@ impl Rule {
             Self::Suppression => SUPPRESSION,
             Self::UncoveredNewCode => UNCOVERED_NEW_CODE,
             Self::CognitiveComplexity => COGNITIVE_COMPLEXITY,
-            Self::CyclomaticComplexity => CYCLOMATIC_COMPLEXITY,
             Self::FileLines => FILE_LINES,
             Self::FunctionLines => FUNCTION_LINES,
             Self::Parameters => PARAMETERS,
@@ -178,12 +175,6 @@ const COGNITIVE_COMPLEXITY: RuleSpec = RuleSpec {
     ..universal("cognitive-complexity", true, 7)
 };
 
-const CYCLOMATIC_COMPLEXITY: RuleSpec = RuleSpec {
-    language_limits: &[(LanguageId::TypeScript, 13)],
-    threshold: Some(on(Measure::CyclomaticComplexity, UnitKind::Function)),
-    ..universal("cyclomatic-complexity", false, 10)
-};
-
 const FILE_LINES: RuleSpec = RuleSpec {
     threshold: Some(on(Measure::Lines, UnitKind::File)),
     ..universal("file-lines", false, 1000)
@@ -235,7 +226,10 @@ pub struct Threshold {
     pub unit: UnitKind,
 }
 
-pub const MEASURED_WITHOUT_LIMIT: [Threshold; 1] = [on(Measure::Churn, UnitKind::File)];
+pub const MEASURED_WITHOUT_LIMIT: [Threshold; 2] = [
+    on(Measure::Churn, UnitKind::File),
+    on(Measure::CyclomaticComplexity, UnitKind::Function),
+];
 
 const fn on(measure: Measure, unit: UnitKind) -> Threshold {
     Threshold { measure, unit }

@@ -106,9 +106,10 @@ function-length limits; TypeScript differs for both function length and cognitiv
 [`CALIBRATION.md`](CALIBRATION.md) records the benchmark populations, revisions, distributions and
 report rates behind those choices.
 
-Cyclomatic complexity and file length are measured but their rules are off, because neither is a
-reliable verdict alone. Their technical behavior is documented under [`docs/`](docs); their measured
-validation is kept separately in [`CALIBRATION.md`](CALIBRATION.md).
+Cyclomatic complexity is measured but has no rule, because cognitive complexity judges the same code
+better. File length is measured and its rule stays off until its limit is calibrated. Their technical
+behavior is documented under [`docs/`](docs); their measured validation is kept separately in
+[`CALIBRATION.md`](CALIBRATION.md).
 
 ## Installing
 

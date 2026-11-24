@@ -96,14 +96,16 @@ For the Rust and Kotlin validation set, the share reported at limit 7 was:
 
 ### Cyclomatic complexity
 
-| Language | p50 | p75 | p90 | p95 | p98 | p99 | Default limit | Reported at default |
+| Language | p50 | p75 | p90 | p95 | p98 | p99 | Former limit | Reported at former limit |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Rust | 1 | 1 | 2 | 4 | not retained | 10 | 10 | below 1% |
 | Kotlin | 1 | not retained | 3 | 4 | 6 | not retained | 10 | below 2% |
 | TypeScript | 1 | 2 | 5 | 8 | 13 | 19 | 13 | 1.95% |
 
-The rule remains off. Inspection of Rust findings showed that the tail was dominated by flat
-exhaustive matches, which raise path count without raising reading difficulty.
+The catalog has no rule for this measure; the limits above are the ones the rule carried before it
+was removed. Inspection of Rust findings showed that the tail was
+dominated by flat exhaustive matches, which raise path count without raising reading difficulty, and
+cognitive complexity judges the same functions without that distortion.
 
 ### Parameters
 

@@ -42,8 +42,9 @@ populations, distributions and report rates.
 ## Why this rule is on
 
 Cognitive complexity charges for nesting and discounts flat dispatch, so its finding points more
-directly at reading effort than a path count. This is why it is enabled while
-[`cyclomatic-complexity`](cyclomatic-complexity.md) is not.
+directly at reading effort than a path count. This is why it is the complexity rule in the catalog,
+and why [cyclomatic complexity](../measures/cyclomatic-complexity.md) is measured but has no rule:
+the two fire on the same functions, and two findings for one problem is noise.
 
 ## Further reading
 

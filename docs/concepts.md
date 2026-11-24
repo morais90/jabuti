@@ -65,7 +65,6 @@ single measure can feed several different questions.
 flowchart LR
     lines["lines"] --> fl["file-lines"]
     lines --> fnl["function-lines"]
-    cyc["cyclomatic complexity"] --> cc["cyclomatic-complexity"]
     cog["cognitive complexity"] --> cogr["cognitive-complexity"]
     cog --> hs["hotspot"]
     churn["churn"] --> hs

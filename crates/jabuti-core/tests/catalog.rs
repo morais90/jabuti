@@ -6,7 +6,6 @@ use jabuti_core::catalog::{
 use rstest::rstest;
 
 #[rstest]
-#[case("cyclomatic-complexity", Rule::CyclomaticComplexity)]
 #[case("file-lines", Rule::FileLines)]
 #[case("function-lines", Rule::FunctionLines)]
 fn a_rule_is_found_by_the_id_it_publishes(#[case] id: &str, #[case] expected: Rule) {
@@ -223,10 +222,6 @@ fn every_rule_with_a_limit_names_the_measure_and_the_unit_it_compares() {
             (
                 "cognitive-complexity",
                 on(Measure::CognitiveComplexity, UnitKind::Function),
-            ),
-            (
-                "cyclomatic-complexity",
-                on(Measure::CyclomaticComplexity, UnitKind::Function),
             ),
             ("file-lines", on(Measure::Lines, UnitKind::File)),
             ("function-lines", on(Measure::Lines, UnitKind::Function)),

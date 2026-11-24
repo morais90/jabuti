@@ -30,7 +30,6 @@ per language where the measured distributions differ.
 | `function-lines` | 60 | 47 | 71 |
 | `cognitive-complexity` | 7 | 7 | 18 |
 | `parameters` | 4 | 4 | 4 |
-| `cyclomatic-complexity` (off) | 10 | 10 | 13 |
 
 [`CALIBRATION.md`](../CALIBRATION.md) records the benchmark populations, distributions and dates
 behind those defaults.
