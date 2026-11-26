@@ -45,6 +45,25 @@ pub(crate) fn excluded(
     Ok(excluded)
 }
 
+pub(crate) fn admits(
+    path: &Path,
+    roots: &[PathBuf],
+    exclude: &[String],
+    project: &Path,
+) -> Result<bool> {
+    let within = roots
+        .iter()
+        .map(|root| canonical(root))
+        .any(|root| path.starts_with(root));
+    let matcher = overrides(exclude, project)?;
+    let excluded = path
+        .ancestors()
+        .take_while(|ancestor| *ancestor != project)
+        .any(|ancestor| matcher.matched(ancestor, ancestor != path).is_ignore());
+
+    Ok(within && !excluded)
+}
+
 fn walker(roots: &[PathBuf], project: &Path) -> Result<WalkBuilder> {
     let absolute: Vec<PathBuf> = roots
         .iter()

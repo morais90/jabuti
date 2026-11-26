@@ -2,10 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use jabuti_core::catalog::{Concept, Rule, RuleId};
+use jabuti_core::diff::Moves;
 use jabuti_core::graph::index::Source;
 use jabuti_core::graph::{self, Scan, facts};
 use jabuti_core::lang::{self, LanguageId};
-use jabuti_core::model::{Detail, Finding, Span};
+use jabuti_core::model::{Detail, Finding, Named, Span};
 use jabuti_core::policy::{ConceptBindings, Layers, Policy, RuleConfig};
 use jabuti_core::syntax;
 
@@ -100,6 +101,7 @@ fn only_a_dependency_the_base_did_not_have_on_another_file_is_new() {
         base: &base,
         policy: &policy,
         compared: true,
+        moves: &Moves::default(),
         layers: None,
     });
 
@@ -129,6 +131,7 @@ fn nothing_is_compared_without_an_earlier_revision_or_while_the_rule_is_off() {
             base: &base,
             policy,
             compared,
+            moves: &Moves::default(),
             layers: None,
         })
     };
@@ -150,6 +153,7 @@ fn a_layer_is_crossed_only_from_an_examined_file_toward_another_file() {
         base: &BTreeMap::new(),
         policy: &policy,
         compared: false,
+        moves: &Moves::default(),
         layers: Some(&layers),
     });
 
@@ -184,6 +188,7 @@ fn no_layer_is_checked_without_declared_layers_or_while_the_rule_is_off() {
             base: &BTreeMap::new(),
             policy,
             compared: false,
+            moves: &Moves::default(),
             layers,
         })
     };
@@ -206,6 +211,7 @@ fn speculative(requested_paths: &[&str], opaque: &[String], policy: &Policy) -> 
         base: &BTreeMap::new(),
         policy,
         compared: true,
+        moves: &Moves::default(),
         layers: None,
     })
 }
@@ -255,6 +261,7 @@ fn a_file_that_did_not_parse_at_the_base_is_not_judged_against_it() {
         base: &base,
         policy: &policy,
         compared: true,
+        moves: &Moves::default(),
         layers: None,
     });
 
@@ -280,4 +287,40 @@ fn aliases_are_read_only_for_a_language_the_project_bound_a_concept_in() {
         graph::aliases(&parsed, LanguageId::Rust, &bound),
         BTreeMap::from([("quit".to_owned(), "std::process::exit".to_owned())])
     );
+}
+
+#[test]
+fn a_public_item_a_move_brought_from_another_file_is_not_speculative() {
+    let sources = vec![
+        source("src/main.rs", BIN_MAIN),
+        source("src/tasks.rs", TASKS),
+    ];
+    let spare = |start_line| Named {
+        name: "spare".to_owned(),
+        owner: None,
+        span: Span {
+            start_line,
+            end_line: start_line,
+        },
+    };
+    let moves = Moves::between(
+        &BTreeMap::from([("src/old.rs".to_owned(), vec![spare(1)])]),
+        &BTreeMap::from([
+            ("src/old.rs".to_owned(), Vec::new()),
+            ("src/tasks.rs".to_owned(), vec![spare(3)]),
+        ]),
+    );
+
+    let found = graph::findings(&Scan {
+        requested: &requested(&["src/tasks.rs"]),
+        sources: &sources,
+        opaque: &[],
+        base: &BTreeMap::new(),
+        policy: &Policy::default(),
+        compared: true,
+        moves: &moves,
+        layers: None,
+    });
+
+    assert_eq!(found, []);
 }

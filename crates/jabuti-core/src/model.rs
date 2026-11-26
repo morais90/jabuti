@@ -58,3 +58,10 @@ pub struct Unreadable {
     pub path: String,
     pub reason: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Named {
+    pub name: String,
+    pub owner: Option<String>,
+    pub span: Span,
+}

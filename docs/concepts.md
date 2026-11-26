@@ -161,7 +161,13 @@ not have, a unit whose measure grew, or one more occurrence of something the uni
 such as a second swallowed error. Units are matched by name, and units sharing a name by where
 the change left them, so moving a function or editing one line of it leaves its finding where it was,
 and a new function named like an old one is still new.
-A renamed file is compared with the file it came from.
+A renamed file is compared with the file it came from. A function or type the change moved from one
+file to another is compared with itself where it was, so its findings, and those of what it carries,
+are new only if they grew or multiplied on the way. A unit counts as moved when its name, together
+with the type it belongs to, disappears from a file the change edited or deleted and appears in a
+file that did not have it. Only files the check would read count as a source: a deleted file outside
+the paths given, excluded, or not written by hand vouches for nothing. Anything else reads as new: a name that only arrives, a method that moves
+to a different type, or one of two namesakes leaving a file that keeps the other.
 
 This is also the setting that makes it practical to fail a build on findings. A function that was
 already too long stays quiet when someone fixes one line of it, and is reported when someone makes it

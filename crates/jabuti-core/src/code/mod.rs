@@ -19,7 +19,7 @@ use self::metrics::{CognitiveIndex, DecisionIndex, LineIndex};
 use self::review::FileUnderReview;
 use self::units::Unit;
 use crate::catalog::{Rule, UnitKind};
-use crate::model::{Finding, Reading, Span};
+use crate::model::{Finding, Named, Reading, Span};
 use crate::policy::{ConceptBindings, Policy};
 use crate::report::Outcome;
 use crate::syntax::{Parsed, Text};
@@ -31,6 +31,14 @@ pub struct Measured {
     pub churn: u32,
     pub complexity: u32,
     pub compile_time: Vec<Span>,
+    pub units: Vec<Named>,
+}
+
+#[derive(Debug)]
+pub struct Parts {
+    pub findings: Vec<Finding>,
+    pub fragments: Option<FileFragments>,
+    pub measured: Measured,
 }
 
 #[derive(Debug)]
@@ -91,6 +99,7 @@ pub fn reviewed(
         churn: file.churn,
         complexity: cognitive.total(&file.units),
         compile_time: compile_time(&file.units),
+        units: named(&file.units),
     };
 
     let mut findings = review::evaluate(request.policy, &file);
@@ -115,6 +124,31 @@ pub fn reviewed(
     }
 }
 
+fn named(unit: &Unit) -> Vec<Named> {
+    named_within(unit, None)
+}
+
+fn named_within(unit: &Unit, owner: Option<&String>) -> Vec<Named> {
+    let counted = matches!(unit.kind, UnitKind::Function | UnitKind::Type);
+    let own = unit.name.as_ref().filter(|_| counted).map(|name| Named {
+        name: name.clone(),
+        owner: owner.cloned(),
+        span: unit.span,
+    });
+    let inner = match unit.kind {
+        UnitKind::Type => unit.name.as_ref(),
+        _ => owner,
+    };
+
+    own.into_iter()
+        .chain(
+            unit.children
+                .iter()
+                .flat_map(|child| named_within(child, inner)),
+        )
+        .collect()
+}
+
 fn compile_time(unit: &Unit) -> Vec<Span> {
     if unit.compile_time {
         return vec![unit.span];
@@ -124,8 +158,12 @@ fn compile_time(unit: &Unit) -> Vec<Span> {
 }
 
 impl Reviewed {
-    pub fn into_parts(self) -> (Vec<Finding>, Option<FileFragments>) {
-        (self.findings, self.fragments)
+    pub fn into_parts(self) -> Parts {
+        Parts {
+            findings: self.findings,
+            fragments: self.fragments,
+            measured: self.measured,
+        }
     }
 }
 

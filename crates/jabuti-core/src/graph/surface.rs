@@ -164,6 +164,11 @@ fn in_source(scan: &Scan<'_>, source: &Source, roots: &Roots) -> Vec<Finding> {
     speculative(source, then, scan.sources, roots)
         .into_iter()
         .filter(|item| !mentioned_in_unreadable(scan, &item.name))
+        .filter(|item| {
+            !scan
+                .moves
+                .brought(&item.path.display().to_string(), &item.name, item.span)
+        })
         .map(|item| Finding {
             rule: RuleId::Native(Rule::SpeculativeApi),
             path: item.path.display().to_string(),

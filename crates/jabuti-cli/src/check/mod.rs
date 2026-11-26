@@ -6,13 +6,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use jabuti_core::authorship::{LeftOut, Origin};
+use jabuti_core::authorship::{self, LeftOut, Origin};
 use jabuti_core::catalog::Input;
 use jabuti_core::code::Measured;
 use jabuti_core::code::duplication::Before;
-use jabuti_core::diff::Placement;
+use jabuti_core::diff::{Moves, Placement, Reference};
 use jabuti_core::graph::index::Source;
-use jabuti_core::model::{Finding, Span};
+use jabuti_core::model::{Finding, Named, Span};
 use jabuti_core::policy::Layers;
 use jabuti_core::report::Outcome;
 use jabuti_core::{code, diff, graph};
@@ -71,6 +71,7 @@ pub(crate) fn verdict(
     let run = Run {
         plan,
         root: &root,
+        roots,
         settings: &settings,
         paths: &paths,
         changes: changes.as_ref(),
@@ -101,6 +102,7 @@ pub(crate) fn verdict(
 struct Run<'a> {
     plan: Plan<'a>,
     root: &'a Path,
+    roots: &'a [PathBuf],
     settings: &'a Settings,
     paths: &'a [PathBuf],
     changes: Option<&'a Changes>,
@@ -162,6 +164,7 @@ fn touched_by(changes: &Changes, paths: &[PathBuf]) -> BTreeSet<PathBuf> {
 struct Compared<'a> {
     changes: &'a Changes,
     texts: BTreeMap<PathBuf, String>,
+    deleted: BTreeSet<String>,
     base: Base,
     placement: Placement,
 }
@@ -178,6 +181,7 @@ struct Drawn<'a> {
     sources: &'a [Source],
     opaque: &'a [String],
     layers: Option<&'a Layers>,
+    moves: &'a Moves,
 }
 
 fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
@@ -204,9 +208,12 @@ fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
     let (mut outcome, measured) = code::scan(examined.reviewed, &request);
     outcome.unreadable = examined.unreadable;
     outcome.left_out = examined.left_out;
+    let moves = compared.as_ref().map_or_else(Moves::default, |compared| {
+        moved(compared, &units(run, compared, &measured))
+    });
     if let Some(compared) = &compared {
         let findings = std::mem::take(&mut outcome.findings);
-        outcome.findings = worsened(run, compared, findings, notices);
+        outcome.findings = worsened(compared, &moves, findings, notices);
     }
     outcome.findings.extend(crossings::hotspots(
         run.plan,
@@ -223,6 +230,7 @@ fn judged(run: &Run<'_>, notices: &mut Vec<String>) -> Result<Outcome> {
         sources: &examined.sources,
         opaque: &examined.opaque,
         layers: layers.as_ref(),
+        moves: &moves,
     };
     let base_texts = compared.map_or_else(BTreeMap::new, |compared| compared.texts);
     outcome.findings.extend(graphed(run, &drawn, &base_texts));
@@ -247,7 +255,14 @@ fn orchestrated(run: &Run<'_>, measured: &[Measured], notices: &mut Vec<String>)
 }
 
 fn compare<'a>(run: &Run<'_>, changes: &'a Changes) -> Result<Compared<'a>> {
-    let texts = changes.base_texts(run.paths, run.root)?;
+    let mut texts = changes.base_texts(run.paths, run.root)?;
+    let mut deleted = BTreeSet::new();
+    for (shown, source) in changes.deleted_texts(run.root)? {
+        if gone_by_hand(run, &shown, &source)? {
+            deleted.insert(shown.display().to_string());
+            texts.insert(shown, source);
+        }
+    }
     let mut base = examine::base_findings(run, &texts, &run.request());
     for path in run.touched.into_iter().flatten() {
         base.blocks
@@ -258,24 +273,69 @@ fn compare<'a>(run: &Run<'_>, changes: &'a Changes) -> Result<Compared<'a>> {
     Ok(Compared {
         changes,
         texts,
+        deleted,
         base,
         placement: changes.placement(run.paths),
     })
 }
 
-fn worsened(
+fn gone_by_hand(run: &Run<'_>, shown: &Path, source: &str) -> Result<bool> {
+    let absolute = run.root.join(shown);
+    let admitted = workspace::admits(&absolute, run.roots, &run.settings.exclude, run.root)?;
+
+    Ok(admitted && authorship::origin(shown, source, &BTreeSet::new()).is_none())
+}
+
+fn moved(compared: &Compared<'_>, now: &BTreeMap<String, Vec<Named>>) -> Moves {
+    let base: BTreeMap<String, Vec<Named>> = compared
+        .base
+        .units
+        .iter()
+        .filter(|(path, _)| now.contains_key(*path) || compared.deleted.contains(*path))
+        .map(|(path, units)| (path.clone(), units.clone()))
+        .collect();
+
+    Moves::between(&base, now)
+}
+
+fn units(
     run: &Run<'_>,
     compared: &Compared<'_>,
+    measured: &[Measured],
+) -> BTreeMap<String, Vec<Named>> {
+    let edited: BTreeSet<String> = run
+        .touched
+        .into_iter()
+        .flatten()
+        .map(|path| workspace::display(path, run.root))
+        .chain(compared.base.units.keys().cloned())
+        .collect();
+
+    measured
+        .iter()
+        .filter(|file| edited.contains(&file.path))
+        .filter(|file| !compared.base.unread.contains_key(&file.path))
+        .map(|file| (file.path.clone(), file.units.clone()))
+        .collect()
+}
+
+fn worsened(
+    compared: &Compared<'_>,
+    moves: &Moves,
     findings: Vec<Finding>,
     notices: &mut Vec<String>,
 ) -> Vec<Finding> {
     let base = &compared.base;
-    for (path, reason) in &base.unread {
+    let still_there = base
+        .unread
+        .iter()
+        .filter(|(path, _)| !compared.deleted.contains(*path));
+    for (path, reason) in still_there {
         notices.push(format!(
             "{path} could not be read as it was before the change ({reason}), so only its findings on lines the change touched are reported"
         ));
     }
-    let placement = compared.changes.placement(run.paths);
+    let placement = &compared.placement;
     let diff = compared.changes.diff();
     let place = |finding: &Finding| placement.in_repository(Path::new(&finding.path));
     let touches = |finding: &Finding| diff.touches(&place(finding), finding.span);
@@ -283,7 +343,11 @@ fn worsened(
     let (unread, readable): (Vec<Finding>, Vec<Finding>) = findings
         .into_iter()
         .partition(|finding| base.unread.contains_key(&finding.path));
-    let mut kept = diff::worsened(readable, &base.findings, touches, |finding| {
+    let reference = Reference {
+        findings: &base.findings,
+        moves,
+    };
+    let mut kept = diff::worsened(readable, reference, touches, |finding| {
         diff.moved(&place(finding), finding.span.start_line)
     });
     kept.extend(unread.into_iter().filter(|finding| touches(finding)));
@@ -323,6 +387,7 @@ fn graphed(
         base: &base,
         policy: &run.settings.policy,
         compared: run.changes.is_some(),
+        moves: drawn.moves,
         layers: drawn.layers,
     })
 }

@@ -5,7 +5,7 @@ use jabuti_core::catalog::{Rule, UnitKind};
 use jabuti_core::code::duplication::{self, FileFragments};
 use jabuti_core::code::{self, Measured, Reviewed, Scan};
 use jabuti_core::lang;
-use jabuti_core::model::Span;
+use jabuti_core::model::{Named, Span};
 use jabuti_core::policy::{ConceptBindings, Policy, RuleConfig};
 use jabuti_core::report::{Outcome, Scanned};
 use jabuti_core::syntax::{self, Text};
@@ -118,19 +118,38 @@ fn a_file_is_counted_measured_and_judged_whole() {
             ("src/lib.rs", UnitKind::Function, Some("small")),
         ]
     );
-    assert_eq!(
-        measured,
-        [Measured {
-            path: "src/lib.rs".to_owned(),
-            span: Span {
-                start_line: 1,
-                end_line: 9,
+    assert_eq!(measured, [guarded_measured()]);
+}
+
+fn guarded_measured() -> Measured {
+    Measured {
+        path: "src/lib.rs".to_owned(),
+        span: Span {
+            start_line: 1,
+            end_line: 9,
+        },
+        churn: 5,
+        complexity: 1,
+        compile_time: Vec::new(),
+        units: vec![
+            Named {
+                name: "read".to_owned(),
+                owner: None,
+                span: Span {
+                    start_line: 2,
+                    end_line: 7,
+                },
             },
-            churn: 5,
-            complexity: 1,
-            compile_time: Vec::new(),
-        }]
-    );
+            Named {
+                name: "small".to_owned(),
+                owner: None,
+                span: Span {
+                    start_line: 9,
+                    end_line: 9,
+                },
+            },
+        ],
+    }
 }
 
 #[test]
@@ -267,7 +286,7 @@ fn a_reviewed_file_hands_over_the_findings_it_judged() {
     };
     let lib = text("src/lib.rs", GUARDED);
 
-    let (findings, _) = reviewed(&lib, &request).into_parts();
+    let findings = reviewed(&lib, &request).into_parts().findings;
 
     let mut fired: Vec<(String, Option<&str>)> = findings
         .iter()
@@ -300,11 +319,15 @@ fn a_reviewed_file_hands_over_its_findings_and_the_blocks_it_holds() {
     let lib = text("src/lib.rs", GUARDED);
     let parsed = syntax::parse(&lib.source, lib.spec).expect("fixture parses cleanly");
 
-    let (findings, fragments) = reviewed(&lib, &request).into_parts();
+    let parts = reviewed(&lib, &request).into_parts();
 
-    let fired: BTreeSet<String> = findings.iter().map(|finding| finding.rule.id()).collect();
+    let fired: BTreeSet<String> = parts
+        .findings
+        .iter()
+        .map(|finding| finding.rule.id())
+        .collect();
     assert_eq!(
-        (fired, fragments),
+        (fired, parts.fragments, parts.measured.path),
         (
             BTreeSet::from([
                 "error-masking".to_owned(),
@@ -314,7 +337,8 @@ fn a_reviewed_file_hands_over_its_findings_and_the_blocks_it_holds() {
             Some(FileFragments {
                 path: "src/lib.rs".to_owned(),
                 fragments: duplication::fragments(&parsed, 10),
-            })
+            }),
+            "src/lib.rs".to_owned()
         )
     );
 }
@@ -349,5 +373,41 @@ fn a_const_fn_is_measured_as_code_that_runs_at_compile_time() {
             .map(|file| file.compile_time.clone())
             .collect::<Vec<_>>(),
         [spans(&[(1, 3), (5, 7), (10, 12)])]
+    );
+}
+
+#[test]
+fn a_method_is_named_with_the_type_it_belongs_to() {
+    let policy = Policy::default();
+    let request = Scan {
+        policy: &policy,
+        bindings: &ConceptBindings::default(),
+        touched: None,
+        churn: &BTreeMap::new(),
+        before: None,
+    };
+    let lib = text(
+        "src/lib.rs",
+        "struct Parser;\n\nimpl Parser {\n    fn new() -> Self {\n        Parser\n    }\n}\n\nfn new() {}\n",
+    );
+
+    let units = reviewed(&lib, &request).into_parts().measured.units;
+
+    let named = |name: &str, owner: Option<&str>, start_line, end_line| Named {
+        name: name.to_owned(),
+        owner: owner.map(str::to_owned),
+        span: Span {
+            start_line,
+            end_line,
+        },
+    };
+    assert_eq!(
+        units,
+        [
+            named("Parser", None, 1, 1),
+            named("Parser", None, 3, 7),
+            named("new", Some("Parser"), 4, 6),
+            named("new", None, 9, 9),
+        ]
     );
 }

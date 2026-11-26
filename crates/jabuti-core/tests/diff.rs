@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use jabuti_core::catalog::{Rule, RuleId};
-use jabuti_core::diff::{self, Diff, Placement};
-use jabuti_core::model::{Detail, Finding, Span};
+use jabuti_core::diff::{self, Diff, Moves, Placement, Reference};
+use jabuti_core::model::{Detail, Finding, Named, Span};
 use rstest::rstest;
 
 const UNIFIED: &str = "\
@@ -238,6 +239,15 @@ fn told(subject: &str, start_line: u32) -> Finding {
     }
 }
 
+fn alone(base: &[Finding]) -> Reference<'_> {
+    Reference {
+        findings: base,
+        moves: &NO_MOVES,
+    }
+}
+
+static NO_MOVES: LazyLock<Moves> = LazyLock::new(Moves::default);
+
 fn anywhere(_: &Finding) -> bool {
     true
 }
@@ -260,7 +270,7 @@ fn a_unit_over_its_limit_is_reported_only_when_the_change_made_its_measure_grow(
     ];
 
     assert_eq!(
-        diff::worsened(current, &base, anywhere, unmoved),
+        diff::worsened(current, alone(&base), anywhere, unmoved),
         [measured(Rule::Parameters, "grew", 3, 6)]
     );
 }
@@ -275,7 +285,7 @@ fn a_unit_the_base_never_had_over_its_limit_is_reported() {
     ];
 
     assert_eq!(
-        diff::worsened(current, &base, anywhere, unmoved),
+        diff::worsened(current, alone(&base), anywhere, unmoved),
         [
             measured(Rule::FunctionLines, "fresh", 30, 61),
             measured(Rule::Parameters, "old", 1, 5),
@@ -293,7 +303,7 @@ fn two_units_named_new(base: [u32; 2], current: [u32; 2]) -> Vec<Finding> {
         measured(Rule::Parameters, "new", 30, current[1]),
     ];
 
-    diff::worsened(current, &base, anywhere, unmoved)
+    diff::worsened(current, alone(&base), anywhere, unmoved)
 }
 
 #[test]
@@ -319,7 +329,7 @@ fn a_fact_is_reported_only_as_many_times_as_the_change_added_it_preferring_chang
 
     let reported = diff::worsened(
         current,
-        &base,
+        alone(&base),
         |finding| finding.span.start_line == 6,
         unmoved,
     );
@@ -332,7 +342,7 @@ fn a_fact_the_change_moved_but_did_not_add_is_not_reported() {
     let base = [told("load", 3)];
     let current = vec![told("load", 40)];
 
-    assert_eq!(diff::worsened(current, &base, anywhere, unmoved), []);
+    assert_eq!(diff::worsened(current, alone(&base), anywhere, unmoved), []);
 }
 
 #[test]
@@ -345,7 +355,7 @@ fn facts_with_different_messages_or_units_are_counted_apart() {
     let current = vec![told("load", 3), told("save", 8), other.clone()];
 
     assert_eq!(
-        diff::worsened(current, &base, anywhere, unmoved),
+        diff::worsened(current, alone(&base), anywhere, unmoved),
         [other, told("save", 8)]
     );
 }
@@ -391,7 +401,7 @@ fn a_new_unit_added_above_one_sharing_its_name_is_not_mistaken_for_it() {
         measured(Rule::FunctionLines, "new", 75, 80),
     ];
 
-    let reported = diff::worsened(current, &base, anywhere, |finding| {
+    let reported = diff::worsened(current, alone(&base), anywhere, |finding| {
         finding.span.start_line + 74
     });
 
@@ -441,4 +451,320 @@ fn a_hunk_header_that_cannot_be_read_marks_nothing_as_touched() {
     assert!(!diff.covers(Path::new("src/lib.rs")));
     assert!(!diff.touches(Path::new("src/lib.rs"), lines(1, 1_000)));
     assert_eq!(diff.moved(Path::new("src/lib.rs"), 7), 7);
+}
+
+fn at(path: &str, mut finding: Finding) -> Finding {
+    path.clone_into(&mut finding.path);
+    finding
+}
+
+fn unit(name: &str, start_line: u32) -> Named {
+    Named {
+        name: name.to_owned(),
+        owner: None,
+        span: lines(start_line, start_line + 9),
+    }
+}
+
+fn method(owner: &str, name: &str, start_line: u32) -> Named {
+    Named {
+        owner: Some(owner.to_owned()),
+        ..unit(name, start_line)
+    }
+}
+
+fn files(entries: &[(&str, &[Named])]) -> BTreeMap<String, Vec<Named>> {
+    entries
+        .iter()
+        .map(|(path, units)| ((*path).to_owned(), units.to_vec()))
+        .collect()
+}
+
+fn parse_moved_from_lib_to_parser() -> Moves {
+    Moves::between(
+        &files(&[("src/lib.rs", &[unit("parse", 1), unit("stays", 20)])]),
+        &files(&[
+            ("src/lib.rs", &[unit("stays", 1)]),
+            ("src/parser.rs", &[unit("parse", 5)]),
+        ]),
+    )
+}
+
+fn after_the_move(base: &[Finding], current: Vec<Finding>) -> Vec<Finding> {
+    let moves = parse_moved_from_lib_to_parser();
+    let reference = Reference {
+        findings: base,
+        moves: &moves,
+    };
+
+    diff::worsened(current, reference, anywhere, unmoved)
+}
+
+#[test]
+fn a_unit_moved_to_another_file_without_growing_is_not_reported() {
+    let base = [measured(Rule::FunctionLines, "parse", 1, 70)];
+    let current = vec![at(
+        "src/parser.rs",
+        measured(Rule::FunctionLines, "parse", 5, 70),
+    )];
+
+    assert_eq!(after_the_move(&base, current), []);
+}
+
+#[test]
+fn a_unit_that_moved_and_grew_is_reported() {
+    let base = [measured(Rule::FunctionLines, "parse", 1, 70)];
+    let grown = at(
+        "src/parser.rs",
+        measured(Rule::FunctionLines, "parse", 5, 75),
+    );
+
+    assert_eq!(after_the_move(&base, vec![grown.clone()]), [grown]);
+}
+
+#[test]
+fn a_fact_carried_inside_a_moved_unit_is_not_reported_again() {
+    let base = [told("unwrap", 3), told("unwrap", 22)];
+    let current = vec![told("unwrap", 3), at("src/parser.rs", told("unwrap", 7))];
+
+    assert_eq!(after_the_move(&base, current), []);
+}
+
+#[test]
+fn a_fact_added_inside_a_moved_unit_is_reported() {
+    let base = [told("unwrap", 3)];
+    let current = vec![
+        at("src/parser.rs", told("unwrap", 7)),
+        at("src/parser.rs", told("unwrap", 8)),
+    ];
+
+    assert_eq!(
+        after_the_move(&base, current),
+        [at("src/parser.rs", told("unwrap", 7))]
+    );
+}
+
+#[test]
+fn a_unit_that_left_no_file_is_new_wherever_it_appears() {
+    let moves = Moves::between(
+        &files(&[("src/lib.rs", &[unit("new", 1)])]),
+        &files(&[
+            ("src/lib.rs", &[unit("new", 1)]),
+            ("src/other.rs", &[unit("new", 1)]),
+        ]),
+    );
+    let base = [measured(Rule::Parameters, "new", 1, 5)];
+    let fresh = at("src/other.rs", measured(Rule::Parameters, "new", 1, 5));
+    let current = vec![measured(Rule::Parameters, "new", 1, 5), fresh.clone()];
+    let reference = Reference {
+        findings: &base,
+        moves: &moves,
+    };
+
+    assert_eq!(
+        diff::worsened(current, reference, anywhere, unmoved),
+        [fresh]
+    );
+}
+
+#[test]
+fn a_move_brings_only_the_units_that_left_a_file_for_another() {
+    let moves = parse_moved_from_lib_to_parser();
+
+    assert_eq!(
+        (
+            moves.brought("src/parser.rs", "parse", lines(6, 7)),
+            moves.brought("src/lib.rs", "stays", lines(2, 3)),
+            moves.brought("src/parser.rs", "extra", lines(6, 7)),
+            moves.brought("src/parser.rs", "parse", lines(30, 31)),
+        ),
+        (true, false, false, false)
+    );
+}
+
+#[test]
+fn a_file_the_change_only_removed_lines_from_is_edited_but_not_covered() {
+    let diff = Diff::parse(
+        "diff --git a/src/lib.rs b/src/lib.rs\n\
+         index 1111111..2222222 100644\n\
+         --- a/src/lib.rs\n\
+         +++ b/src/lib.rs\n\
+         @@ -1,2 +0,0 @@\n\
+         -fn gone() {}\n\
+         -\n",
+    );
+
+    assert_eq!(
+        (
+            diff.edits(Path::new("src/lib.rs")),
+            diff.covers(Path::new("src/lib.rs")),
+            diff.edits(Path::new("src/other.rs")),
+        ),
+        (true, false, false)
+    );
+}
+
+#[test]
+fn a_unit_whose_namesake_stays_behind_is_not_taken_for_a_move() {
+    let moves = Moves::between(
+        &files(&[("src/lib.rs", &[unit("new", 1), unit("new", 30)])]),
+        &files(&[
+            ("src/lib.rs", &[unit("new", 1)]),
+            ("src/other.rs", &[unit("new", 1)]),
+        ]),
+    );
+    let base = [
+        measured(Rule::Parameters, "new", 1, 5),
+        measured(Rule::Parameters, "new", 30, 5),
+    ];
+    let landed = at("src/other.rs", measured(Rule::Parameters, "new", 1, 5));
+    let current = vec![measured(Rule::Parameters, "new", 1, 5), landed.clone()];
+    let reference = Reference {
+        findings: &base,
+        moves: &moves,
+    };
+
+    assert_eq!(
+        diff::worsened(current, reference, anywhere, unmoved),
+        [landed]
+    );
+}
+
+fn compared_with(moves: &Moves, base: &[Finding], current: Vec<Finding>) -> Vec<Finding> {
+    let reference = Reference {
+        findings: base,
+        moves,
+    };
+
+    diff::worsened(current, reference, anywhere, unmoved)
+}
+
+#[test]
+fn a_fact_added_to_a_unit_its_file_already_held_is_not_taken_for_one_that_moved() {
+    let moves = Moves::between(
+        &files(&[
+            ("src/a.rs", &[unit("parse", 1)]),
+            ("src/c.rs", &[unit("parse", 1)]),
+        ]),
+        &files(&[
+            ("src/a.rs", &[]),
+            ("src/b.rs", &[unit("parse", 1)]),
+            ("src/c.rs", &[unit("parse", 1)]),
+        ]),
+    );
+    let added = at("src/c.rs", told("unwrap", 3));
+
+    assert_eq!(
+        compared_with(
+            &moves,
+            &[at("src/a.rs", told("unwrap", 3))],
+            vec![added.clone()]
+        ),
+        [added]
+    );
+}
+
+#[test]
+fn units_of_different_types_sharing_a_name_are_not_one_unit_moving() {
+    let moves = Moves::between(
+        &files(&[("src/a.rs", &[method("Foo", "new", 1)])]),
+        &files(&[("src/a.rs", &[]), ("src/b.rs", &[method("Bar", "new", 1)])]),
+    );
+    let fresh = at("src/b.rs", measured(Rule::FunctionLines, "new", 1, 70));
+
+    assert_eq!(
+        compared_with(
+            &moves,
+            &[at("src/a.rs", measured(Rule::FunctionLines, "new", 1, 70))],
+            vec![fresh.clone()]
+        ),
+        [fresh]
+    );
+}
+
+#[test]
+fn a_deleted_file_is_listed_apart_from_the_files_still_there() {
+    let diff = Diff::parse(
+        "diff --git a/src/old.rs b/src/old.rs\n\
+         deleted file mode 100644\n\
+         index 1111111..0000000\n\
+         --- a/src/old.rs\n\
+         +++ /dev/null\n\
+         @@ -1 +0,0 @@\n\
+         -fn old() {}\n\
+         diff --git a/src/kept.rs b/src/kept.rs\n\
+         index 3333333..4444444 100644\n\
+         --- a/src/kept.rs\n\
+         +++ b/src/kept.rs\n\
+         @@ -1 +1 @@\n\
+         -fn a() {}\n\
+         +fn b() {}\n",
+    );
+
+    assert_eq!(
+        diff.deleted().collect::<Vec<_>>(),
+        [Path::new("src/old.rs")]
+    );
+}
+
+#[test]
+fn a_fact_below_a_moved_unit_is_not_counted_as_carried_by_it() {
+    let moves = Moves::between(
+        &files(&[("src/a.rs", &[unit("parse", 1)])]),
+        &files(&[("src/a.rs", &[]), ("src/b.rs", &[unit("parse", 1)])]),
+    );
+    let below = at("src/b.rs", told("unwrap", 20));
+
+    assert_eq!(
+        compared_with(
+            &moves,
+            &[at("src/a.rs", told("unwrap", 3))],
+            vec![below.clone()]
+        ),
+        [below]
+    );
+}
+
+#[test]
+fn methods_of_different_types_that_both_moved_are_compared_each_with_its_own_past() {
+    let moves = Moves::between(
+        &files(&[
+            ("src/x.rs", &[method("A", "new", 1)]),
+            ("src/z.rs", &[method("B", "new", 1)]),
+        ]),
+        &files(&[
+            ("src/x.rs", &[]),
+            ("src/y.rs", &[method("A", "new", 1)]),
+            ("src/z.rs", &[]),
+            ("src/w.rs", &[method("B", "new", 1)]),
+        ]),
+    );
+    let grown = at("src/w.rs", measured(Rule::FunctionLines, "new", 1, 70));
+
+    assert_eq!(
+        compared_with(
+            &moves,
+            &[at("src/x.rs", measured(Rule::FunctionLines, "new", 1, 70))],
+            vec![grown.clone()]
+        ),
+        [grown]
+    );
+}
+
+#[test]
+fn a_deleted_file_whose_name_holds_a_space_is_read_without_the_tab_git_appends() {
+    let diff = Diff::parse(
+        "diff --git a/src/old file.rs b/src/old file.rs\n\
+         deleted file mode 100644\n\
+         index 1111111..0000000\n\
+         --- a/src/old file.rs\t\n\
+         +++ /dev/null\n\
+         @@ -1 +0,0 @@\n\
+         -fn old() {}\n",
+    );
+
+    assert_eq!(
+        diff.deleted().collect::<Vec<_>>(),
+        [Path::new("src/old file.rs")]
+    );
 }

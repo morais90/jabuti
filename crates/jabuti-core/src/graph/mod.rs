@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 use self::index::{Index, Source};
 use crate::catalog::Rule;
+use crate::diff::Moves;
 use crate::lang::LanguageId;
 use crate::model::Finding;
 use crate::policy::{ConceptBindings, Layers, Policy};
@@ -23,6 +24,7 @@ pub struct Scan<'a> {
     pub base: &'a BTreeMap<PathBuf, Option<Source>>,
     pub policy: &'a Policy,
     pub compared: bool,
+    pub moves: &'a Moves,
     pub layers: Option<&'a Layers>,
 }
 

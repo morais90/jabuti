@@ -4,11 +4,11 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use jabuti_core::authorship::{self, LeftOut, Origin};
 use jabuti_core::catalog::Input;
-use jabuti_core::code::duplication::{self, Blocks, FileFragments};
+use jabuti_core::code::duplication::{self, Blocks};
 use jabuti_core::graph::facts::{self, FileFacts};
 use jabuti_core::graph::index::Source;
 use jabuti_core::lang::{self, LangSpec, LanguageId};
-use jabuti_core::model::{Finding, Unreadable};
+use jabuti_core::model::{Finding, Named, Unreadable};
 use jabuti_core::syntax::{self, Parsed, SyntaxError, Text};
 use jabuti_core::{code, graph};
 use rayon::prelude::*;
@@ -205,6 +205,7 @@ impl Examined {
 pub(super) struct Base {
     pub(super) findings: Vec<Finding>,
     pub(super) blocks: Blocks,
+    pub(super) units: BTreeMap<String, Vec<Named>>,
     pub(super) unread: BTreeMap<String, String>,
 }
 
@@ -213,7 +214,7 @@ pub(super) fn base_findings(
     texts: &BTreeMap<PathBuf, String>,
     request: &code::Scan<'_>,
 ) -> Base {
-    type Read = Result<(Vec<Finding>, Option<FileFragments>), (String, String)>;
+    type Read = Result<code::Parts, (String, String)>;
     let read: Vec<Read> = texts
         .par_iter()
         .filter_map(|(shown, source)| {
@@ -238,9 +239,10 @@ pub(super) fn base_findings(
     let mut fragments = Vec::new();
     for file in read {
         match file {
-            Ok((findings, held)) => {
-                base.findings.extend(findings);
-                fragments.extend(held);
+            Ok(parts) => {
+                base.findings.extend(parts.findings);
+                fragments.extend(parts.fragments);
+                base.units.insert(parts.measured.path, parts.measured.units);
             }
             Err((shown, reason)) => {
                 base.unread.insert(shown, reason);

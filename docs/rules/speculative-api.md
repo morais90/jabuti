@@ -69,8 +69,10 @@ every report. If one of them mentions the name as a whole word, the item is unkn
 
 **An item that already existed.** The rule compares the declarations of the changed file with the
 same file at the base revision, so editing a file full of public functions reports nothing about
-them. Renaming is the one case that reads as new, and a renamed item nobody references is worth the
-line. When the base revision of a file cannot be parsed, the file is skipped rather than read as new.
+them. An item the change moved out of another file it edited or deleted is not new either, though
+an item added to a type that moved still is. Renaming is the one case that reads as new, and a
+renamed item nobody references is worth the line. When the base revision of a file cannot be parsed,
+the file is skipped rather than read as new.
 
 ## Kotlin and TypeScript libraries
 

@@ -19,7 +19,14 @@ impl Changes {
     pub(crate) fn since(reference: &str, project: &Path) -> Result<Self> {
         let root = PathBuf::from(super::run(&["rev-parse", "--show-toplevel"])?.trim());
         let base = merge_base(reference)?;
-        let unified = super::run(&["diff", "--unified=0", "--find-renames", &base])?;
+        let unified = super::run(&[
+            "diff",
+            "--unified=0",
+            "--find-renames",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
+            &base,
+        ])?;
         let untracked = super::run_at(&root, &["ls-files", "--others", "--exclude-standard"])?;
 
         let mut diff = Diff::parse(&unified);
@@ -45,11 +52,33 @@ impl Changes {
             let Some(relative) = self.relative(path) else {
                 continue;
             };
-            if self.diff.covers(&relative) {
+            if self.diff.edits(&relative) {
                 let origin = self.diff.origin(&relative).to_path_buf();
                 requested.insert(origin, PathBuf::from(workspace::display(path, project)));
             }
         }
+        self.read_base(requested)
+    }
+
+    pub(crate) fn deleted_texts(&self, project: &Path) -> Result<BTreeMap<PathBuf, String>> {
+        let requested = self
+            .diff
+            .deleted()
+            .map(|gone| (gone, self.root.join(gone)))
+            .filter(|(_, absolute)| absolute.starts_with(project))
+            .map(|(gone, absolute)| {
+                let shown = workspace::display(&absolute, project);
+                (gone.to_path_buf(), PathBuf::from(shown))
+            })
+            .collect();
+
+        self.read_base(requested)
+    }
+
+    fn read_base(
+        &self,
+        mut requested: BTreeMap<PathBuf, PathBuf>,
+    ) -> Result<BTreeMap<PathBuf, String>> {
         let inside: Vec<PathBuf> = requested.keys().cloned().collect();
 
         let blobs = super::blobs(&self.base, &inside)?;
